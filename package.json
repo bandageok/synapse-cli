@@ -1,11 +1,9 @@
-{
+﻿{
   "name": "cclaw",
-  "version": "0.1.0",
-  "description": "C.C.Claw — Claude Code × Claw agent framework",
+  "version": "0.2.0",
+  "description": "C.C.Claw - Claude Code x Claw agent framework",
   "type": "module",
-  "bin": {
-    "cclaw": "./dist/cli.js"
-  },
+  "bin": { "cclaw": "./dist/cli.mjs" },
   "scripts": {
     "dev": "tsx src/entry/cli.ts",
     "build": "tsup",
@@ -28,26 +26,7 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "engines": {
-    "node": ">=18"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cclaw/cclaw.git"
-  },
-  "keywords": [
-    "cli",
-    "agent",
-    "ai",
-    "llm",
-    "anthropic",
-    "openrouter",
-    "coding-agent"
-  ],
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": { "node": ">=18" },
   "license": "MIT"
 }
