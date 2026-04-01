@@ -10,7 +10,7 @@ export class OpenRouterProvider implements Provider {
 
   constructor(config: ProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'xiaomi/mimo-v2-pro';
+    this.model = config.model ?? 'openrouter/xiaomi/mimo-v2-pro';
     this.baseUrl = config.baseUrl ?? 'https://openrouter.ai/api/v1';
   }
 
@@ -26,7 +26,16 @@ export class OpenRouterProvider implements Provider {
         model: this.model,
         messages: [
           { role: 'system', content: params.system.join('\n') },
-          ...params.messages,
+          ...params.messages.map(m => ({
+            role: m.role,
+            content: typeof m.content === 'string'
+              ? m.content
+              : m.content.map(b => {
+                  if (b.type === 'text') return b.text;
+                  if (b.type === 'tool_result') return `[Tool Result] ${b.content}`;
+                  return `[${b.type}]`;
+                }).join('\n'),
+          })),
         ],
         tools: params.tools,
         stream: true,
