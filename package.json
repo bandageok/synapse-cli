@@ -1,0 +1,33 @@
+{
+  "name": "cclaw",
+  "version": "0.1.0",
+  "description": "C.C.Claw — Claude Code × Claw agent framework",
+  "type": "module",
+  "bin": {
+    "cclaw": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx src/entry/cli.ts",
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "commander": "^13.1.0",
+    "ink": "^5.2.1",
+    "react": "^19.2.4",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
