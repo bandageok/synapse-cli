@@ -7,8 +7,9 @@ import {
   helpCommand, exitCommand, clearCommand, modelCommand,
   memoryCommand, soulCommand, doctorCommand, configCommand,
   sessionCommand, costCommand, compactCommand, initCommand,
-  resumeCommand, historyCommand, soulEditCommand,
+  resumeCommand, historyCommand, soulEditCommand, vimCommand,
 } from '../commands/builtin/index.js';
+import { useVimInput } from '../vim/index.js';
 import type { Message, EngineEvent } from '../core/types.js';
 
 interface REPLDeps {
@@ -29,7 +30,7 @@ export function launchREPL(deps: REPLDeps) {
 
   // Setup command registry
   const registry = new CommandRegistry();
-  for (const cmd of [helpCommand, exitCommand, clearCommand, modelCommand, memoryCommand, soulCommand, doctorCommand, configCommand, sessionCommand, costCommand, compactCommand, initCommand, resumeCommand, historyCommand, soulEditCommand]) {
+  for (const cmd of [helpCommand, exitCommand, clearCommand, modelCommand, memoryCommand, soulCommand, doctorCommand, configCommand, sessionCommand, costCommand, compactCommand, initCommand, resumeCommand, historyCommand, soulEditCommand, vimCommand]) {
     registry.register(cmd);
   }
 
@@ -41,6 +42,7 @@ export function launchREPL(deps: REPLDeps) {
     const [model, setModelState] = useState('xiaomi/mimo-v2-pro');
     const allMessagesRef = useRef<Message[]>([]);
     const { exit } = useApp();
+    const vim = useVimInput(input, setInput);
 
     const addOutput = useCallback((line: string) => {
       setOutput(prev => [...prev.slice(-40), line]);
@@ -94,6 +96,11 @@ export function launchREPL(deps: REPLDeps) {
     useInput(async (char, key) => {
       if (isThinking) return;
 
+      // Vim mode intercept
+      if (vim.handleKey(char, key).handled) return;
+
+      // /vim toggle shortcut (Ctrl+V)
+
       if (key.return) {
         const trimmed = input.trim();
         if (!trimmed) return;
@@ -144,6 +151,9 @@ export function launchREPL(deps: REPLDeps) {
         React.createElement(Text, { bold: true, color: 'cyan' }, '⚡ C.C.Claw v0.2.0'),
         React.createElement(Text, { color: 'gray' }, ` — ${provider.name} / ${model}`),
         React.createElement(Text, { color: 'gray' }, ' | /help for commands'),
+        vim.enabled && React.createElement(Text, { color: vim.isNormalMode ? 'yellow' : 'green' },
+          vim.isNormalMode ? ' [NORMAL]' : ' [INSERT]'
+        ),
       ),
       ...output.map((line, i) =>
         React.createElement(Text, {

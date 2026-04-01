@@ -13,3 +13,4 @@ export { initCommand } from './init.js';
 export { resumeCommand } from './resume.js';
 export { historyCommand } from './history.js';
 export { soulEditCommand } from './soul-edit.js';
+export { vimCommand } from './vim.js';
