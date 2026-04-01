@@ -1,5 +1,5 @@
 // src/ui/REPL.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { render, Text, Box, useInput, useApp } from 'ink';
 import { createEngine } from '../core/Engine.js';
 import { CommandRegistry } from '../commands/registry.js';
@@ -20,10 +20,12 @@ interface REPLDeps {
   errorRecovery: any;
   dynamicReminder: any;
   dataDir: string;
+  sessionStore?: any;
 }
 
 export function launchREPL(deps: REPLDeps) {
-  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir } = deps;
+  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir, sessionStore } = deps;
+  const sessionId = `session-${Date.now()}`;
 
   // Setup command registry
   const registry = new CommandRegistry();
@@ -37,6 +39,7 @@ export function launchREPL(deps: REPLDeps) {
     const [output, setOutput] = useState<string[]>([]);
     const [isThinking, setIsThinking] = useState(false);
     const [model, setModelState] = useState('xiaomi/mimo-v2-pro');
+    const allMessagesRef = useRef<Message[]>([]);
     const { exit } = useApp();
 
     const addOutput = useCallback((line: string) => {
@@ -67,6 +70,14 @@ export function launchREPL(deps: REPLDeps) {
               break;
             case 'end_turn':
               setIsThinking(false);
+              // Auto-save session
+              if (sessionStore) {
+                const turnCount = allMessagesRef.current.filter(m => m.role === 'user').length;
+                sessionStore.save(sessionId, allMessagesRef.current, {
+                  id: sessionId, model, createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(), tokenUsage: 0, turnCount,
+                }).catch(() => {});
+              }
               break;
             case 'error':
               addOutput(`❌ ${event.error}`);
@@ -113,6 +124,7 @@ export function launchREPL(deps: REPLDeps) {
         const userMsg: Message = { role: 'user', content: trimmed };
         setMessages(prev => {
           const allMessages = [...prev, userMsg];
+          allMessagesRef.current = allMessages;
           runEngine(allMessages);
           return allMessages;
         });
