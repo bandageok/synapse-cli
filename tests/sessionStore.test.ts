@@ -27,12 +27,19 @@ describe('SessionStore', () => {
     expect(loaded?.metadata.id).toBe('test-1');
   });
 
-  it('lists sessions sorted by updatedAt', async () => {
-    await store.save('a', [], { id: 'a', model: 'test', createdAt: '2026-01-01', updatedAt: '2026-01-01', tokenUsage: 0, turnCount: 0 });
-    await store.save('b', [], { id: 'b', model: 'test', createdAt: '2026-01-02', updatedAt: '2026-01-02', tokenUsage: 0, turnCount: 0 });
+  it('lists sessions sorted by updatedAt descending', async () => {
+    // Save with explicit updatedAt values that differ
+    const metaA = { id: 'a', model: 'test', createdAt: '2026-01-01', updatedAt: '2026-01-01', tokenUsage: 0, turnCount: 0 };
+    const metaB = { id: 'b', model: 'test', createdAt: '2026-01-02', updatedAt: '2026-01-02', tokenUsage: 0, turnCount: 0 };
+    // Save 'a' first, then 'b' — save() overwrites updatedAt with current time
+    // so we need a small delay to ensure different timestamps
+    await store.save('a', [], metaA);
+    await new Promise(r => setTimeout(r, 10));
+    await store.save('b', [], metaB);
     const list = await store.list();
     expect(list).toHaveLength(2);
-    expect(list[0].id).toBe('b'); // newer first
+    // 'b' was saved later, so its updatedAt should be newer
+    expect(list[0].id).toBe('b');
   });
 
   it('returns null for non-existent session', async () => {
