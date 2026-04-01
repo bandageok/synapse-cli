@@ -22,12 +22,31 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
-    "tsup": "^8.0.0",
+    "tsup": "^8.5.1",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=18"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cclaw/cclaw.git"
+  },
+  "keywords": [
+    "cli",
+    "agent",
+    "ai",
+    "llm",
+    "anthropic",
+    "openrouter",
+    "coding-agent"
+  ],
+  "license": "MIT"
 }
