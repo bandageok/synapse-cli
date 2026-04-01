@@ -25,6 +25,11 @@ import { AgentTool } from '../tools/AgentTool.js';
 import { TodoWriteTool } from '../tools/TodoWriteTool.js';
 import { AskUserQuestionTool } from '../tools/AskUserQuestionTool.js';
 import { SkillTool } from '../tools/SkillTool.js';
+import { NotebookReadTool } from '../tools/NotebookReadTool.js';
+import { NotebookEditTool } from '../tools/NotebookEditTool.js';
+import { GitStatusTool } from '../tools/GitStatusTool.js';
+import { GitDiffTool } from '../tools/GitDiffTool.js';
+import { GitCommitTool } from '../tools/GitCommitTool.js';
 
 export async function init(opts: { model?: string }) {
   const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
@@ -33,7 +38,7 @@ export async function init(opts: { model?: string }) {
   const provider = createProvider();
   const tools = new ToolRegistry();
 
-  const allTools = [BashTool, FileReadTool, FileEditTool, FileWriteTool, GlobTool, GrepTool, WebSearchTool, WebFetchTool, AgentTool, TodoWriteTool, AskUserQuestionTool, SkillTool] as ToolDef[];
+  const allTools = [BashTool, FileReadTool, FileEditTool, FileWriteTool, GlobTool, GrepTool, WebSearchTool, WebFetchTool, AgentTool, TodoWriteTool, AskUserQuestionTool, SkillTool, NotebookReadTool, NotebookEditTool, GitStatusTool, GitDiffTool, GitCommitTool] as ToolDef[];
   for (const tool of allTools) {
     tools.register(tool);
   }

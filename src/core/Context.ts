@@ -79,6 +79,20 @@ You have access to a persistent memory system:
     parts.push(`Working directory: ${this.config.cwd}`);
     parts.push(`Platform: ${process.platform}`);
     parts.push(`Node: ${process.version}`);
+
+    // Git info
+    try {
+      const { execSync } = require('child_process');
+      const branch = execSync('git branch --show-current', { cwd: this.config.cwd, encoding: 'utf-8', timeout: 3000 }).trim();
+      const status = execSync('git status --short', { cwd: this.config.cwd, encoding: 'utf-8', timeout: 3000 }).trim();
+      const log = execSync('git log --oneline -3', { cwd: this.config.cwd, encoding: 'utf-8', timeout: 3000 }).trim();
+      parts.push(`Git branch: ${branch}`);
+      if (status) parts.push(`Git status:\n${status}`);
+      parts.push(`Recent commits:\n${log}`);
+    } catch {
+      // Not a git repo, skip
+    }
+
     return parts.join('\n');
   }
 
