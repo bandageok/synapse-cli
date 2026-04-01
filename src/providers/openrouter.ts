@@ -10,7 +10,7 @@ export class OpenRouterProvider implements Provider {
 
   constructor(config: ProviderConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model ?? 'anthropic/claude-sonnet-4';
+    this.model = config.model ?? 'xiaomi/mimo-v2-pro';
     this.baseUrl = config.baseUrl ?? 'https://openrouter.ai/api/v1';
   }
 
