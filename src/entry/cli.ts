@@ -99,4 +99,71 @@ program
     console.log(`  Compressor: 4-level defense`);
   });
 
+program
+  .command('mcp')
+  .description('Manage MCP servers')
+  .argument('[action]', 'add | list | remove')
+  .argument('[name]', 'Server name')
+  .argument('[command]', 'Server command')
+  .action(async (action, name, command) => {
+    const { homedir } = await import('os');
+    const { join } = await import('path');
+    const { readFileSync, writeFileSync, existsSync } = await import('fs');
+    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+    const mcpPath = join(dataDir, '.mcp.json');
+
+    if (action === 'list' || !action) {
+      if (!existsSync(mcpPath)) { console.log('No MCP servers configured.'); return; }
+      const config = JSON.parse(readFileSync(mcpPath, 'utf-8'));
+      const servers = config.mcpServers ?? {};
+      if (Object.keys(servers).length === 0) { console.log('No MCP servers configured.'); return; }
+      for (const [n, v] of Object.entries(servers)) {
+        console.log(`  ${n}: ${(v as any).command} ${(v as any).args?.join(' ') ?? ''}`);
+      }
+    } else if (action === 'add' && name && command) {
+      const config = existsSync(mcpPath) ? JSON.parse(readFileSync(mcpPath, 'utf-8')) : { mcpServers: {} };
+      config.mcpServers[name] = { command, args: process.argv.slice(6) };
+      writeFileSync(mcpPath, JSON.stringify(config, null, 2));
+      console.log(`✅ MCP server "${name}" added`);
+    } else if (action === 'remove' && name) {
+      if (!existsSync(mcpPath)) { console.log('No MCP servers configured.'); return; }
+      const config = JSON.parse(readFileSync(mcpPath, 'utf-8'));
+      delete config.mcpServers[name];
+      writeFileSync(mcpPath, JSON.stringify(config, null, 2));
+      console.log(`✅ MCP server "${name}" removed`);
+    } else {
+      console.log('Usage: cclaw mcp [list|add <name> <command>|remove <name>]');
+    }
+  });
+
+program
+  .command('plugin')
+  .description('Manage plugins')
+  .argument('[action]', 'list | install | remove')
+  .argument('[name]', 'Plugin name')
+  .action(async (action, name) => {
+    const { homedir } = await import('os');
+    const { join } = await import('path');
+    const { readdirSync, readFileSync, existsSync } = await import('fs');
+    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+    const pluginsDir = join(dataDir, 'plugins');
+
+    if (action === 'list' || !action) {
+      if (!existsSync(pluginsDir)) { console.log('No plugins installed.'); return; }
+      const dirs = readdirSync(pluginsDir, { withFileTypes: true }).filter(d => d.isDirectory());
+      if (dirs.length === 0) { console.log('No plugins installed.'); return; }
+      for (const dir of dirs) {
+        const manifestPath = join(pluginsDir, dir.name, 'plugin.json');
+        if (existsSync(manifestPath)) {
+          const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+          console.log(`  ${manifest.name}@${manifest.version} — ${manifest.description ?? ''}`);
+        } else {
+          console.log(`  ${dir.name} (no manifest)`);
+        }
+      }
+    } else {
+      console.log('Usage: cclaw plugin [list]');
+    }
+  });
+
 program.parse();

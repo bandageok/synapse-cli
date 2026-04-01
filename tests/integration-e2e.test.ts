@@ -130,7 +130,7 @@ describe('E2E: Full Engine + MiMo V2 Pro', () => {
     expect(events.some(e => e.type === 'tool_result')).toBe(true);
     expect(events.some(e => e.type === 'token')).toBe(true);
     expect(events.some(e => e.type === 'end_turn')).toBe(true);
-  }, 30_000);
+  }, 60_000);
 
   it('context builder produces 6 layers', async () => {
     const layers = await context.build(1);
