@@ -1,4 +1,4 @@
-import { globSync } from 'fs';
+import { globSync, statSync } from 'fs';
 import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
 
 export const GlobTool: ToolDef<{ pattern: string; path?: string }> = {
@@ -16,7 +16,8 @@ export const GlobTool: ToolDef<{ pattern: string; path?: string }> = {
   isEnabled: () => true,
   execute: async (input, ctx): Promise<ToolResult> => {
     const cwd = input.path || ctx.cwd;
-    const results = globSync(input.pattern, { cwd, nodir: true });
+    const results = globSync(input.pattern, { cwd })
+      .filter(f => { try { return !statSync(`${cwd}/${f}`).isDirectory(); } catch { return true; } });
     return { output: results.join('\n') || 'No files found', isError: false };
   },
 };

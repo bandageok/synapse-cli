@@ -73,7 +73,7 @@ export class Compressor {
     return messages.map(msg => {
       if (typeof msg.content === 'string') return msg;
       const filtered = (msg.content as ContentBlock[]).filter(
-        block => block.type !== 'image'
+        block => (block as any).type !== 'image'
       );
       return { ...msg, content: filtered };
     });
