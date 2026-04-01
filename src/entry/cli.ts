@@ -6,7 +6,7 @@ const program = new Command();
 program
   .name('cclaw')
   .description('C.C.Claw — Claude Code × Claw agent framework')
-  .version('0.1.0');
+  .version('0.2.0');
 
 program
   .command('chat')
@@ -94,7 +94,7 @@ program
     console.log(`  Data dir: ${deps.dataDir}`);
     console.log(`  SOUL.md: ${deps.soulLoader.load() ? '✅' : '❌'}`);
     console.log(`  Tools: ${deps.tools.schemas().length} registered`);
-    console.log(`  Engine: AsyncGenerator v0.1.0`);
+    console.log(`  Engine: AsyncGenerator v0.2.0`);
     console.log(`  Context: 6-layer builder`);
     console.log(`  Compressor: 4-level defense`);
   });

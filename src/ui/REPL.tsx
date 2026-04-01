@@ -2,7 +2,14 @@
 import React, { useState, useCallback } from 'react';
 import { render, Text, Box, useInput, useApp } from 'ink';
 import { createEngine } from '../core/Engine.js';
-import type { Message } from '../core/types.js';
+import { CommandRegistry } from '../commands/registry.js';
+import {
+  helpCommand, exitCommand, clearCommand, modelCommand,
+  memoryCommand, soulCommand, doctorCommand, configCommand,
+  sessionCommand, costCommand, compactCommand, initCommand,
+  resumeCommand, historyCommand, soulEditCommand,
+} from '../commands/builtin/index.js';
+import type { Message, EngineEvent } from '../core/types.js';
 
 interface REPLDeps {
   provider: any;
@@ -12,57 +19,29 @@ interface REPLDeps {
   hooks: any;
   errorRecovery: any;
   dynamicReminder: any;
+  dataDir: string;
 }
 
 export function launchREPL(deps: REPLDeps) {
-  const { provider, tools, context, compressor, hooks, errorRecovery } = deps;
+  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir } = deps;
+
+  // Setup command registry
+  const registry = new CommandRegistry();
+  for (const cmd of [helpCommand, exitCommand, clearCommand, modelCommand, memoryCommand, soulCommand, doctorCommand, configCommand, sessionCommand, costCommand, compactCommand, initCommand, resumeCommand, historyCommand, soulEditCommand]) {
+    registry.register(cmd);
+  }
 
   function REPL() {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [output, setOutput] = useState<string[]>([]);
     const [isThinking, setIsThinking] = useState(false);
+    const [model, setModelState] = useState('xiaomi/mimo-v2-pro');
     const { exit } = useApp();
 
     const addOutput = useCallback((line: string) => {
-      setOutput(prev => [...prev.slice(-30), line]);
+      setOutput(prev => [...prev.slice(-40), line]);
     }, []);
-
-    useInput(async (char, key) => {
-      if (isThinking) return;
-
-      if (key.return) {
-        const trimmed = input.trim();
-        if (!trimmed) return;
-
-        if (trimmed === '/exit' || trimmed === '/quit') {
-          exit();
-          return;
-        }
-        if (trimmed === '/clear') {
-          setOutput([]);
-          setInput('');
-          return;
-        }
-
-        const userMsg: Message = { role: 'user', content: trimmed };
-        setMessages(prev => {
-          const allMessages = [...prev, userMsg];
-          // Kick off engine with captured messages
-          runEngine(allMessages);
-          return allMessages;
-        });
-        addOutput(`> ${trimmed}`);
-        setInput('');
-        setIsThinking(true);
-      } else if (key.backspace || key.delete) {
-        setInput(prev => prev.slice(0, -1));
-      } else if (key.ctrl && char === 'c') {
-        exit();
-      } else if (!key.ctrl && !key.meta && char) {
-        setInput(prev => prev + char);
-      }
-    });
 
     const runEngine = useCallback(async (allMessages: Message[]) => {
       try {
@@ -101,10 +80,58 @@ export function launchREPL(deps: REPLDeps) {
       }
     }, [addOutput]);
 
+    useInput(async (char, key) => {
+      if (isThinking) return;
+
+      if (key.return) {
+        const trimmed = input.trim();
+        if (!trimmed) return;
+        setInput('');
+
+        // Handle slash commands
+        if (trimmed.startsWith('/')) {
+          const commandDeps = {
+            dataDir,
+            model,
+            setModel: (m: string) => setModelState(m),
+            clearOutput: () => setOutput([]),
+            addOutput,
+            messages,
+            resetMessages: () => setMessages([]),
+            turnCount: messages.filter(m => m.role === 'user').length,
+          };
+          const result = await registry.execute(trimmed, commandDeps);
+          if (result.output) {
+            for (const line of result.output.split('\n')) {
+              addOutput(line);
+            }
+          }
+          return;
+        }
+
+        // Normal chat
+        const userMsg: Message = { role: 'user', content: trimmed };
+        setMessages(prev => {
+          const allMessages = [...prev, userMsg];
+          runEngine(allMessages);
+          return allMessages;
+        });
+        addOutput(`> ${trimmed}`);
+        setIsThinking(true);
+      } else if (key.backspace || key.delete) {
+        setInput(prev => prev.slice(0, -1));
+      } else if (key.ctrl && char === 'c') {
+        exit();
+      } else if (!key.ctrl && !key.meta && char) {
+        setInput(prev => prev + char);
+      }
+    });
+
     return React.createElement(Box, { flexDirection: 'column', height: '100%' },
       React.createElement(Box, { marginBottom: 1 },
-        React.createElement(Text, { bold: true, color: 'cyan' }, '⚡ C.C.Claw v0.1.0'),
-        React.createElement(Text, { color: 'gray' }, ` — ${provider.name}`),
+        React.createElement(Text, { bold: true, color: 'cyan' }, '⚡ C.C.Claw v0.2.0'),
+        React.createElement(Text, { color: 'gray' }, ` — ${provider.name} / ${model}`),
+        React.createElement(Text, { color: 'gray' }, ' | /help for commands'),
       ),
       ...output.map((line, i) =>
         React.createElement(Text, {
@@ -114,6 +141,7 @@ export function launchREPL(deps: REPLDeps) {
             : line.startsWith('🔧') ? 'yellow'
             : line.startsWith('❌') ? 'red'
             : line.startsWith('📦') ? 'blue'
+            : line.startsWith('/') || line.startsWith('  ') ? 'gray'
             : 'gray',
         }, line)
       ),

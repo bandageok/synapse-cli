@@ -1,0 +1,15 @@
+export { helpCommand } from './help.js';
+export { exitCommand } from './exit.js';
+export { clearCommand } from './clear.js';
+export { modelCommand } from './model.js';
+export { memoryCommand } from './memory.js';
+export { soulCommand } from './soul.js';
+export { doctorCommand } from './doctor.js';
+export { configCommand } from './config.js';
+export { sessionCommand } from './session.js';
+export { costCommand } from './cost.js';
+export { compactCommand } from './compact.js';
+export { initCommand } from './init.js';
+export { resumeCommand } from './resume.js';
+export { historyCommand } from './history.js';
+export { soulEditCommand } from './soul-edit.js';
