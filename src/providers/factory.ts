@@ -1,5 +1,5 @@
 // src/providers/factory.ts
-import type { Provider } from '../core/types.js';
+import type { Provider } from './base.js';
 import { AnthropicProvider } from './anthropic.js';
 import { OpenRouterProvider } from './openrouter.js';
 

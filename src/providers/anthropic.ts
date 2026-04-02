@@ -1,7 +1,7 @@
 // src/providers/anthropic.ts
 import Anthropic from '@anthropic-ai/sdk';
-import type { StreamChunk, StreamParams, Provider } from '../core/types.js';
-import type { ProviderConfig } from './base.js';
+import type { StreamChunk, StreamParams } from '../core/types.js';
+import type { Provider, ProviderConfig } from './base.js';
 
 export class AnthropicProvider implements Provider {
   name = 'anthropic';

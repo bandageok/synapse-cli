@@ -1,6 +1,6 @@
 // src/providers/openrouter.ts
-import type { StreamChunk, StreamParams, Provider } from '../core/types.js';
-import type { ProviderConfig } from './base.js';
+import type { StreamChunk, StreamParams } from '../core/types.js';
+import type { Provider, ProviderConfig } from './base.js';
 
 export class OpenRouterProvider implements Provider {
   name = 'openrouter';
