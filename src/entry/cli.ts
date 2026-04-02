@@ -9,9 +9,20 @@ program
   .version('0.2.0');
 
 program
+  .command('onboard')
+  .description('Interactive setup wizard for first-time configuration')
+  .action(async () => {
+    const { launchOnboarding } = await import('../ui/Onboarding.js');
+    await launchOnboarding();
+  });
+
+program
   .command('chat')
   .description('Start interactive chat')
   .option('-m, --model <model>', 'Model to use')
+  .option('-p, --pipe', 'Pipe mode: read from stdin, output to stdout')
+  .option('-v, --verbose', 'Verbose mode: show full API requests')
+  .option('--add-dir <dirs...>', 'Additional directories to load CLAUDE.md from')
   .action(async (opts) => {
     const { init } = await import('./init.js');
     const deps = await init(opts);
@@ -19,6 +30,45 @@ program
       console.error('Error: No API key found. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY.');
       process.exit(1);
     }
+
+    // Pipe 模式：从 stdin 读取，输出到 stdout
+    if (opts.pipe) {
+      const chunks: Buffer[] = [];
+      process.stdin.on('data', (chunk: Buffer) => chunks.push(chunk));
+      process.stdin.on('end', async () => {
+        const input = Buffer.concat(chunks).toString('utf-8').trim();
+        if (!input) {
+          console.error('Error: No input from stdin');
+          process.exit(1);
+        }
+
+        const { createEngine } = await import('../core/Engine.js');
+        const messages = [{ role: 'user' as const, content: input }];
+
+        try {
+          for await (const event of createEngine(
+            messages, deps.provider, deps.tools, deps.context,
+            deps.hooks, deps.compressor, deps.errorRecovery
+          )) {
+            if (event.type === 'token') {
+              process.stdout.write(event.text);
+            } else if (event.type === 'tool_use' && opts.verbose) {
+              process.stderr.write(`\n🔧 ${event.tool}\n`);
+            } else if (event.type === 'tool_result' && opts.verbose) {
+              process.stderr.write(`  → ${event.output.slice(0, 200)}\n`);
+            } else if (event.type === 'error') {
+              process.stderr.write(`\n❌ ${event.error}\n`);
+              process.exit(1);
+            }
+          }
+        } catch (err: any) {
+          process.stderr.write(`\n❌ ${err.message}\n`);
+          process.exit(1);
+        }
+      });
+      return;
+    }
+
     const { launchREPL } = await import('../ui/REPL.js');
     await launchREPL(deps);
   });
@@ -163,6 +213,113 @@ program
       }
     } else {
       console.log('Usage: cclaw plugin [list]');
+    }
+  });
+
+program
+  .command('update')
+  .description('Check for updates and update cclaw')
+  .option('--check', 'Only check, do not update')
+  .action(async (opts) => {
+    const { execSync } = await import('child_process');
+    const { readFileSync } = await import('fs');
+    const { join } = await import('path');
+    const { fileURLToPath } = await import('url');
+    const { dirname } = await import('path');
+
+    // 获取本地版本
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = join(__dirname, '..', 'package.json');
+    let localVersion = '0.0.0';
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      localVersion = pkg.version;
+    } catch {}
+
+    console.log(`Current version: ${localVersion}`);
+
+    // 查询 npm registry
+    try {
+      const resp = await fetch('https://registry.npmjs.org/cclaw/latest');
+      if (!resp.ok) {
+        console.log('⚠️ Could not check registry. You can manually update with: npm update -g cclaw');
+        return;
+      }
+      const data = await resp.json() as any;
+      const latestVersion = data.version;
+
+      console.log(`Latest version:  ${latestVersion}`);
+
+      if (localVersion === latestVersion) {
+        console.log('✅ Already up to date!');
+        return;
+      }
+
+      if (opts.check) {
+        console.log(`📦 Update available: ${localVersion} → ${latestVersion}`);
+        console.log('Run `cclaw update` to install.');
+        return;
+      }
+
+      console.log(`📦 Updating ${localVersion} → ${latestVersion}...`);
+      try {
+        execSync('npm update -g cclaw', { stdio: 'inherit' });
+        console.log('✅ Update complete! Restart cclaw to use the new version.');
+      } catch {
+        console.log('⚠️ Auto-update failed. Try manually: npm update -g cclaw');
+      }
+    } catch {
+      console.log('⚠️ Could not check registry. You can manually update with: npm update -g cclaw');
+    }
+  });
+
+program
+  .command('logs')
+  .description('Show cclaw logs')
+  .option('-f, --follow', 'Follow log output (tail -f)')
+  .option('-n, --lines <n>', 'Number of lines to show', '50')
+  .action(async (opts) => {
+    const { homedir } = await import('os');
+    const { join } = await import('path');
+    const { existsSync, readFileSync, watchFile, unwatchFile } = await import('fs');
+    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+    const logPath = join(dataDir, 'logs', 'cclaw.log');
+
+    if (!existsSync(logPath)) {
+      console.log('No log file found. Logs are created during chat sessions.');
+      return;
+    }
+
+    const lines = parseInt(opts.lines, 10) || 50;
+    const content = readFileSync(logPath, 'utf-8');
+    const logLines = content.split('\n').filter(Boolean);
+    const recent = logLines.slice(-lines);
+
+    console.log(`--- Last ${lines} lines of ${logPath} ---`);
+    for (const line of recent) {
+      console.log(line);
+    }
+
+    if (opts.follow) {
+      console.log('\n--- Following log (Ctrl+C to stop) ---');
+      let lastSize = content.length;
+
+      watchFile(logPath, { interval: 1000 }, (curr) => {
+        if (curr.size > lastSize) {
+          const newContent = readFileSync(logPath, 'utf-8');
+          const newLines = newContent.slice(lastSize).split('\n').filter(Boolean);
+          for (const line of newLines) {
+            console.log(line);
+          }
+          lastSize = curr.size;
+        }
+      });
+
+      // 保持进程运行
+      process.on('SIGINT', () => {
+        unwatchFile(logPath);
+        process.exit(0);
+      });
     }
   });
 

@@ -14,3 +14,6 @@ export { resumeCommand } from './resume.js';
 export { historyCommand } from './history.js';
 export { soulEditCommand } from './soul-edit.js';
 export { vimCommand } from './vim.js';
+export { diffCommand } from './diff.js';
+export { undoCommand } from './undo.js';
+export { contextCommand } from './context.js';

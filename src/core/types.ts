@@ -59,7 +59,8 @@ export type EngineEvent =
   | { type: 'tool_result'; tool: string; output: string }
   | { type: 'compressed'; tokensBefore: number; tokensAfter: number }
   | { type: 'end_turn' }
-  | { type: 'error'; error: string };
+  | { type: 'error'; error: string }
+  | { type: 'permission_ask'; tool: string; input: Record<string, unknown>; toolUseId: string };
 
 export interface StreamChunk {
   type: string;

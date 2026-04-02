@@ -15,6 +15,7 @@ export interface CommandDeps {
   addOutput: (line: string) => void;
   messages: any[];
   resetMessages: () => void;
+  setMessages?: (msgs: any[]) => void;
   turnCount: number;
 }
 

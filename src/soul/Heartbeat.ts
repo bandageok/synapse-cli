@@ -17,10 +17,22 @@ export class Heartbeat {
   private tasks: HeartbeatTask[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly defaultInterval = 5 * 60 * 1000; // 5 minutes
+  private dream: any = null;
+  private memoryExtractor: any = null;
 
   constructor(private dataDir: string) {
     this.loadBuiltinTasks();
     this.loadHeartbeatMd();
+  }
+
+  /** 设置 Dream 实例（可选） */
+  setDream(dream: any): void {
+    this.dream = dream;
+  }
+
+  /** 设置 MemoryExtractor 实例（可选） */
+  setMemoryExtractor(extractor: any): void {
+    this.memoryExtractor = extractor;
   }
 
   private loadBuiltinTasks(): void {
@@ -114,6 +126,35 @@ export class Heartbeat {
         }
       } catch {
         // silently skip failed tasks
+      }
+    }
+
+    // Dream 整合检查
+    if (this.dream && this.dream.shouldTrigger()) {
+      console.log('[Heartbeat] Dream consolidation triggered');
+      this.dream.run().then(result => {
+        if (result.success) {
+          console.log(`[Heartbeat] Dream completed: ${result.summary}`);
+        }
+      }).catch(() => {});
+    }
+
+    // MemoryExtractor 检查（每天一次）
+    if (this.memoryExtractor) {
+      const sessionsDir = join(this.dataDir, 'sessions');
+      if (existsSync(sessionsDir)) {
+        const { readdirSync } = require('fs') as typeof import('fs');
+        const files = readdirSync(sessionsDir).filter((f: string) => f.endsWith('.json'));
+        if (files.length > 0) {
+          // 检查最近的会话是否已提取记忆
+          const latestFile = files.sort().pop();
+          const latestPath = join(sessionsDir, latestFile!);
+          const stats = require('fs').statSync(latestPath);
+          const hoursSince = (Date.now() - stats.mtimeMs) / 3_600_000;
+          if (hoursSince < 24) {
+            console.log(`[Heartbeat] Recent session found (${latestFile}), memory extraction available`);
+          }
+        }
       }
     }
   }

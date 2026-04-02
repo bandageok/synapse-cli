@@ -26,10 +26,14 @@ export const resumeCommand: SlashCommand = {
     if (idx < 0 || idx >= recentFiles.length) return 'Invalid session number.';
 
     const data = JSON.parse(readFileSync(join(sessionsDir, recentFiles[idx]), 'utf-8'));
-    deps.resetMessages();
-    for (const msg of data.messages) {
-      deps.messages.push(msg);
+    if (deps.setMessages) {
+      deps.setMessages(data.messages);
+    } else {
+      deps.resetMessages();
+      for (const msg of data.messages) {
+        deps.messages.push(msg);
+      }
     }
-    return `Resumed session: ${data.metadata?.id ?? recentFiles[idx]} (${data.messages.length} messages)`;
+    return `✅ Resumed session: ${data.metadata?.id ?? recentFiles[idx]} (${data.messages.length} messages)`;
   },
 };

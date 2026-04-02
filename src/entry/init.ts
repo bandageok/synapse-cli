@@ -13,6 +13,12 @@ import { ErrorRecovery } from '../core/ErrorRecovery.js';
 import { SoulLoader } from '../soul/SoulLoader.js';
 import { MemoryManager } from '../soul/MemoryManager.js';
 import { DynamicReminder } from '../soul/DynamicReminder.js';
+import { Heartbeat } from '../soul/Heartbeat.js';
+import { Dream } from '../soul/Dream.js';
+import { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
+import { SelfImprovement } from '../soul/SelfImprovement.js';
+import { MEMORY_EXTRACTION_PROMPT } from '../soul/MemoryExtractor.js';
+import { Logger } from '../core/Logger.js';
 import { BashTool } from '../tools/BashTool.js';
 import { FileReadTool } from '../tools/FileReadTool.js';
 import { FileEditTool } from '../tools/FileEditTool.js';
@@ -21,7 +27,6 @@ import { GlobTool } from '../tools/GlobTool.js';
 import { GrepTool } from '../tools/GrepTool.js';
 import { WebSearchTool } from '../tools/WebSearchTool.js';
 import { WebFetchTool } from '../tools/WebFetchTool.js';
-import { AgentTool } from '../tools/AgentTool.js';
 import { TodoWriteTool } from '../tools/TodoWriteTool.js';
 import { AskUserQuestionTool } from '../tools/AskUserQuestionTool.js';
 import { SkillTool } from '../tools/SkillTool.js';
@@ -30,21 +35,36 @@ import { NotebookEditTool } from '../tools/NotebookEditTool.js';
 import { GitStatusTool } from '../tools/GitStatusTool.js';
 import { GitDiffTool } from '../tools/GitDiffTool.js';
 import { GitCommitTool } from '../tools/GitCommitTool.js';
+import { PowerShellTool } from '../tools/PowerShellTool.js';
+import { ImageReadTool, ImageGenerateTool } from '../tools/ImageTool.js';
+import { TtsTool } from '../tools/TtsTool.js';
+import { createTaskTool } from '../tools/TaskTool.js';
+import { MCPClient } from '../services/mcp/client.js';
+import { PluginRegistry } from '../plugins/registry.js';
 
-export async function init(opts: { model?: string }) {
+export async function init(opts: { model?: string; addDir?: string[] }) {
   const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
-  const provider = createProvider();
+  const provider = createProvider(opts.model);
   const tools = new ToolRegistry();
+  const logger = new Logger({ dataDir });
 
-  const allTools = [BashTool, FileReadTool, FileEditTool, FileWriteTool, GlobTool, GrepTool, WebSearchTool, WebFetchTool, AgentTool, TodoWriteTool, AskUserQuestionTool, SkillTool, NotebookReadTool, NotebookEditTool, GitStatusTool, GitDiffTool, GitCommitTool] as ToolDef[];
-  for (const tool of allTools) {
+  // 基础工具（无依赖）
+  const basicTools = [
+    BashTool, FileReadTool, FileEditTool, FileWriteTool,
+    GlobTool, GrepTool, WebSearchTool, WebFetchTool,
+    TodoWriteTool, AskUserQuestionTool, SkillTool,
+    NotebookReadTool, NotebookEditTool,
+    GitStatusTool, GitDiffTool, GitCommitTool,
+    PowerShellTool, ImageReadTool, ImageGenerateTool, TtsTool,
+  ] as ToolDef[];
+  for (const tool of basicTools) {
     tools.register(tool);
   }
 
-  const context = new ContextBuilder({ dataDir, cwd: process.cwd() });
-  const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default' });
+  const context = new ContextBuilder({ dataDir, cwd: process.cwd(), additionalDirs: opts.addDir });
+  const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider });
   const hooks = new HookSystem();
   const sessionStore = new SessionStore(join(dataDir, 'sessions'));
   const errorRecovery = new ErrorRecovery();
@@ -52,5 +72,34 @@ export async function init(opts: { model?: string }) {
   const memoryManager = new MemoryManager(dataDir);
   const dynamicReminder = new DynamicReminder();
 
-  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, dataDir };
+  // TaskTool 需要注入依赖
+  const taskTool = createTaskTool({ provider: provider!, tools, context, hooks, compressor, errorRecovery });
+  tools.register(taskTool);
+
+  // MCP 集成
+  const mcpClient = new MCPClient();
+  const mcpServers = mcpClient.loadConfig(dataDir);
+  for (const serverConfig of mcpServers) {
+    try {
+      const mcpTools = await mcpClient.connect(serverConfig);
+      for (const mcpTool of mcpTools) {
+        tools.register(mcpClient.wrapAsToolDef(mcpTool, serverConfig.name));
+      }
+    } catch {
+      // MCP 连接失败，静默跳过
+    }
+  }
+
+  // Plugin 集成
+  const pluginRegistry = new PluginRegistry();
+  pluginRegistry.loadFromDir(dataDir);
+
+  // Heartbeat + Dream + Watchdog + SelfImprovement
+  const heartbeat = new Heartbeat(dataDir);
+  const dream = new Dream(dataDir);
+  heartbeat.setDream(dream);
+  const watchdog = new FakeExecutionWatchdog();
+  const selfImprovement = new SelfImprovement(dataDir);
+
+  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, heartbeat, dream, watchdog, selfImprovement, mcpClient, pluginRegistry, logger, dataDir };
 }
