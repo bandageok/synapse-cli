@@ -61,8 +61,9 @@ program
               process.exit(1);
             }
           }
-        } catch (err: any) {
-          process.stderr.write(`\n❌ ${err.message}\n`);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`\n❌ ${msg}\n`);
           process.exit(1);
         }
       });

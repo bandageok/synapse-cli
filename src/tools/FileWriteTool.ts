@@ -20,8 +20,8 @@ export const FileWriteTool: ToolDef<{ file_path: string; content: string }> = {
       mkdirSync(dirname(input.file_path), { recursive: true });
       writeFileSync(input.file_path, input.content);
       return { output: `File written: ${input.file_path}`, isError: false };
-    } catch (err: any) {
-      return { output: `Error: ${err.message}`, isError: true };
+    } catch (err: unknown) {
+      return { output: `Error: ${(err instanceof Error ? err.message : String(err))}`, isError: true };
     }
   },
 };

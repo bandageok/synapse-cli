@@ -20,7 +20,7 @@ export interface EngineOptions {
   onPermissionAsk?: (tool: string, input: Record<string, unknown>, toolUseId: string) => Promise<boolean>;
   watchdog?: { recordTurn: (turn: number, content: string, hasToolCall: boolean) => void; report: () => string };
   selfImprovement?: { logError: (tool: string, command: string, error: string) => void };
-  logger?: { info: (msg: string, meta?: any) => void; error: (msg: string, meta?: any) => void; warn: (msg: string, meta?: any) => void };
+  logger?: { info: (msg: string, meta?: unknown) => void; error: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 }
 
 export async function* createEngine(
@@ -178,8 +178,9 @@ export async function* createEngine(
             () => tools.execute(toolUse),
             { tool: toolUse.name, maxRetries: 1 },
           );
-        } catch (err: any) {
-          result = { output: `Error: ${err.message}`, isError: true };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          result = { output: `Error: ${msg}`, isError: true };
           // 记录错误到 SelfImprovement
           if (options?.selfImprovement) {
             options.selfImprovement.logError(
@@ -198,8 +199,8 @@ export async function* createEngine(
         });
         yield { type: 'tool_result', tool: toolUse.name, output: result.output };
       }
-    } catch (err: any) {
-      const recovered = await errorRecovery.handleApiError(err, messages);
+    } catch (err: unknown) {
+      const recovered = await errorRecovery.handleApiError(err as Error, messages);
       if (!recovered) {
         options?.logger?.error(`Engine error: ${err.message}`);
         yield { type: 'error', error: err.message };

@@ -47,8 +47,9 @@ export const PowerShellTool: ToolDef<{ command: string; timeout?: number }> = {
         env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
       });
       return { output, isError: false };
-    } catch (err: any) {
-      return { output: err.stderr || err.message, isError: true };
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; message?: string };
+      return { output: e.stderr || e.message || String(err), isError: true };
     }
   },
 };

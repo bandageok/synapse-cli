@@ -1,8 +1,9 @@
 // src/soul/Heartbeat.ts
 // 定时任务引擎 — 借鉴 OpenClaw HEARTBEAT.md 驱动模式
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
+import type { Dream } from './Dream.js';
 
 export interface HeartbeatTask {
   name: string;
@@ -17,8 +18,8 @@ export class Heartbeat {
   private tasks: HeartbeatTask[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly defaultInterval = 5 * 60 * 1000; // 5 minutes
-  private dream: any = null;
-  private memoryExtractor: any = null;
+  private dream: Dream | null = null;
+  private memoryExtractor: { extract: () => Promise<void> } | null = null;
 
   constructor(private dataDir: string) {
     this.loadBuiltinTasks();
@@ -26,12 +27,12 @@ export class Heartbeat {
   }
 
   /** 设置 Dream 实例（可选） */
-  setDream(dream: any): void {
+  setDream(dream: Dream): void {
     this.dream = dream;
   }
 
   /** 设置 MemoryExtractor 实例（可选） */
-  setMemoryExtractor(extractor: any): void {
+  setMemoryExtractor(extractor: { extract: () => Promise<void> }): void {
     this.memoryExtractor = extractor;
   }
 
@@ -132,7 +133,7 @@ export class Heartbeat {
     // Dream 整合检查
     if (this.dream && this.dream.shouldTrigger()) {
       console.log('[Heartbeat] Dream consolidation triggered');
-      this.dream.run().then(result => {
+      this.dream.run().then((result: { success: boolean; summary: string }) => {
         if (result.success) {
           console.log(`[Heartbeat] Dream completed: ${result.summary}`);
         }
@@ -143,7 +144,6 @@ export class Heartbeat {
     if (this.memoryExtractor) {
       const sessionsDir = join(this.dataDir, 'sessions');
       if (existsSync(sessionsDir)) {
-        const { readdirSync } = require('fs') as typeof import('fs');
         const files = readdirSync(sessionsDir).filter((f: string) => f.endsWith('.json'));
         if (files.length > 0) {
           // 检查最近的会话是否已提取记忆

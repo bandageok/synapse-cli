@@ -11,6 +11,7 @@ export interface ContextConfig {
   dataDir: string;   // ~/.cclaw/
   cwd: string;       // current working directory
   additionalDirs?: string[];  // --add-dir 额外目录
+  soulLoader?: { load: () => string };  // 可选 SoulLoader
 }
 
 export class ContextBuilder {
@@ -73,6 +74,10 @@ Follow these principles:
    * Layer 2: SOUL.md 人格定义
    */
   private layer2_soul(): string {
+    // 优先使用 SoulLoader（支持缓存）
+    if (this.config.soulLoader) {
+      return this.config.soulLoader.load();
+    }
     const soulPath = join(this.config.dataDir, 'SOUL.md');
     if (existsSync(soulPath)) {
       return readFileSync(soulPath, 'utf-8');

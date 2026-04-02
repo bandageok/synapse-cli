@@ -9,7 +9,7 @@
 // The "dream" runs a reflective pass over memory files, merging/pruning/
 // reorganizing them so future sessions orient quickly.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { buildConsolidationPrompt } from './MemoryExtractor.js';
 import { SessionIndex } from './SessionIndex.js';
@@ -286,7 +286,6 @@ export class Dream {
     if (!existsSync(sessionsDir)) return [];
 
     try {
-      const { readdirSync, statSync } = require('fs') as typeof import('fs');
       return readdirSync(sessionsDir)
         .filter((f: string) => f.endsWith('.json'))
         .map((f: string) => ({

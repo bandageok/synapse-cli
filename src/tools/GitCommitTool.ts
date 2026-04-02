@@ -23,8 +23,8 @@ export const GitCommitTool: ToolDef<{ message: string; add_all?: boolean }> = {
         cwd: ctx.cwd, encoding: 'utf-8', timeout: 10000,
       });
       return { output: result, isError: false };
-    } catch (err: any) {
-      return { output: err.stderr || err.message, isError: true };
+    } catch (err: unknown) {
+      return { output: err.stderr || (err instanceof Error ? err.message : String(err)), isError: true };
     }
   },
 };

@@ -16,21 +16,35 @@ import {
 import { useVimInput } from '../vim/index.js';
 import type { Message, EngineEvent } from '../core/types.js';
 
+import type { Provider } from '../providers/base.js';
+import type { ToolRegistry } from '../core/ToolRegistry.js';
+import type { ContextBuilder } from '../core/Context.js';
+import type { Compressor } from '../core/Compressor.js';
+import type { HookSystem } from '../core/HookSystem.js';
+import type { ErrorRecovery } from '../core/ErrorRecovery.js';
+import type { DynamicReminder } from '../soul/DynamicReminder.js';
+import type { Heartbeat } from '../soul/Heartbeat.js';
+import type { Dream } from '../soul/Dream.js';
+import type { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
+import type { SelfImprovement } from '../soul/SelfImprovement.js';
+import type { Logger } from '../core/Logger.js';
+import type { SessionStore } from '../core/SessionStore.js';
+
 interface REPLDeps {
-  provider: any;
-  tools: any;
-  context: any;
-  compressor: any;
-  hooks: any;
-  errorRecovery: any;
-  dynamicReminder: any;
-  heartbeat?: any;
-  dream?: any;
-  watchdog?: any;
-  selfImprovement?: any;
-  logger?: any;
+  provider: Provider;
+  tools: ToolRegistry;
+  context: ContextBuilder;
+  compressor: Compressor;
+  hooks: HookSystem;
+  errorRecovery: ErrorRecovery;
+  dynamicReminder: DynamicReminder;
+  heartbeat?: Heartbeat;
+  dream?: Dream;
+  watchdog?: FakeExecutionWatchdog;
+  selfImprovement?: SelfImprovement;
+  logger?: Logger;
   dataDir: string;
-  sessionStore?: any;
+  sessionStore?: SessionStore;
 }
 
 // Spinner 帧
@@ -120,7 +134,7 @@ export function launchREPL(deps: REPLDeps) {
     const [isThinking, setIsThinking] = useState(false);
     const [thinkingLabel, setThinkingLabel] = useState('');
     const [model, setModelState] = useState('xiaomi/mimo-v2-pro');
-    const [pendingPermission, setPendingPermission] = useState<{ tool: string; input: any; toolUseId: string; resolve: (v: boolean) => void } | null>(null);
+    const [pendingPermission, setPendingPermission] = useState<{ tool: string; input: unknown; toolUseId: string; resolve: (v: boolean) => void } | null>(null);
     const [toolResults, setToolResults] = useState<Map<string, { tool: string; output: string }>>(new Map());
     const allMessagesRef = useRef<Message[]>([]);
     const { exit } = useApp();
@@ -133,8 +147,8 @@ export function launchREPL(deps: REPLDeps) {
 
     const runEngine = useCallback(async (allMessages: Message[]) => {
       try {
-        const engineOptions: any = {
-          onPermissionAsk: async (tool: string, input: any, toolUseId: string) => {
+        const engineOptions: Record<string, unknown> = {
+          onPermissionAsk: async (tool: string, input: unknown, toolUseId: string) => {
             return new Promise<boolean>((resolve) => {
               setPendingPermission({ tool, input, toolUseId, resolve });
             });
@@ -189,8 +203,9 @@ export function launchREPL(deps: REPLDeps) {
               break;
           }
         }
-      } catch (err: any) {
-        addOutput(`❌ ${err.message}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        addOutput(`❌ ${msg}`);
         setIsThinking(false);
         setThinkingLabel('');
       }

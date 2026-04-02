@@ -17,7 +17,6 @@ import { Heartbeat } from '../soul/Heartbeat.js';
 import { Dream } from '../soul/Dream.js';
 import { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
 import { SelfImprovement } from '../soul/SelfImprovement.js';
-import { MEMORY_EXTRACTION_PROMPT } from '../soul/MemoryExtractor.js';
 import { Logger } from '../core/Logger.js';
 import { BashTool } from '../tools/BashTool.js';
 import { FileReadTool } from '../tools/FileReadTool.js';
@@ -49,6 +48,10 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
   const provider = createProvider(opts.model);
   const tools = new ToolRegistry();
   const logger = new Logger({ dataDir });
+  const compressor = new Compressor({ contextWindow: 200_000, model: 'claude-sonnet-4-20250514' });
+  const hooks = new HookSystem();
+  const sessionStore = new SessionStore(dataDir);
+  const errorRecovery = new ErrorRecovery();
 
   // 基础工具（无依赖）
   const basicTools = [
@@ -63,32 +66,25 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
     tools.register(tool);
   }
 
-  const context = new ContextBuilder({ dataDir, cwd: process.cwd(), additionalDirs: opts.addDir });
-  const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider });
-  const hooks = new HookSystem();
-  const sessionStore = new SessionStore(join(dataDir, 'sessions'));
-  const errorRecovery = new ErrorRecovery();
   const soulLoader = new SoulLoader(dataDir);
   const memoryManager = new MemoryManager(dataDir);
   const dynamicReminder = new DynamicReminder();
 
+  const context = new ContextBuilder({ dataDir, cwd: process.cwd(), additionalDirs: opts.addDir, soulLoader });
+
   // TaskTool 需要注入依赖
   const taskTool = createTaskTool({ provider: provider!, tools, context, hooks, compressor, errorRecovery });
-  tools.register(taskTool);
+  tools.register(taskTool as ToolDef);
 
-  // MCP 集成
+  // MCP 集成（并行连接）
   const mcpClient = new MCPClient();
   const mcpServers = mcpClient.loadConfig(dataDir);
-  for (const serverConfig of mcpServers) {
-    try {
-      const mcpTools = await mcpClient.connect(serverConfig);
-      for (const mcpTool of mcpTools) {
-        tools.register(mcpClient.wrapAsToolDef(mcpTool, serverConfig.name));
-      }
-    } catch {
-      // MCP 连接失败，静默跳过
+  await Promise.allSettled(mcpServers.map(async (serverConfig) => {
+    const mcpTools = await mcpClient.connect(serverConfig);
+    for (const mcpTool of mcpTools) {
+      tools.register(mcpClient.wrapAsToolDef(mcpTool, serverConfig.name));
     }
-  }
+  }));
 
   // Plugin 集成
   const pluginRegistry = new PluginRegistry();

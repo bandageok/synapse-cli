@@ -28,8 +28,8 @@ export const WebFetchTool: ToolDef<{ url: string; max_chars?: number }> = {
         .trim();
       const maxChars = input.max_chars ?? 5000;
       return { output: text.slice(0, maxChars), isError: false };
-    } catch (err: any) {
-      return { output: `Error fetching URL: ${err.message}`, isError: true };
+    } catch (err: unknown) {
+      return { output: `Error fetching URL: ${(err instanceof Error ? err.message : String(err))}`, isError: true };
     }
   },
 };

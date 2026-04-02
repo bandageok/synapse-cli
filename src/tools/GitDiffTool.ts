@@ -20,8 +20,8 @@ export const GitDiffTool: ToolDef<{ staged?: boolean; path?: string }> = {
       const cmd = `git diff ${flags} ${path}`.trim();
       const diff = execSync(cmd, { cwd: ctx.cwd, encoding: 'utf-8', timeout: 10000, maxBuffer: 1024 * 1024 });
       return { output: diff || 'No changes', isError: false };
-    } catch (err: any) {
-      return { output: err.message, isError: true };
+    } catch (err: unknown) {
+      return { output: (err instanceof Error ? err.message : String(err)), isError: true };
     }
   },
 };

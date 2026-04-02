@@ -116,7 +116,7 @@ export class MCPClient {
 
     const resp = await this.sendRequest(server.process, 'resources/read', { uri });
     const contents = resp?.result?.contents ?? [];
-    return contents.map((c: any) => c.text ?? c.blob ?? '').join('\n') || 'Empty resource';
+    return contents.map((c: { text?: string; blob?: string }) => c.text ?? c.blob ?? '').join('\n') || 'Empty resource';
   }
 
   /** 获取 prompt */
@@ -126,7 +126,7 @@ export class MCPClient {
 
     const resp = await this.sendRequest(server.process, 'prompts/get', { name, arguments: args });
     const messages = resp?.result?.messages ?? [];
-    return messages.map((m: any) => m.content?.text ?? '').join('\n') || 'Empty prompt';
+    return messages.map((m: { content?: { text?: string } }) => m.content?.text ?? '').join('\n') || 'Empty prompt';
   }
 
   /** 包装为 ToolDef */
@@ -180,7 +180,7 @@ export class MCPClient {
 
   // --- 内部方法 ---
 
-  private sendRequest(proc: ChildProcess, method: string, params: any): Promise<any> {
+  private sendRequest(proc: ChildProcess, method: string, params: unknown): Promise<unknown> {
     return new Promise((resolve) => {
       const id = ++this.requestId;
       const req = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
@@ -206,7 +206,7 @@ export class MCPClient {
     });
   }
 
-  private sendNotification(proc: ChildProcess, method: string, params: any): void {
+  private sendNotification(proc: ChildProcess, method: string, params: unknown): void {
     const req = JSON.stringify({ jsonrpc: '2.0', method, params }) + '\n';
     proc.stdin?.write(req);
   }

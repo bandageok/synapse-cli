@@ -4,7 +4,7 @@ import type { Message, CompressionResult, ContentBlock } from './types.js';
 export interface CompressorConfig {
   contextWindow: number;
   model: string;
-  provider?: any;  // 可选 Provider 用于 LLM 摘要
+  provider?: unknown;  // 可选 Provider 用于 LLM 摘要
 }
 
 export class Compressor {
@@ -12,7 +12,7 @@ export class Compressor {
   private warningThreshold: number;
   private consecutiveFailures = 0;
   private readonly MAX_CONSECUTIVE_FAILURES = 3;
-  private provider: any;
+  private provider: unknown;
 
   constructor(config: CompressorConfig) {
     // Claude Code: contextWindow - 20_000 (reserved for summary output)

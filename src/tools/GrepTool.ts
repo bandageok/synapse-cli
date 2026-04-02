@@ -21,7 +21,7 @@ export const GrepTool: ToolDef<{ pattern: string; path?: string; include?: strin
       const cmd = `grep -rn ${includeFlag} "${input.pattern}" "${input.path || ctx.cwd}"`;
       const output = execSync(cmd, { encoding: 'utf-8', timeout: 10_000, maxBuffer: 1024 * 1024 });
       return { output: output.slice(0, 10_000), isError: false };
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err.status === 1) return { output: 'No matches found', isError: false };
       return { output: err.message, isError: true };
     }

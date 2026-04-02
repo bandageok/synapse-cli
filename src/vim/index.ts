@@ -12,7 +12,7 @@ import { transition } from './transitions.js';
 
 export interface VimResult {
   vimState: VimState;
-  handleKey: (char: string, key: any) => { handled: boolean };
+  handleKey: (char: string, key: { return?: boolean; escape?: boolean; backspace?: boolean; delete?: boolean; leftArrow?: boolean; rightArrow?: boolean; upArrow?: boolean; downArrow?: boolean; ctrl?: boolean; meta?: boolean; shift?: boolean }) => { handled: boolean };
   isNormalMode: boolean;
   toggleVim: () => void;
   enabled: boolean;
@@ -34,7 +34,7 @@ export function useVimInput(
   }, []);
 
   const handleKey = useCallback(
-    (char: string, key: any) => {
+    (char: string, key: { return?: boolean; escape?: boolean; backspace?: boolean; delete?: boolean; leftArrow?: boolean; rightArrow?: boolean; ctrl?: boolean }) => {
       if (!enabled) return { handled: false };
 
       // INSERT mode

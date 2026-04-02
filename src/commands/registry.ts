@@ -1,4 +1,6 @@
 // src/commands/registry.ts
+import type { Message } from '../core/types.js';
+
 export interface SlashCommand {
   name: string;
   aliases?: string[];
@@ -13,9 +15,9 @@ export interface CommandDeps {
   setModel: (m: string) => void;
   clearOutput: () => void;
   addOutput: (line: string) => void;
-  messages: any[];
+  messages: Message[];
   resetMessages: () => void;
-  setMessages?: (msgs: any[]) => void;
+  setMessages?: (msgs: Message[]) => void;
   turnCount: number;
 }
 

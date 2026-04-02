@@ -6,13 +6,20 @@ import type { ToolRegistry } from '../core/ToolRegistry.js';
 import type { Provider } from '../core/types.js';
 import { createEngine } from '../core/Engine.js';
 
+import type { Provider } from '../providers/base.js';
+import type { ToolRegistry } from '../core/ToolRegistry.js';
+import type { ContextBuilder } from '../core/Context.js';
+import type { Compressor } from '../core/Compressor.js';
+import type { HookSystem } from '../core/HookSystem.js';
+import type { ErrorRecovery } from '../core/ErrorRecovery.js';
+
 export interface TaskToolDeps {
   provider: Provider;
   tools: ToolRegistry;
-  context: any;
-  hooks: any;
-  compressor: any;
-  errorRecovery: any;
+  context: ContextBuilder;
+  hooks: HookSystem;
+  compressor: Compressor;
+  errorRecovery: ErrorRecovery;
 }
 
 export type IsolationMode = 'in-process' | 'spawn';
@@ -92,8 +99,9 @@ async function executeInProcess(
       }
     }
     return { output: outputs.join('\n') || '[SubAgent] Task completed with no output.', isError: false };
-  } catch (err: any) {
-    return { output: `[SubAgent] Failed: ${err.message}\n\n${outputs.join('\n')}`, isError: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { output: `[SubAgent] Failed: ${msg}\n\n${outputs.join('\n')}`, isError: true };
   }
 }
 

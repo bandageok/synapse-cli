@@ -84,8 +84,8 @@ export const ImageReadTool: ToolDef<{ file_path: string }> = {
         output: `Format: ${ext.toUpperCase()} (unknown binary)\nSize: ${(size / 1024).toFixed(1)} KB\n(Dimensions: unsupported format)`,
         isError: false,
       };
-    } catch (err: any) {
-      return { output: `Error reading image: ${err.message}`, isError: true };
+    } catch (err: unknown) {
+      return { output: `Error reading image: ${err instanceof Error ? err.message : String(err)}`, isError: true };
     }
   },
 };
@@ -144,8 +144,8 @@ export const ImageGenerateTool: ToolDef<{ prompt: string; output_path?: string; 
         output: `Image generated and saved to: ${outputPath}\nPrompt: ${input.prompt}`,
         isError: false,
       };
-    } catch (err: any) {
-      return { output: `Error: ${err.message}`, isError: true };
+    } catch (err: unknown) {
+      return { output: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
     }
   },
 };

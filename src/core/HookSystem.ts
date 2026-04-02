@@ -5,7 +5,7 @@ interface HookConfig {
   event: 'preToolUse' | 'postToolUse';
   tool?: string;
   command?: string;
-  handler?: (toolUse: { id: string; name: string; input: Record<string, unknown> }, result?: any) => Promise<HookResult>;
+  handler?: (toolUse: { id: string; name: string; input: Record<string, unknown> }, result?: unknown) => Promise<HookResult>;
 }
 
 export class HookSystem {
@@ -27,7 +27,7 @@ export class HookSystem {
     return { blocked: false };
   }
 
-  async postToolUse(toolUse: { id: string; name: string; input: Record<string, unknown> }, result: any): Promise<void> {
+  async postToolUse(toolUse: { id: string; name: string; input: Record<string, unknown> }, result: unknown): Promise<void> {
     for (const hook of this.hooks) {
       if (hook.event !== 'postToolUse') continue;
       if (hook.tool && hook.tool !== toolUse.name) continue;

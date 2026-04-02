@@ -306,7 +306,7 @@ export class MemoryLoader {
       (path.startsWith('/') && path !== '/') ||
       (!path.startsWith('@') &&
         !path.match(/^[#%^&*()]+/) &&
-        path.match(/^[a-zA-Z0-9._-]/))
+        path.match(/^[a-zA-Z0-9._-]/) !== null)
     );
   }
 

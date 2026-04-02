@@ -96,8 +96,8 @@ export class ErrorRecovery {
         this.circuitBreaker.recordSuccess();
         this.consecutiveFailures = 0;
         return result;
-      } catch (e: any) {
-        lastErr = e;
+      } catch (e: unknown) {
+        lastErr = e instanceof Error ? e : new Error(String(e));
         this.circuitBreaker.recordFailure();
 
         // 不可重试的错误类型

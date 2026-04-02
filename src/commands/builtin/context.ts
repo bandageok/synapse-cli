@@ -4,8 +4,8 @@ export const contextCommand: SlashCommand = {
   name: 'context',
   description: 'Show current context layers and loaded files',
   handler: async (_args, deps) => {
-    const { existsSync, readFileSync } = await import('fs');
-    const { join } = require('path');
+    const { existsSync, readFileSync, readdirSync } = await import('fs');
+    const { join } = await import('path');
 
     const lines: string[] = [];
     const cwd = process.cwd();
@@ -64,7 +64,6 @@ export const contextCommand: SlashCommand = {
     // .cclaw/rules/*.md
     const rulesDir = join(cwd, '.cclaw', 'rules');
     if (existsSync(rulesDir)) {
-      const { readdirSync } = await import('fs');
       const rules = readdirSync(rulesDir).filter((f: string) => f.endsWith('.md'));
       if (rules.length > 0) {
         lines.push(`    └── .cclaw/rules/ ✅ (${rules.length} rules: ${rules.join(', ')})`);

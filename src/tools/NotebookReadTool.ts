@@ -19,14 +19,14 @@ export const NotebookReadTool: ToolDef<{ notebook_path: string }> = {
     }
     try {
       const nb = JSON.parse(readFileSync(input.notebook_path, 'utf-8'));
-      const cells = (nb.cells ?? []).map((cell: any, i: number) => {
+      const cells = (nb.cells ?? []).map((cell: { cell_type: string; source: string[] }, i: number) => {
         const type = cell.cell_type;
         const source = Array.isArray(cell.source) ? cell.source.join('') : cell.source;
         return `[${i}] (${type}):\n${source}`;
       }).join('\n\n---\n\n');
       return { output: cells || 'Empty notebook', isError: false };
-    } catch (err: any) {
-      return { output: `Error parsing notebook: ${err.message}`, isError: true };
+    } catch (err: unknown) {
+      return { output: `Error parsing notebook: ${err instanceof Error ? err.message : String(err)}`, isError: true };
     }
   },
 };

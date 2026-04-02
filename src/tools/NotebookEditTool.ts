@@ -34,8 +34,8 @@ export const NotebookEditTool: ToolDef<{
       if (input.cell_type) nb.cells[input.cell_number].cell_type = input.cell_type;
       writeFileSync(input.notebook_path, JSON.stringify(nb, null, 1));
       return { output: `Cell ${input.cell_number} updated`, isError: false };
-    } catch (err: any) {
-      return { output: `Error: ${err.message}`, isError: true };
+    } catch (err: unknown) {
+      return { output: `Error: ${(err instanceof Error ? err.message : String(err))}`, isError: true };
     }
   },
 };

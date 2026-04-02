@@ -51,8 +51,8 @@ export const TtsTool: ToolDef<{ text: string; voice?: string; output_path?: stri
         output: `Speech saved to: ${outputPath}\nText: ${input.text.slice(0, 100)}${input.text.length > 100 ? '...' : ''}`,
         isError: false,
       };
-    } catch (err: any) {
-      return { output: `Error: ${err.message}`, isError: true };
+    } catch (err: unknown) {
+      return { output: `Error: ${(err instanceof Error ? err.message : String(err))}`, isError: true };
     }
   },
 };

@@ -22,7 +22,7 @@ export const WebSearchTool: ToolDef<{ query: string; count?: number }> = {
         body: JSON.stringify({ api_key: tavilyKey, query: input.query, max_results: input.count ?? 5 }),
       });
       const data = await resp.json();
-      const results = (data.results || []).map((r: any) => `${r.title}\n${r.url}\n${r.content}`).join('\n---\n');
+      const results = (data.results || []).map((r: { title: string; url: string; content: string }) => `${r.title}\n${r.url}\n${r.content}`).join('\n---\n');
       return { output: results || 'No results', isError: false };
     }
     return { output: 'Error: No search API key configured (set TAVILY_API_KEY or SERPER_API_KEY)', isError: true };
