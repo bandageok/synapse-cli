@@ -1,9 +1,9 @@
 // src/soul/Heartbeat.ts
 // 定时任务引擎 — 借鉴 OpenClaw HEARTBEAT.md 驱动模式
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
 import type { Dream, DreamResult } from './Dream.js';
+import { Logger } from '../core/Logger.js';
 
 export interface HeartbeatTask {
   name: string;
@@ -20,8 +20,10 @@ export class Heartbeat {
   private readonly defaultInterval = 5 * 60 * 1000; // 5 minutes
   private dream: Dream | null = null;
   private memoryExtractor: { extract: () => Promise<void> } | null = null;
+  private logger: Logger;
 
   constructor(private dataDir: string) {
+    this.logger = new Logger({ dataDir, level: 'info' });
     this.loadBuiltinTasks();
     this.loadHeartbeatMd();
   }
@@ -47,7 +49,7 @@ export class Heartbeat {
       },
       action: () => {
         // Archive overflow — delegated to MemoryManager
-        console.log('[Heartbeat] MEMORY.md exceeds 200 lines, archiving...');
+        this.logger.info('[Heartbeat] MEMORY.md exceeds 200 lines, archiving...');
       },
       intervalMs: 24 * 60 * 60 * 1000, // daily
       lastRun: 0,
@@ -61,7 +63,7 @@ export class Heartbeat {
         : `find "${join(this.dataDir, 'sessions')}" -name "*.json" -mtime +30 | wc -l`,
       condition: (output) => parseInt(output.trim(), 10) > 0,
       action: (output) => {
-        console.log(`[Heartbeat] ${output.trim()} old sessions found for cleanup`);
+        this.logger.info(`[Heartbeat] ${output.trim()} old sessions found for cleanup`);
       },
       intervalMs: 7 * 24 * 60 * 60 * 1000, // weekly
       lastRun: 0,
@@ -89,7 +91,7 @@ export class Heartbeat {
           command: cmdMatch[1].trim(),
           condition: (output) => output.trim().length > 0,
           action: (output) => {
-            console.log(`[Heartbeat:${name}] ${output.trim()}`);
+            this.logger.info(`[Heartbeat:${name}] ${output.trim()}`);
           },
           intervalMs: this.defaultInterval,
           lastRun: 0,
@@ -101,7 +103,7 @@ export class Heartbeat {
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => this.tick(), 60_000); // check every minute
-    console.log(`[Heartbeat] Started with ${this.tasks.length} tasks`);
+    this.logger.info(`[Heartbeat] Started with ${this.tasks.length} tasks`);
   }
 
   stop(): void {
@@ -132,10 +134,10 @@ export class Heartbeat {
 
     // Dream 整合检查
     if (this.dream && this.dream.shouldTrigger()) {
-      console.log('[Heartbeat] Dream consolidation triggered');
+      this.logger.info('[Heartbeat] Dream consolidation triggered');
       this.dream.run().then((result: DreamResult) => {
         if (result.success) {
-          console.log(`[Heartbeat] Dream completed: ${result.summary}`);
+          this.logger.info(`[Heartbeat] Dream completed: ${result.summary}`);
         }
       }).catch(() => {});
     }
@@ -152,7 +154,7 @@ export class Heartbeat {
           const stats = statSync(latestPath);
           const hoursSince = (Date.now() - stats.mtimeMs) / 3_600_000;
           if (hoursSince < 24) {
-            console.log(`[Heartbeat] Recent session found (${latestFile}), memory extraction available`);
+            this.logger.info(`[Heartbeat] Recent session found (${latestFile}), memory extraction available`);
           }
         }
       }
