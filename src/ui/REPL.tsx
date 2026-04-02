@@ -16,7 +16,7 @@ import {
 import { useVimInput } from '../vim/index.js';
 import type { Message, EngineEvent } from '../core/types.js';
 
-import type { Provider } from '../providers/base.js';
+import type { Provider } from '../core/types.js';
 import type { ToolRegistry } from '../core/ToolRegistry.js';
 import type { ContextBuilder } from '../core/Context.js';
 import type { Compressor } from '../core/Compressor.js';

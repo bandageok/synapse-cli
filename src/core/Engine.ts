@@ -186,7 +186,7 @@ export async function* createEngine(
             options.selfImprovement.logError(
               toolUse.name,
               JSON.stringify(toolUse.input).slice(0, 200),
-              err.message,
+              (err instanceof Error ? err.message : String(err)),
             );
           }
         }
@@ -200,10 +200,11 @@ export async function* createEngine(
         yield { type: 'tool_result', tool: toolUse.name, output: result.output };
       }
     } catch (err: unknown) {
-      const recovered = await errorRecovery.handleApiError(err as Error, messages);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const recovered = await errorRecovery.handleApiError(err instanceof Error ? err : new Error(errMsg), messages);
       if (!recovered) {
-        options?.logger?.error(`Engine error: ${err.message}`);
-        yield { type: 'error', error: err.message };
+        options?.logger?.error(`Engine error: ${errMsg}`);
+        yield { type: 'error', error: errMsg };
         return;
       }
     }

@@ -101,7 +101,7 @@ export class ErrorRecovery {
         this.circuitBreaker.recordFailure();
 
         // 不可重试的错误类型
-        if (this.isNonRetryable(e)) {
+        if (this.isNonRetryable(lastErr)) {
           throw e;
         }
 

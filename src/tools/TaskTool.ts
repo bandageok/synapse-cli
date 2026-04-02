@@ -1,13 +1,9 @@
 // src/tools/TaskTool.ts
 // 子代理工具 — 支持 in-process 和 spawn 两种隔离模式
 import { spawn } from 'child_process';
-import type { ToolDef, ToolResult, ToolContext } from '../core/types.js';
+import type { ToolDef, ToolResult, ToolContext, Provider } from '../core/types.js';
 import type { ToolRegistry } from '../core/ToolRegistry.js';
-import type { Provider } from '../core/types.js';
 import { createEngine } from '../core/Engine.js';
-
-import type { Provider } from '../providers/base.js';
-import type { ToolRegistry } from '../core/ToolRegistry.js';
 import type { ContextBuilder } from '../core/Context.js';
 import type { Compressor } from '../core/Compressor.js';
 import type { HookSystem } from '../core/HookSystem.js';

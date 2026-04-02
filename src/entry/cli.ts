@@ -47,7 +47,7 @@ program
 
         try {
           for await (const event of createEngine(
-            messages, deps.provider, deps.tools, deps.context,
+            messages, deps.provider!, deps.tools, deps.context,
             deps.hooks, deps.compressor, deps.errorRecovery
           )) {
             if (event.type === 'token') {
@@ -71,7 +71,7 @@ program
     }
 
     const { launchREPL } = await import('../ui/REPL.js');
-    await launchREPL(deps);
+    await launchREPL(deps as Parameters<typeof launchREPL>[0]);
   });
 
 program

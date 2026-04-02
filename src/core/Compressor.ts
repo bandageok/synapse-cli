@@ -172,7 +172,7 @@ export class Compressor {
 
     try {
       const chunks: string[] = [];
-      for await (const chunk of this.provider.stream({
+      for await (const chunk of (this.provider as { stream: (p: unknown) => AsyncIterable<{ type?: string; delta?: { type?: string; text?: string } }> }).stream({
         system: ['You are a conversation summarizer. Summarize the key points, decisions, and context from this conversation in under 500 words. Focus on: what was discussed, what was decided, what was accomplished, and what remains to be done.'],
         messages: [{ role: 'user', content: `Summarize this conversation:\n\n${transcript}` }],
         tools: [],

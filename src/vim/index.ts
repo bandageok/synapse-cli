@@ -34,7 +34,7 @@ export function useVimInput(
   }, []);
 
   const handleKey = useCallback(
-    (char: string, key: { return?: boolean; escape?: boolean; backspace?: boolean; delete?: boolean; leftArrow?: boolean; rightArrow?: boolean; ctrl?: boolean }) => {
+    (char: string, key: { return?: boolean; escape?: boolean; backspace?: boolean; delete?: boolean; leftArrow?: boolean; rightArrow?: boolean; upArrow?: boolean; downArrow?: boolean; ctrl?: boolean; meta?: boolean; shift?: boolean; tab?: boolean }) => {
       if (!enabled) return { handled: false };
 
       // INSERT mode

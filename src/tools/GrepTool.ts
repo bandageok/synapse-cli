@@ -22,8 +22,9 @@ export const GrepTool: ToolDef<{ pattern: string; path?: string; include?: strin
       const output = execSync(cmd, { encoding: 'utf-8', timeout: 10_000, maxBuffer: 1024 * 1024 });
       return { output: output.slice(0, 10_000), isError: false };
     } catch (err: unknown) {
-      if (err.status === 1) return { output: 'No matches found', isError: false };
-      return { output: err.message, isError: true };
+      const e = err as { status?: number };
+      if (e.status === 1) return { output: 'No matches found', isError: false };
+      return { output: err instanceof Error ? err.message : String(err), isError: true };
     }
   },
 };

@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
-import type { Dream } from './Dream.js';
+import type { Dream, DreamResult } from './Dream.js';
 
 export interface HeartbeatTask {
   name: string;
@@ -133,7 +133,7 @@ export class Heartbeat {
     // Dream 整合检查
     if (this.dream && this.dream.shouldTrigger()) {
       console.log('[Heartbeat] Dream consolidation triggered');
-      this.dream.run().then((result: { success: boolean; summary: string }) => {
+      this.dream.run().then((result: DreamResult) => {
         if (result.success) {
           console.log(`[Heartbeat] Dream completed: ${result.summary}`);
         }

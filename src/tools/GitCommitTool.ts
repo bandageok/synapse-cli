@@ -24,7 +24,8 @@ export const GitCommitTool: ToolDef<{ message: string; add_all?: boolean }> = {
       });
       return { output: result, isError: false };
     } catch (err: unknown) {
-      return { output: err.stderr || (err instanceof Error ? err.message : String(err)), isError: true };
+      const e = err as { stderr?: string };
+      return { output: e.stderr || (err instanceof Error ? err.message : String(err)), isError: true };
     }
   },
 };

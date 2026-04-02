@@ -3,6 +3,9 @@
 // 支持 tools/resources/prompts/sampling
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MCPResponse = Record<string, any>;
 import { spawn, type ChildProcess } from 'child_process';
 import type { MCPServerConfig, MCPTool, MCPResource, MCPPrompt, MCPServerCapabilities } from './types.js';
 import type { ToolDef, ToolResult } from '../../core/types.js';
@@ -180,7 +183,7 @@ export class MCPClient {
 
   // --- 内部方法 ---
 
-  private sendRequest(proc: ChildProcess, method: string, params: unknown): Promise<unknown> {
+  private sendRequest(proc: ChildProcess, method: string, params: unknown): Promise<MCPResponse> {
     return new Promise((resolve) => {
       const id = ++this.requestId;
       const req = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
@@ -202,7 +205,7 @@ export class MCPClient {
         }
       };
       proc.stdout?.on('data', handler);
-      setTimeout(() => resolve(null), 10000);
+      setTimeout(() => resolve({}), 10000);
     });
   }
 
