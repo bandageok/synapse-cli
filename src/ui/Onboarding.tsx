@@ -1,9 +1,9 @@
 // src/ui/Onboarding.tsx
 // C.C.Claw Onboarding UI — 对标 Claude Code 首次启动配置界面
 // 支持 API Key、模型、SOUL.md、权限、MCP 等配置
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { render, Text, Box, useInput, useApp } from 'ink';
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 

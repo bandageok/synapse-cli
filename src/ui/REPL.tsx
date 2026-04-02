@@ -3,7 +3,6 @@
 // Spinner + 多行编辑 + 语法高亮 + 工具结果折叠
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
-import Spinner from 'ink-spinner';
 import { createEngine } from '../core/Engine.js';
 import { CommandRegistry } from '../commands/registry.js';
 import {
@@ -14,7 +13,7 @@ import {
   diffCommand, undoCommand, contextCommand,
 } from '../commands/builtin/index.js';
 import { useVimInput } from '../vim/index.js';
-import type { Message, EngineEvent } from '../core/types.js';
+import type { Message } from '../core/types.js';
 
 import type { Provider } from '../core/types.js';
 import type { ToolRegistry } from '../core/ToolRegistry.js';
@@ -59,24 +58,6 @@ function SpinnerText({ label }: { label: string }) {
   return React.createElement(Text, { color: 'yellow' }, `${SPINNER_FRAMES[frame]} ${label}`);
 }
 
-// 工具结果折叠组件
-function ToolResult({ tool, output }: { tool: string; output: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const isLong = output.length > 200;
-
-  if (!isLong) {
-    return React.createElement(Text, { color: 'gray' }, `  → ${output}`);
-  }
-
-  return React.createElement(Box, { flexDirection: 'column' },
-    React.createElement(Text, { color: 'gray' }, `  → ${output.slice(0, 150)}...`),
-    React.createElement(Text, { color: 'blue', dimColor: true },
-      `     [${expanded ? 'collapse' : `${output.length} chars, click to expand`}]`
-    ),
-    expanded && React.createElement(Text, { color: 'gray' }, `     ${output}`),
-  );
-}
-
 // 语法高亮：命令、工具名、错误
 function highlightLine(line: string): React.ReactElement {
   if (line.startsWith('> ')) {
@@ -113,7 +94,7 @@ function highlightLine(line: string): React.ReactElement {
 }
 
 export function launchREPL(deps: REPLDeps) {
-  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir, sessionStore, heartbeat, dream, watchdog, selfImprovement, logger } = deps;
+  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir, sessionStore, heartbeat, dream: _dream, watchdog, selfImprovement, logger } = deps;
   const sessionId = `session-${Date.now()}`;
 
   // 启动 Heartbeat
@@ -135,11 +116,11 @@ export function launchREPL(deps: REPLDeps) {
     const [thinkingLabel, setThinkingLabel] = useState('');
     const [model, setModelState] = useState('xiaomi/mimo-v2-pro');
     const [pendingPermission, setPendingPermission] = useState<{ tool: string; input: unknown; toolUseId: string; resolve: (v: boolean) => void } | null>(null);
-    const [toolResults, setToolResults] = useState<Map<string, { tool: string; output: string }>>(new Map());
+    const [_toolResults, _setToolResults] = useState<Map<string, { tool: string; output: string }>>(new Map());
     const allMessagesRef = useRef<Message[]>([]);
     const { exit } = useApp();
     const vim = useVimInput(input, setInput);
-    const { stdout } = useStdout();
+    useStdout();
 
     const addOutput = useCallback((line: string) => {
       setOutput(prev => [...prev.slice(-60), line]);
@@ -352,7 +333,7 @@ export function launchREPL(deps: REPLDeps) {
     );
   }
 
-  const { unmount, waitUntilExit } = render(React.createElement(REPL));
+  const { waitUntilExit } = render(React.createElement(REPL));
 
   return waitUntilExit();
 }

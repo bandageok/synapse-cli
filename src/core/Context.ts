@@ -3,7 +3,7 @@
 // 6 层上下文构建 + 内存文件自动发现
 
 import { readFileSync, existsSync } from 'fs';
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { execSync } from 'child_process';
 import { MemoryLoader, type MemoryFileInfo } from './MemoryLoader.js';
 

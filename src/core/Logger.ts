@@ -2,7 +2,7 @@
 // 日志系统 — 对标 OpenClaw logs
 
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

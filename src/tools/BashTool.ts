@@ -1,5 +1,5 @@
 // src/tools/BashTool.ts
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
 
 // ============================================================================

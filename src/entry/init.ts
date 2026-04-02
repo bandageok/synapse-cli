@@ -48,9 +48,9 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
   const provider = createProvider(opts.model);
   const tools = new ToolRegistry();
   const logger = new Logger({ dataDir });
-  const compressor = new Compressor({ contextWindow: 200_000, model: 'claude-sonnet-4-20250514' });
+  const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider });
   const hooks = new HookSystem();
-  const sessionStore = new SessionStore(dataDir);
+  const sessionStore = new SessionStore(join(dataDir, 'sessions'));
   const errorRecovery = new ErrorRecovery();
 
   // 基础工具（无依赖）

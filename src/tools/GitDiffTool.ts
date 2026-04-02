@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
+import type { ToolDef, ToolResult } from '../core/types.js';
 
 export const GitDiffTool: ToolDef<{ staged?: boolean; path?: string }> = {
   name: 'GitDiff',

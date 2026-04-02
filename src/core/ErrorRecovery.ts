@@ -114,7 +114,7 @@ export class ErrorRecovery {
     throw lastErr;
   }
 
-  async handleApiError(err: Error, messages: Message[]): Promise<boolean> {
+  async handleApiError(err: Error, _messages: Message[]): Promise<boolean> {
     // rate_limit: 等待后重试
     if (err.message.includes('rate_limit') || err.message.includes('429')) {
       const retryAfter = this.extractRetryAfter(err.message);

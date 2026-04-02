@@ -149,7 +149,7 @@ export class Heartbeat {
           // 检查最近的会话是否已提取记忆
           const latestFile = files.sort().pop();
           const latestPath = join(sessionsDir, latestFile!);
-          const stats = require('fs').statSync(latestPath);
+          const stats = statSync(latestPath);
           const hoursSince = (Date.now() - stats.mtimeMs) / 3_600_000;
           if (hoursSince < 24) {
             console.log(`[Heartbeat] Recent session found (${latestFile}), memory extraction available`);

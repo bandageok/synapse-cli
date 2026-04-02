@@ -192,7 +192,7 @@ program
   .description('Manage plugins')
   .argument('[action]', 'list | install | remove')
   .argument('[name]', 'Plugin name')
-  .action(async (action, name) => {
+  .action(async (action, _name) => {
     const { homedir } = await import('os');
     const { join } = await import('path');
     const { readdirSync, readFileSync, existsSync } = await import('fs');

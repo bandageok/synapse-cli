@@ -9,7 +9,7 @@ export interface PermissionDialogProps {
   onDeny: () => void;
 }
 
-export function PermissionDialog({ tool, input, onAllow, onDeny }: PermissionDialogProps) {
+export function PermissionDialog({ tool, input, onAllow: _onAllow, onDeny: _onDeny }: PermissionDialogProps) {
   return React.createElement(Box, { flexDirection: 'column', borderStyle: 'round', borderColor: 'yellow', padding: 1 },
     React.createElement(Text, { bold: true, color: 'yellow' }, `⚠️  Permission Request`),
     React.createElement(Text, null, `Tool: ${tool}`),

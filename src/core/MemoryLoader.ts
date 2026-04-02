@@ -2,8 +2,8 @@
 // 严格对标 Claude Code 的 claudemd.ts 配置加载流程
 // 加载顺序：User → Project → Local（优先级递增）
 
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, dirname, basename, resolve, sep, isAbsolute, relative, extname } from 'path';
+import { readFileSync, existsSync, readdirSync } from 'fs';
+import { join, dirname, resolve } from 'path';
 
 export type MemoryType = 'User' | 'Project' | 'Local' | 'Rules';
 
@@ -19,19 +19,6 @@ export interface MemoryLoaderConfig {
   dataDir: string;    // ~/.cclaw/
   cwd: string;        // current working directory
 }
-
-// 允许的文本文件扩展名（防止加载二进制文件）
-const TEXT_FILE_EXTENSIONS = new Set([
-  '.md', '.txt', '.json', '.yaml', '.yml', '.toml', '.xml', '.csv',
-  '.js', '.ts', '.tsx', '.jsx', '.mjs', '.cjs',
-  '.py', '.rb', '.go', '.rs', '.java', '.kt', '.scala',
-  '.c', '.cpp', '.h', '.hpp', '.cs', '.swift',
-  '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd',
-  '.html', '.htm', '.css', '.scss', '.less',
-  '.sql', '.graphql', '.vue', '.svelte',
-  '.env', '.ini', '.cfg', '.conf', '.config',
-  '.lock', '.log', '.diff', '.patch',
-]);
 
 const MAX_INCLUDE_DEPTH = 5;
 const MAX_MEMORY_CHARACTER_COUNT = 40000;
@@ -238,7 +225,7 @@ export class MemoryLoader {
   /**
    * 解析内存文件内容（移除 HTML 注释，提取 @include 路径，提取 frontmatter globs）
    */
-  private parseMemoryFileContent(rawContent: string, filePath: string): {
+  private parseMemoryFileContent(rawContent: string, _filePath: string): {
     content: string;
     includePaths: string[];
     globs?: string[];

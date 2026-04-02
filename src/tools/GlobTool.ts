@@ -1,5 +1,5 @@
 import { globSync, statSync } from 'fs';
-import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
+import type { ToolDef, ToolResult } from '../core/types.js';
 
 export const GlobTool: ToolDef<{ pattern: string; path?: string }> = {
   name: 'Glob',

@@ -1,7 +1,7 @@
 // src/core/Engine.ts
 import type {
   Message, ContentBlock, ToolUseBlock, ToolResult,
-  Provider, EngineEvent, StreamChunk,
+  Provider, EngineEvent,
 } from './types.js';
 import type { ToolRegistry } from './ToolRegistry.js';
 

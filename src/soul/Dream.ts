@@ -12,7 +12,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { buildConsolidationPrompt } from './MemoryExtractor.js';
-import { SessionIndex } from './SessionIndex.js';
+
 
 // ============================================================================
 // Config — ported from Claude Code autoDream/config.ts
@@ -74,7 +74,6 @@ function writeLockState(dataDir: string, state: LockState): void {
 
 export class Dream {
   private config: DreamConfig;
-  private sessionIndex: SessionIndex;
   private lastSessionScanAt = 0;
   private static readonly SESSION_SCAN_INTERVAL_MS = 10 * 60 * 1000; // 10 min throttle
 
@@ -83,7 +82,6 @@ export class Dream {
     config?: Partial<DreamConfig>,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.sessionIndex = new SessionIndex(dataDir);
   }
 
   /**
