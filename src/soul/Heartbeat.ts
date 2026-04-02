@@ -1,7 +1,8 @@
 // src/soul/Heartbeat.ts
 // 定时任务引擎 — 借鉴 OpenClaw HEARTBEAT.md 驱动模式
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
+import { execSync } from 'child_process';
 import type { Dream, DreamResult } from './Dream.js';
 import { Logger } from '../core/Logger.js';
 
