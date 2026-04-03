@@ -1,6 +1,6 @@
 // src/ui/REPL.tsx
-// C.C.Claw REPL v4 -- Full-featured CLI (对标 Claude Code)
-// Status bar + session title + context bar + help panel + memory/tools/skills views
+// C.C.Claw REPL v5 -- Full-featured CLI (对标 Claude Code)
+// Status bar + session title + context bar + markdown renderer + virtual scroll
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
 import { existsSync, readFileSync } from 'fs';
@@ -34,7 +34,8 @@ import type { SessionStore } from '../core/SessionStore.js';
 
 const VERSION = '0.2.0';
 const CONTEXT_WINDOW = 200_000;
-const MAX_OUTPUT = 120;
+const MAX_OUTPUT = 100;    // 虚拟滚动窗口上限（对标 Claude Code 视口裁剪）
+const HIDDEN_COUNT = 50;   // 超出 MAX_OUTPUT 时显示提示
 const SPINNER = ['\u280b','\u2819','\u2839','\u2838','\u283c','\u2834','\u2826','\u2827','\u2807','\u280f'];
 
 interface REPLDeps {
