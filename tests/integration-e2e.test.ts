@@ -119,7 +119,7 @@ describe('E2E: Full Engine + MiMo V2 Pro', () => {
   it('context builder produces 7 layers (v7: skills layer added)', async () => {
     const layers = await context.build(1);
     expect(layers).toHaveLength(7);
-    expect(layers[0]).toContain('C.C.Claw');
+    expect(layers[0]).toContain('Synapse');
     expect(layers[3]).toContain('Memory System');
   });
 
