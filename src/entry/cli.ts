@@ -24,6 +24,44 @@ program
   .option('-v, --verbose', 'Verbose mode: show full API requests')
   .option('--add-dir <dirs...>', 'Additional directories to load CLAUDE.md from')
   .action(async (opts) => {
+    const { join } = await import('path');
+    const { homedir } = await import('os');
+    const { existsSync, readFileSync } = await import('fs');
+    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+    const cfgPath = join(dataDir, '.cclaw.json');
+
+    // 首次启动：检测配置，没有则自动弹出 onboard
+    if (!existsSync(cfgPath)) {
+      console.log('');
+      const { launchOnboarding } = await import('../ui/Onboarding.js');
+      const result = await launchOnboarding();
+      if (!result) {
+        console.log('Configuration cancelled.');
+        process.exit(0);
+      }
+    } else {
+      // 已有配置但缺少 API Key → 也需要重新配置
+      try {
+        const cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'));
+        if (!cfg.model || !cfg.provider) {
+          console.log('');
+          const { launchOnboarding } = await import('../ui/Onboarding.js');
+          const result = await launchOnboarding();
+          if (!result) {
+            console.log('Configuration cancelled.');
+            process.exit(0);
+          }
+        }
+      } catch { /* corrupt config, fallback to onboard */
+        console.log('');
+        const { launchOnboarding } = await import('../ui/Onboarding.js');
+        const result = await launchOnboarding();
+        if (!result) {
+          console.log('Configuration cancelled.');
+          process.exit(0);
+        }
+      }
+    }
     const { init } = await import('./init.js');
     const deps = await init(opts);
     if (!deps.provider) {
