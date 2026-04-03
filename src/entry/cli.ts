@@ -4,7 +4,7 @@ import { Command } from 'commander';
 const program = new Command();
 
 program
-  .name('cclaw')
+  .name('synapse')
   .description('Synapse — Claude Code × Claw agent framework')
   .version('0.2.0');
 
@@ -275,7 +275,7 @@ program
     try {
       const resp = await fetch('https://registry.npmjs.org/cclaw/latest');
       if (!resp.ok) {
-        console.log('⚠️ Could not check registry. You can manually update with: npm update -g cclaw');
+        console.log('⚠️ Could not check registry. You can manually update with: npm update -g synapse-cli');
         return;
       }
       const data = (await resp.json()) as { version: string };
@@ -296,13 +296,13 @@ program
 
       console.log(`📦 Updating ${localVersion} → ${latestVersion}...`);
       try {
-        execSync('npm update -g cclaw', { stdio: 'inherit' });
+        execSync('npm update -g synapse-cli', { stdio: 'inherit' });
         console.log('✅ Update complete! Restart cclaw to use the new version.');
       } catch {
-        console.log('⚠️ Auto-update failed. Try manually: npm update -g cclaw');
+        console.log('⚠️ Auto-update failed. Try manually: npm update -g synapse-cli');
       }
     } catch {
-      console.log('⚠️ Could not check registry. You can manually update with: npm update -g cclaw');
+      console.log('⚠️ Could not check registry. You can manually update with: npm update -g synapse-cli');
     }
   });
 

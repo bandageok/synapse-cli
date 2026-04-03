@@ -1,5 +1,11 @@
-node_modules/
+﻿node_modules/
 dist/
 *.tsbuildinfo
 .cclaw/
 .env
+*.log
+db.json
+*.local.json
+.DS_Store
+Thumbs.db
+scripts/
