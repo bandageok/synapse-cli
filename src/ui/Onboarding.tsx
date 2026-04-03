@@ -152,31 +152,35 @@ export function launchOnboarding() {
       const dataDir = config.dataDir;
       if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
-      // .env 文件（提示用户设置环境变量）
+      // .env 文件（UTF-8 no BOM）
       const envFile = join(dataDir, '.env');
-      const envLine = `${config.provider === 'minimax' ? 'ANTHROPIC_API_KEY' : (config.provider === 'custom' ? 'CUSTOM_API_KEY' : (config.provider === 'openrouter' ? 'OPENROUTER_API_KEY' : 'ANTHROPIC_API_KEY'))}=${config.apiKey}\n`;
+      const envKey = config.provider === 'minimax' ? 'ANTHROPIC_API_KEY'
+        : config.provider === 'custom' ? 'CUSTOM_API_KEY'
+        : config.provider === 'openrouter' ? 'OPENROUTER_API_KEY'
+        : 'ANTHROPIC_API_KEY';
+      let envContent = `${envKey}=${config.apiKey}\n`;
       if (config.baseUrl && config.provider !== 'anthropic' && config.provider !== 'openrouter') {
-        writeFileSync(envFile, envLine + `API_BASE_URL=${config.baseUrl}\n`);
-      } else {
-        writeFileSync(envFile, envLine);
+        envContent += `API_BASE_URL=${config.baseUrl}\n`;
       }
+      // UTF-8 no BOM
+      writeFileSync(envFile, Buffer.from(envContent, 'utf-8'));
 
-      // SOUL.md
-      writeFileSync(join(dataDir, 'SOUL.md'), config.soulContent);
+      // SOUL.md (UTF-8 no BOM)
+      writeFileSync(join(dataDir, 'SOUL.md'), Buffer.from(config.soulContent, 'utf-8'));
 
       // 权限配置
-      writeFileSync(join(dataDir, 'permissions.json'), JSON.stringify({
+      writeFileSync(join(dataDir, 'permissions.json'), Buffer.from(JSON.stringify({
         allowedTools: config.allowedTools,
         askTools: config.askTools,
         deniedTools: config.deniedTools,
-      }, null, 2));
+      }, null, 2), 'utf-8'));
 
-      // 模型配置
-      writeFileSync(join(dataDir, '.cclaw.json'), JSON.stringify({
+      // 模型配置 (UTF-8 no BOM)
+      writeFileSync(join(dataDir, '.cclaw.json'), Buffer.from(JSON.stringify({
         model: config.model,
         provider: config.provider,
         ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-      }, null, 2));
+      }, null, 2), 'utf-8'));
 
       // 必要目录
       for (const dir of ['memory', 'sessions', 'logs', '.learnings']) {

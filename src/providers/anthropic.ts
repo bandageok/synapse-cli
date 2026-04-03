@@ -4,13 +4,16 @@ import type { StreamChunk, StreamParams, Message } from '../core/types.js';
 import type { Provider, ProviderConfig } from './base.js';
 
 export class AnthropicProvider implements Provider {
-  name = 'anthropic';
+  name: string;
   private client: Anthropic;
   private model: string;
 
   constructor(config: ProviderConfig) {
-    this.client = new Anthropic({ apiKey: config.apiKey });
+    const opts: ConstructorParameters<typeof Anthropic>[0] = { apiKey: config.apiKey };
+    if (config.baseUrl) opts.baseURL = config.baseUrl;
+    this.client = new Anthropic(opts);
     this.model = config.model ?? 'claude-sonnet-4-20250514';
+    this.name = config.baseUrl ? 'minimax' : 'anthropic';
   }
 
   async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
