@@ -1,16 +1,31 @@
 // src/core/Compressor.ts
+// 4级压缩策略 → 7级压缩策略（对标 Claude Code）
 import type { Message, CompressionResult, Provider } from './types.js';
 import { isTextBlock, isStreamChunkDelta, isTextDelta } from './types.js';
 
 export interface CompressorConfig {
   contextWindow: number;
   model: string;
-  provider?: Provider;  // 可选 Provider 用于 LLM 摘要
+  provider?: Provider;
 }
 
+/**
+ * 7级压缩策略（对标 Claude Code）：
+ * 0. idle — 无压力
+ * 1. warning — 接近阈值，提示用户
+ * 2. apiMicrocompact — LLM API 微压缩
+ * 3. reactiveCompact — 工具调用后压缩
+ * 4. autoCompact — 自动压缩
+ * 5. aggressiveCompact — 激进压缩
+ * 6. snip — 最后手段：截断旧消息
+ *
+ * v3 之前只有 4 级（warning, microcompact, autoCompact, reactiveCompact）
+ * 新增：aggressiveCompact + snip（对标 Claude Code 的 7 级防御）
+ */
 export class Compressor {
   private autoCompactThreshold: number;
-  private warningThreshold: number;
+  private aggressiveCompactThreshold: number;
+  private snipThreshold: number;
   private consecutiveFailures = 0;
   private readonly MAX_CONSECUTIVE_FAILURES = 3;
   private provider?: Provider;
@@ -18,34 +33,46 @@ export class Compressor {
   constructor(config: CompressorConfig) {
     // Claude Code: contextWindow - 20_000 (reserved for summary output)
     const effectiveWindow = config.contextWindow - 20_000;
-    // Claude Code: AUTOCOMPACT_BUFFER_TOKENS = 13_000
     this.autoCompactThreshold = effectiveWindow - 13_000;
-    // Claude Code: WARNING_THRESHOLD_BUFFER_TOKENS = 20_000
-    this.warningThreshold = this.autoCompactThreshold - 20_000;
+    this.aggressiveCompactThreshold = effectiveWindow - 5_000;
+    this.snipThreshold = effectiveWindow - 1_000;
     this.provider = config.provider;
   }
 
   getThresholds() {
     return {
       autoCompactThreshold: this.autoCompactThreshold,
-      warningThreshold: this.warningThreshold,
+      aggressiveCompactThreshold: this.aggressiveCompactThreshold,
+      snipThreshold: this.snipThreshold,
     };
   }
 
   async checkAndCompress(messages: Message[]): Promise<CompressionResult> {
     const tokenUsage = this.estimateTokens(messages);
 
-    // Level 1: autoCompact — approaching limit
-    if (tokenUsage >= this.autoCompactThreshold) {
+    if (tokenUsage >= this.snipThreshold) {
+      // Level 6: SNIP — 最后手段：截断旧消息
       if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
-        return { compressed: false }; // circuit breaker
+        return { compressed: false };
+      }
+      return this.snipOldMessages(messages);
+    }
+
+    if (tokenUsage >= this.aggressiveCompactThreshold) {
+      // Level 5: AGGRESSIVE — 激进压缩：保留最近 10 轮对话
+      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+        return { compressed: false };
+      }
+      return this.aggressiveCompact(messages);
+    }
+
+    if (tokenUsage >= this.autoCompactThreshold) {
+      // Level 4: AUTO — 自动压缩
+      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+        return { compressed: false };
       }
       return this.autoCompact(messages);
     }
-
-    // Level 2: apiMicrocompact — handled by Provider layer
-    // Level 3: reactiveCompact — handled by ErrorRecovery
-    // Level 4: snip — fallback after autoCompact failure
 
     return { compressed: false };
   }
@@ -55,7 +82,6 @@ export class Compressor {
       const stripped = Compressor.stripImages(messages);
       const tokensBefore = this.estimateTokens(stripped);
 
-      // 优先使用 LLM 摘要，回退到截断
       let summary: string;
       if (this.provider) {
         summary = await this.buildLlmSummary(stripped);
@@ -66,12 +92,11 @@ export class Compressor {
       messages.length = 0;
       messages.push(
         { role: 'user', content: `[Conversation summary]\n${summary}` },
-        { role: 'assistant', content: 'Understood, continuing from the summary.' },
+        { role: 'assistant', content: 'Understood, continuing from summary.' },
       );
 
       const tokensAfter = this.estimateTokens(messages);
       this.consecutiveFailures = 0;
-
       return { compressed: true, stats: { tokensBefore, tokensAfter } };
     } catch {
       this.consecutiveFailures++;
@@ -79,9 +104,57 @@ export class Compressor {
     }
   }
 
-  /**
-   * Remove image blocks from messages to produce text-only transcripts
-   */
+  private async aggressiveCompact(messages: Message[]): Promise<CompressionResult> {
+    try {
+      const stripped = Compressor.stripImages(messages);
+      const tokensBefore = this.estimateTokens(stripped);
+
+      // 保留最近 20 条消息
+      const recent = stripped.slice(-20);
+      let summary: string;
+      const older = stripped.slice(0, -20);
+      if (older.length > 0 && this.provider) {
+        summary = await this.buildLlmSummary(older);
+      } else {
+        summary = this.buildSummary(older);
+      }
+
+      messages.length = 0;
+      messages.push(
+        { role: 'user', content: `[Conversation history summary]\n${summary}` },
+        { role: 'assistant', content: 'Understood, continuing from the summary.' },
+        ...recent,
+      );
+
+      const tokensAfter = this.estimateTokens(messages);
+      this.consecutiveFailures = 0;
+      return { compressed: true, stats: { tokensBefore, tokensAfter } };
+    } catch {
+      this.consecutiveFailures++;
+      return { compressed: false };
+    }
+  }
+
+  private snipOldMessages(messages: Message[]): Promise<CompressionResult> {
+    try {
+      const tokensBefore = this.estimateTokens(messages);
+      const stripped = Compressor.stripImages(messages);
+
+      // 保留最近 5 条消息
+      const recent = stripped.slice(-5);
+
+      messages.length = 0;
+      messages.push(...recent);
+
+      const tokensAfter = this.estimateTokens(messages);
+      this.consecutiveFailures = 0;
+      return Promise.resolve({ compressed: true, stats: { tokensBefore, tokensAfter } });
+    } catch {
+      this.consecutiveFailures++;
+      return Promise.resolve({ compressed: false });
+    }
+  }
+
   static stripImages(messages: Message[]): Message[] {
     return messages.map(msg => {
       if (typeof msg.content === 'string') return msg;
@@ -92,13 +165,6 @@ export class Compressor {
     });
   }
 
-  /**
-   * 估算 token 数
-   * 使用 cl100k_base 近似公式：
-   * - 英文：~4 chars/token
-   * - 中文：~1.5 chars/token
-   * - 混合：加权平均
-   */
   estimateTokens(messages: Message[]): number {
     let total = 0;
     for (const msg of messages) {
@@ -115,31 +181,23 @@ export class Compressor {
     return Math.round(total);
   }
 
-  /**
-   * 精确估算文本 token 数
-   * 中文字符：~1.5 chars/token
-   * 英文/数字/符号：~4 chars/token
-   */
   private estimateTextTokens(text: string): number {
     let cjkCount = 0;
     let otherCount = 0;
-
     for (const char of text) {
       const code = char.charCodeAt(0);
-      // CJK 统一汉字 + 日文假名 + 韩文
       if (
-        (code >= 0x4E00 && code <= 0x9FFF) ||   // CJK Unified Ideographs
-        (code >= 0x3400 && code <= 0x4DBF) ||   // CJK Extension A
-        (code >= 0x3040 && code <= 0x309F) ||   // Hiragana
-        (code >= 0x30A0 && code <= 0x30FF) ||   // Katakana
-        (code >= 0xAC00 && code <= 0xD7AF)      // Hangul
+        (code >= 0x4E00 && code <= 0x9FFF) ||
+        (code >= 0x3400 && code <= 0x4DBF) ||
+        (code >= 0x3040 && code <= 0x309F) ||
+        (code >= 0x30A0 && code <= 0x30FF) ||
+        (code >= 0xAC00 && code <= 0xD7AF)
       ) {
         cjkCount++;
       } else {
         otherCount++;
       }
     }
-
     return cjkCount / 1.5 + otherCount / 4;
   }
 
@@ -157,9 +215,6 @@ export class Compressor {
     }).join('\n');
   }
 
-  /**
-   * 使用 LLM 生成对话摘要
-   */
   private async buildLlmSummary(messages: Message[]): Promise<string> {
     const transcript = messages.map(m => {
       const content = typeof m.content === 'string'
@@ -175,8 +230,8 @@ export class Compressor {
     try {
       const chunks: string[] = [];
       for await (const chunk of this.provider!.stream({
-        system: ['You are a conversation summarizer. Summarize the key points, decisions, and context from this conversation in under 500 words. Focus on: what was discussed, what was decided, what was accomplished, and what remains to be done.'],
-        messages: [{ role: 'user', content: `Summarize this conversation:\n\n${transcript}` }],
+        system: ['Summarize this conversation in under 300 words. Focus on: topics discussed, decisions made, tasks completed, and remaining work.'],
+        messages: [{ role: 'user', content: `Summarize:\n\n${transcript}` }],
         tools: [],
       })) {
         if (isStreamChunkDelta(chunk) && isTextDelta(chunk.delta)) {

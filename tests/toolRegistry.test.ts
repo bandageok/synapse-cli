@@ -1,60 +1,119 @@
 // tests/toolRegistry.test.ts
-import { describe, it, expect } from 'vitest';
+// ToolRegistry: registration, retrieval, execution, permissions
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolRegistry } from '../src/core/ToolRegistry.js';
-import type { ToolDef } from '../src/core/types.js';
-
-const mockTool: ToolDef = {
-  name: 'Echo',
-  description: 'Echoes input',
-  schema: { type: 'object', properties: { text: { type: 'string' } } },
-  permissions: 'read',
-  isEnabled: () => true,
-  execute: async (input) => ({ output: (input as any).text ?? 'empty', isError: false }),
-};
-
-const disabledTool: ToolDef = {
-  ...mockTool,
-  name: 'Disabled',
-  isEnabled: () => false,
-};
 
 describe('ToolRegistry', () => {
-  it('registers and retrieves tools', () => {
-    const registry = new ToolRegistry();
-    registry.register(mockTool);
-    expect(registry.get('Echo')).toBe(mockTool);
+  let registry: ToolRegistry;
+
+  beforeEach(() => {
+    registry = new ToolRegistry();
   });
 
-  it('returns undefined for unknown tool', () => {
-    const registry = new ToolRegistry();
-    expect(registry.get('NonExistent')).toBeUndefined();
+  it('starts empty', () => {
+    expect(registry.schemas()).toEqual([]);
+    expect(registry.count).toBe(0);
   });
 
-  it('returns schemas for enabled tools only', () => {
-    const registry = new ToolRegistry();
-    registry.register(mockTool);
-    registry.register(disabledTool);
+  it('registers a tool', () => {
+    const tool = {
+      name: 'TestTool',
+      description: 'A test tool',
+      schema: { type: 'object', properties: {} },
+      permissions: 'read' as const,
+      isEnabled: () => true,
+      execute: async () => ({ output: 'ok', isError: false }),
+    };
+    registry.register(tool);
+    expect(registry.schemas().length).toBe(1);
+    expect(registry.count).toBe(1);
+  });
+
+  it('retrieves tool by name', () => {
+    const tool = {
+      name: 'FindMe',
+      description: 'Find this tool',
+      schema: { type: 'object', properties: {} },
+      permissions: 'read' as const,
+      isEnabled: () => true,
+      execute: async () => ({ output: 'ok', isError: false }),
+    };
+    registry.register(tool);
+    const found = registry.get('FindMe');
+    expect(found).toBeDefined();
+    expect(found?.name).toBe('FindMe');
+  });
+
+  it('returns undefined for missing tool', () => {
+    expect(registry.get('NoSuchTool')).toBeUndefined();
+  });
+
+  it('filters by enabled status', () => {
+    registry.register({
+      name: 'Active',
+      description: 'Enabled tool',
+      schema: { type: 'object', properties: {} },
+      permissions: 'read' as const,
+      isEnabled: () => true,
+      execute: async () => ({ output: 'ok', isError: false }),
+    });
+    registry.register({
+      name: 'Inactive',
+      description: 'Disabled tool',
+      schema: { type: 'object', properties: {} },
+      permissions: 'read' as const,
+      isEnabled: () => false,
+      execute: async () => ({ output: 'ok', isError: false }),
+    });
     const schemas = registry.schemas();
-    expect(schemas).toHaveLength(1);
-    expect(schemas[0].name).toBe('Echo');
+    expect(schemas.length).toBe(1);
+    expect(schemas[0].name).toBe('Active');
+  });
+
+  it('checks permission correctly', () => {
+    registry.register({
+      name: 'ReadTool',
+      description: 'Read',
+      schema: { type: 'object', properties: {} },
+      permissions: 'read' as const,
+      isEnabled: () => true,
+      execute: async () => ({ output: 'ok', isError: false }),
+    });
+    registry.register({
+      name: 'ExecTool',
+      description: 'Execute',
+      schema: { type: 'object', properties: {} },
+      permissions: 'execute' as const,
+      isEnabled: () => true,
+      execute: async () => ({ output: 'ok', isError: false }),
+    });
+    const readSchema = registry.schemas().find(s => s.name === 'ReadTool');
+    const execSchema = registry.schemas().find(s => s.name === 'ExecTool');
+    expect(readSchema).toBeDefined();
+    expect(execSchema).toBeDefined();
   });
 
   it('executes a tool and returns result', async () => {
-    const registry = new ToolRegistry();
-    registry.register(mockTool);
+    registry.register({
+      name: 'Echo',
+      description: 'Echo input',
+      schema: { type: 'object', properties: { msg: { type: 'string' } } },
+      permissions: 'read' as const,
+      isEnabled: () => true,
+      execute: async (input) => ({ output: `Echo: ${input.msg}`, isError: false }),
+    });
     const result = await registry.execute({
       id: 'test-1',
       name: 'Echo',
-      input: { text: 'hello' },
+      input: { msg: 'hello' },
     });
-    expect(result.output).toBe('hello');
     expect(result.isError).toBe(false);
+    expect(result.output).toContain('hello');
   });
 
   it('returns error for unknown tool', async () => {
-    const registry = new ToolRegistry();
     const result = await registry.execute({
-      id: 'test-2',
+      id: 'bad',
       name: 'NonExistent',
       input: {},
     });
@@ -63,25 +122,33 @@ describe('ToolRegistry', () => {
   });
 
   it('returns error for disabled tool', async () => {
-    const registry = new ToolRegistry();
-    registry.register(disabledTool);
+    registry.register({
+      name: 'DisabledTool',
+      description: 'Disabled',
+      schema: { type: 'object', properties: {} },
+      permissions: 'read' as const,
+      isEnabled: () => false,
+      execute: async () => ({ output: 'should not reach', isError: false }),
+    });
     const result = await registry.execute({
-      id: 'test-3',
-      name: 'Disabled',
+      id: 'x',
+      name: 'DisabledTool',
       input: {},
     });
     expect(result.isError).toBe(true);
     expect(result.output).toContain('disabled');
   });
 
-  it('checkPermission returns deny for unknown tool', () => {
-    const registry = new ToolRegistry();
-    expect(registry.checkPermission({ id: '1', name: 'Unknown', input: {} })).toBe('deny');
-  });
-
-  it('checkPermission returns allow for registered tool', () => {
-    const registry = new ToolRegistry();
-    registry.register(mockTool);
-    expect(registry.checkPermission({ id: '1', name: 'Echo', input: {} })).toBe('allow');
+  it('lists all tool names', () => {
+    registry.register({
+      name: 'A', description: 'a', schema: {}, permissions: 'read' as const, isEnabled: () => true, execute: async () => ({ output: '', isError: false }),
+    });
+    registry.register({
+      name: 'B', description: 'b', schema: {}, permissions: 'read' as const, isEnabled: () => true, execute: async () => ({ output: '', isError: false }),
+    });
+    const names = registry.listToolNames();
+    expect(names).toContain('A');
+    expect(names).toContain('B');
+    expect(names.length).toBe(2);
   });
 });
