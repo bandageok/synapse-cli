@@ -3,6 +3,7 @@
 // Spinner + 多行编辑 + 语法高亮 + 工具结果折叠
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
+import { existsSync, readFileSync } from 'fs';
 import { createEngine } from '../core/Engine.js';
 import { CommandRegistry } from '../commands/registry.js';
 import {

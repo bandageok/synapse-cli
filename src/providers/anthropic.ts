@@ -13,7 +13,15 @@ export class AnthropicProvider implements Provider {
     if (config.baseUrl) opts.baseURL = config.baseUrl;
     this.client = new Anthropic(opts);
     this.model = config.model ?? 'claude-sonnet-4-20250514';
+    // Detect MiniMax: uses Bearer auth instead of x-api-key
     this.name = config.baseUrl ? 'minimax' : 'anthropic';
+    if (config.baseUrl?.includes('minimaxi.com')) {
+      this.client = new Anthropic({
+        apiKey: config.apiKey,
+        baseURL: config.baseUrl,
+        defaultHeaders: { 'Authorization': `Bearer ${config.apiKey}` },
+      });
+    }
   }
 
   async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
