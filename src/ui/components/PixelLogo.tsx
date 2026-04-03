@@ -1,62 +1,83 @@
 // src/ui/components/PixelLogo.tsx
-// Pixel art C.C.Claw logo (face outline + eyes + smile) — Claude Code style
+// Pixel art C.C.Claw logo derived from pixel.png
+// Claude Code style — multi-color terminal pixels
 import React from 'react';
 import { Text, Box } from 'ink';
 
-const FACE_FILL = '#e5713e';
-const OUTLINE = '#6b1d00';
+// Colors from pixel.png
+const OUTLINE = '#6b1d00';  // Dark brown-red outline
+const FACE_FILL = '#ea7441'; // Light orange face
+const EYES_MOUTH = '#5a1a00'; // Dark eyes + mouth
+const EYE_HL = '#ffffff';     // Eye highlights
+const NOSE = '#c45d3e';       // Light nose
 
-// 1 = outline, 0 = fill, sp = space
-const LOGO = [
-  [0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
-  [0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0],
-  [0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0],
-  [0,1,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0],
-  [0,1,1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,1,0,0,0,0,0,0],
-  [1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
-  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
-  [0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0],
-  [0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0],
-  [0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
-  [0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-  [0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+// Pixel grid: 0=space, 1=outline, 2=fill, 3=eyes/mouth, 4=eyeHighlight, 5=nose
+const LOGO: number[][] = [
+  [0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,1,2,2,2,2,2,2,2,2,2,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,3,3,3,2,2,2,2,3,3,3,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,3,4,3,2,2,2,2,3,4,3,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,3,3,3,2,2,2,2,3,3,3,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,5,5,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,5,5,5,5,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,5,5,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,3,2,3,2,2,2,3,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,3,2,3,3,3,2,3,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,3,3,3,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,1,2,2,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,1,2,2,2,2,2,2,2,2,2,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
 ];
+
+const CHAR_MAP: Record<number, { char: string; color: string }> = {
+  0: { char: ' ', color: '' },
+  1: { char: '\u2588', color: OUTLINE },
+  2: { char: '\u2588', color: FACE_FILL },
+  3: { char: '\u2588', color: EYES_MOUTH },
+  4: { char: '\u2588', color: EYE_HL },
+  5: { char: '\u2588', color: NOSE },
+};
+
+// Ink terminal character width compensation (CJK chars are 2x width)
+// Full block \u2588 is 1 char width, space is 1 char width
 
 function renderLogoLine(row: number[]): React.ReactElement[] {
   const elements: React.ReactElement[] = [];
-  // Group consecutive same-type blocks
-  const segments: { type: number; count: number }[] = [];
-  for (const cell of row) {
-    if (segments.length > 0 && segments[segments.length - 1].type === cell) {
-      segments[segments.length - 1].count++;
+  let i = 0;
+  while (i < row.length) {
+    const cell = row[i];
+    let count = 1;
+    while (i + count < row.length && row[i + count] === cell) count++;
+    const { char, color } = CHAR_MAP[cell] || CHAR_MAP[0];
+    if (cell === 0) {
+      elements.push(React.createElement(Text, { key: `s-${i}` }, ' '.repeat(count)));
     } else {
-      segments.push({ type: cell, count: 1 });
+      elements.push(React.createElement(Text, {
+        key: `${cell}-${i}`,
+        color: color as any,
+        ...(cell === 1 ? { bold: true } : {}),
+      }, char.repeat(count)));
     }
-  }
-  let idx = 0;
-  for (const seg of segments) {
-    if (seg.type === 1) {
-      elements.push(React.createElement(Text, { key: `o-${idx}`, color: OUTLINE as any, bold: true }, '\u2588'.repeat(seg.count)));
-    } else if (seg.type === 0) {
-      elements.push(React.createElement(Text, { key: `f-${idx}`, color: FACE_FILL as any }, '\u2593'.repeat(seg.count)));
-    } else {
-      elements.push(React.createElement(Text, { key: `s-${idx}` }, ' '.repeat(seg.count)));
-    }
-    idx += seg.count;
+    i += count;
   }
   return elements;
 }
 
 export function PixelLogo(): React.ReactElement {
-  return React.createElement(Box, { flexDirection: 'column' as const },
-    ...LOGO.map((row, i) => React.createElement(Box, { key: i }, ...renderLogoLine(row)))
+  return React.createElement(Box, { flexDirection: 'column' as const, paddingLeft: 2 },
+    ...LOGO.map((row, i) => React.createElement(Text, { key: i }, ...renderLogoLine(row)))
   );
 }
