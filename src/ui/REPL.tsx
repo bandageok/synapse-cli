@@ -1,6 +1,5 @@
 // src/ui/REPL.tsx
-// C.C.Claw REPL v5 -- Full-featured CLI (对标 Claude Code)
-// Status bar + session title + context bar + markdown renderer + virtual scroll
+// C.C.Claw REPL v6 -- Complete: virtual scroll + tool detail + skills auto-load + message timeline
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
 import { existsSync, readFileSync } from 'fs';
@@ -17,6 +16,7 @@ import {
 import { statusCommand } from '../commands/builtin/status.js';
 import { skillsCommand } from '../commands/builtin/skills.js';
 import { useVimInput } from '../vim/index.js';
+import { SkillAutoLoader } from '../skills/AutoLoader.js';
 import type { Message } from '../core/types.js';
 import type { Provider } from '../providers/base.js';
 import type { ToolRegistry } from '../core/ToolRegistry.js';
@@ -32,11 +32,18 @@ import type { SelfImprovement } from '../soul/SelfImprovement.js';
 import type { Logger } from '../core/Logger.js';
 import type { SessionStore } from '../core/SessionStore.js';
 
+// ============================================================
+// Constants
+// ============================================================
 const VERSION = '0.2.0';
 const CONTEXT_WINDOW = 200_000;
-const MAX_OUTPUT = 100;    // 虚拟滚动窗口上限（对标 Claude Code 视口裁剪）
-const HIDDEN_COUNT = 50;   // 超出 MAX_OUTPUT 时显示提示
-const SPINNER = ['\u280b','\u2819','\u2839','\u2838','\u283c','\u2834','\u2826','\u2827','\u2807','\u280f'];
+const SCROLL_MARGIN = 5;
+const SPINNER = ['\u280B','\u2819','\u2839','\u2838','\u283C','\u2834','\u2826','\u2827','\u2807','\u280F'];
+const BADGE: Record<string, string> = {
+  anthropic: '\u25C6',
+  openrouter: '\u25C7',
+  minimax: '\u25B2',
+};
 
 interface REPLDeps {
   provider: Provider;
@@ -53,14 +60,23 @@ interface REPLDeps {
   logger?: Logger;
   dataDir: string;
   sessionStore?: SessionStore;
+  skillLoader?: SkillAutoLoader;
 }
 
 interface DisplayMsg {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
+  toolName?: string;
+  toolOutput?: string;
+  toolError?: boolean;
+  collapsed?: boolean;
+  timestamp: number;
 }
 
+// ============================================================
+// Utilities
+// ============================================================
 function estTokens(msgs: Message[]): number {
   let t = 0;
   for (const m of msgs) {
@@ -81,43 +97,50 @@ function getInitialModel(dataDir: string): string {
   return 'claude-sonnet-4-20250514';
 }
 
-// --- Components ---
+// ============================================================
+// UI Components
+// ============================================================
 
 function WelcomeBanner({ providerName, model }: { providerName: string; model: string }) {
-  return React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
-    React.createElement(Text, { bold: true, color: 'cyan' }, ' C.C.Claw v' + VERSION),
-    React.createElement(Text, { color: 'gray' }, '  ' + providerName + ' / ' + model),
+  return React.createElement(Box, { flexDirection: 'column' as const, marginBottom: 1 },
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, ' \u26A1 C.C.Claw v' + VERSION),
+    React.createElement(Text, { color: 'gray' as const }, '  ' + (BADGE[providerName] || '\u25CF') + ' ' + providerName + ' / ' + model),
+    React.createElement(Text, { color: 'gray' as const, dimColor: true }, '  /help: commands'),
   );
 }
 
-function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle }: {
+function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, activeSkills, turnCount }: {
   providerName: string; model: string; tokens: number; msgs: number;
-  vimMode: boolean; sessionTitle?: string;
+  vimMode: boolean; sessionTitle?: string; activeSkills: string[]; turnCount: number;
 }) {
   const pct = Math.min(100, Math.round((tokens / CONTEXT_WINDOW) * 100));
   const filled = Math.round((pct / 100) * 20);
   const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(20 - filled);
-  const color = pct < 60 ? 'green' : pct < 85 ? 'yellow' : 'red';
+  const color = pct < 60 ? 'green' as const : pct < 85 ? 'yellow' as const : 'red' as const;
+  const skillBadge = activeSkills.length > 0 ? ' | \u{1F9E9} ' + activeSkills.length : '';
   return React.createElement(Box, null,
-    React.createElement(Text, { color: 'gray' },
+    React.createElement(Text, { color: 'gray' as const },
       ' ' + providerName + ' ' + model
     ),
-    sessionTitle ? React.createElement(Text, { color: 'gray', dimColor: true },
-      ' -- ' + sessionTitle
+    sessionTitle ? React.createElement(Text, { color: 'gray' as const, dimColor: true },
+      ' \u2014 ' + sessionTitle
     ) : null,
-    React.createElement(Text, { color: 'gray' }, ' ' + msgs + ' msgs'),
-    React.createElement(Text, { color }, ' | ' + bar + ' ' + pct + '%'),
-    vimMode ? React.createElement(Text, { color: 'yellow', bold: true }, ' NORMAL') : null,
+    React.createElement(Text, { color: 'gray' as const },
+      ' \u00B7 ' + msgs + ' msgs \u00B7 turn ' + turnCount + skillBadge
+    ),
+    React.createElement(Text, { color },
+      ' | ' + bar + ' ' + pct + '%'
+    ),
+    vimMode ? React.createElement(Text, { color: 'yellow' as const, bold: true }, ' NORMAL') : null,
   );
 }
 
 function Divider() {
-  return React.createElement(Text, { color: 'gray' },
+  return React.createElement(Text, { color: 'gray' as const, dimColor: true },
     ' ' + '\u2500'.repeat(60)
   );
 }
 
-// Thinking spinner with elapsed time
 function ThinkingSpinner({ label }: { label: string }) {
   const t0 = Date.now();
   const [tick, setTick] = useState(0);
@@ -130,39 +153,41 @@ function ThinkingSpinner({ label }: { label: string }) {
     return () => clearInterval(timer);
   }, []);
   return React.createElement(Box, null,
-    React.createElement(Text, { color: 'cyan' }, ' ' + SPINNER[tick] + ' '),
-    React.createElement(Text, { color: 'yellow' }, label || 'thinking'),
-    React.createElement(Text, { color: 'gray', dimColor: true }, ' ' + elapsed),
+    React.createElement(Text, { color: 'cyan' as const }, ' ' + SPINNER[tick] + ' '),
+    React.createElement(Text, { color: 'yellow' as const }, label || 'thinking'),
+    React.createElement(Text, { color: 'gray' as const, dimColor: true }, ' ' + elapsed),
   );
 }
 
-// Permission dialog
 function PermissionDialog({ tool, input }: { tool: string; input: unknown }) {
   const inputStr = typeof input === 'string' ? input.slice(0, 100) : JSON.stringify(input).slice(0, 100);
   return React.createElement(Box, {
-    flexDirection: 'column',
+    flexDirection: 'column' as const,
     paddingX: 1,
-    borderStyle: 'single',
-    borderColor: 'yellow',
+    borderStyle: 'single' as const,
+    borderColor: 'yellow' as const,
   },
-    React.createElement(Text, { bold: true, color: 'yellow' }, ' Permission: ' + tool),
-    React.createElement(Text, { color: 'gray' }, '   ' + inputStr),
+    React.createElement(Text, { bold: true, color: 'yellow' as const }, ' \u26A0 Permission: ' + tool),
+    React.createElement(Text, { color: 'gray' as const }, '   ' + inputStr),
     React.createElement(Text, null, '   [A] allow   [D] deny'),
   );
 }
 
-function Footer({ vimMode }: { vimMode: boolean }) {
-  return React.createElement(Text, { color: 'gray' },
+function Footer({ vimMode, scrollPos, maxScroll }: { vimMode: boolean; scrollPos: number; maxScroll: number }) {
+  const scrollInfo = maxScroll > 0 ? ' PgUp/Dn:scroll ' + (scrollPos + 1) + '/' + (maxScroll + 1) : ' ';
+  return React.createElement(Text, { color: 'gray' as const, dimColor: true },
     vimMode
-      ? ' i:insert  esc:normal  h/j/k/l:move  ctrl+c:exit'
-      : ' enter:send  ctrl+c:exit  ctrl+l:clear  ctrl+u:clear  /help:cmds'
+      ? ' i:insert  esc:normal  h/j/k/l:move PgUp/Dn:scroll ctrl+c:exit'
+      : ' Enter:send  Ctrl+C:exit  Ctrl+L:clear  Ctrl+U:clear  PgUp/Dn:scroll  /help:cmds'
   );
 }
 
-// --- Main REPL ---
+// ============================================================
+// Main REPL v6
+// ============================================================
 
 export function launchREPL(deps: REPLDeps) {
-  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir, sessionStore, heartbeat, watchdog, selfImprovement, logger } = deps;
+  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir, sessionStore, heartbeat, watchdog, selfImprovement, logger, skillLoader: skillLoaderFromDeps } = deps;
   const sessionId = 'session-' + Date.now();
   const initialModel = getInitialModel(dataDir);
 
@@ -179,6 +204,9 @@ export function launchREPL(deps: REPLDeps) {
     registry.register(cmd);
   }
 
+  // Use skillLoader from deps (created in init.ts and injected into ContextBuilder)
+  const skillLoader = skillLoaderFromDeps || new SkillAutoLoader(dataDir);
+
   function REPL() {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
@@ -190,18 +218,52 @@ export function launchREPL(deps: REPLDeps) {
     const [pendingPermission, setPendingPermission] = useState<
       { tool: string; input: unknown; toolUseId: string; resolve: (v: boolean) => void } | null
     >(null);
+    const [scrollPos, setScrollPos] = useState(0);
+    const [terminalRows, setTerminalRows] = useState(40);
+    const { exit } = useApp();
+    const stdout = useStdout();
+    const rows = (stdout as any).rows;
+    const vim = useVimInput(input, setInput);
+
     const allMessagesRef = useRef<Message[]>([]);
     const sessionTitleRef = useRef<string>('');
-    const { exit } = useApp();
-    const vim = useVimInput(input, setInput);
-    useStdout();
+    const activeSkillsRef = useRef<string[]>([]);
+
+    useEffect(() => {
+      if (rows) setTerminalRows(Math.max(10, rows - SCROLL_MARGIN));
+    }, [rows]);
+
+    // Discover skills on mount (may already be discovered by init.ts)
+    useEffect(() => {
+      const cwd = process.cwd();
+      if (!skillLoader.list().length || !skillLoaderFromDeps) {
+        skillLoader.rebuild(cwd);
+      }
+      autoActivateSkills(cwd);
+    }, []);
+
+    function autoActivateSkills(cwd: string) {
+      const skills = skillLoader.list();
+      for (const s of skills) {
+        skillLoader.autoMatch(s.manifest.name, cwd);
+      }
+      activeSkillsRef.current = skillLoader.getActiveNames();
+    }
 
     const addDisplay = useCallback((msg: DisplayMsg) => {
-      setDisplayMessages(prev => [...prev.slice(-MAX_OUTPUT), msg]);
-    }, []);
+      setDisplayMessages(prev => {
+        const next = [...prev, msg];
+        const visibleLimit = Math.max(20, terminalRows - 4);
+        if (next.length > visibleLimit * 2) {
+          return next.slice(-visibleLimit * 2);
+        }
+        return next;
+      });
+    }, [terminalRows]);
 
     const runEngine = useCallback(async (allMessages: Message[]) => {
       let responseText = '';
+      let currentToolName = '';
 
       try {
         const engineOptions: Record<string, unknown> = {
@@ -224,46 +286,63 @@ export function launchREPL(deps: REPLDeps) {
               setDisplayMessages(prev => {
                 const last = prev[prev.length - 1];
                 if (last && last.role === 'assistant') {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = { ...last, content: responseText };
-                  return updated;
+                  return [...prev.slice(0, -1), { ...last, content: responseText }];
                 }
-                return [...prev, { id: 'msg-' + Date.now(), role: 'assistant', content: responseText }];
+                return [...prev, {
+                  id: 'msg-' + Date.now(),
+                  role: 'assistant' as const,
+                  content: responseText,
+                  timestamp: Date.now(),
+                }];
               });
               break;
 
             case 'tool_use':
+              currentToolName = event.tool;
               setThinkingLabel(event.tool);
               addDisplay({
-                id: 'tool-' + Date.now(),
-                role: 'assistant',
-                content: '  [' + event.tool + '] calling...',
+                id: 'toolhdr-' + Date.now(),
+                role: 'system' as const,
+                content: '  [\u25B2 ' + event.tool + '] running...',
+                timestamp: Date.now(),
               });
               break;
 
-            case 'tool_result':
+            case 'tool_result': {
               const isError = typeof event.output === 'string' && event.output.startsWith('Error:');
               addDisplay({
                 id: 'result-' + Date.now(),
-                role: 'assistant',
+                role: 'assistant' as const,
                 content: isError
-                  ? '  X ' + event.tool + ' failed: ' + event.output.slice(0, 150)
-                  : '  [ok] ' + event.tool + ' -- ' + event.output.slice(0, 120),
+                  ? '  [\u00D7] ' + currentToolName + ' failed: ' + event.output.slice(0, 150)
+                  : '  [\u2713] ' + currentToolName + ' -- ' + event.output.slice(0, 120),
+                toolName: currentToolName,
+                toolOutput: event.output.slice(0, 500),
+                toolError: isError,
+                collapsed: true,
+                timestamp: Date.now(),
               });
               setThinkingLabel('');
               break;
+            }
 
             case 'compressed':
               addDisplay({
                 id: 'comp-' + Date.now(),
-                role: 'assistant',
-                content: '  [compress] ' + event.tokensBefore + ' -> ' + event.tokensAfter + ' tokens',
+                role: 'system' as const,
+                content: '  [\u{1F4C6}] Compressed ' + event.tokensBefore.toLocaleString() + ' \u2192 ' + event.tokensAfter.toLocaleString() + ' tokens',
+                timestamp: Date.now(),
               });
               break;
 
-            case 'end_turn':
+            case 'end_turn': {
+              const lastMsg = allMessages[allMessages.length - 1];
+              const lastText = lastMsg && typeof lastMsg.content === 'string' ? lastMsg.content : '';
+              skillLoader.autoMatch(lastText, process.cwd());
+              activeSkillsRef.current = skillLoader.getActiveNames();
               setIsThinking(false);
               setThinkingLabel('');
+              currentToolName = '';
               if (sessionStore) {
                 const turns = allMessagesRef.current.filter(m => m.role === 'user').length;
                 sessionStore.save(sessionId, allMessagesRef.current, {
@@ -274,9 +353,15 @@ export function launchREPL(deps: REPLDeps) {
                 }).catch(() => {});
               }
               break;
+            }
 
             case 'error':
-              addDisplay({ id: 'err-' + Date.now(), role: 'assistant', content: 'X ' + event.error });
+              addDisplay({
+                id: 'err-' + Date.now(),
+                role: 'system' as const,
+                content: 'X ' + event.error,
+                timestamp: Date.now(),
+              });
               setIsThinking(false);
               setThinkingLabel('');
               break;
@@ -284,7 +369,7 @@ export function launchREPL(deps: REPLDeps) {
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        addDisplay({ id: 'err-' + Date.now(), role: 'assistant', content: 'X ' + msg });
+        addDisplay({ id: 'err-' + Date.now(), role: 'system' as const, content: 'X ' + msg, timestamp: Date.now() });
         setIsThinking(false);
         setThinkingLabel('');
       }
@@ -294,13 +379,13 @@ export function launchREPL(deps: REPLDeps) {
       if (pendingPermission) {
         if (char === 'a' || char === 'A') {
           pendingPermission.resolve(true);
-          addDisplay({ id: 'perm-ok', role: 'assistant', content: '  [allowed] ' + pendingPermission.tool });
+          addDisplay({ id: 'perm-ok', role: 'assistant' as const, content: '  [allowed] ' + pendingPermission.tool, timestamp: Date.now() });
           setPendingPermission(null);
           return;
         }
         if (char === 'd' || char === 'D') {
           pendingPermission.resolve(false);
-          addDisplay({ id: 'perm-deny', role: 'assistant', content: '  [denied] ' + pendingPermission.tool });
+          addDisplay({ id: 'perm-deny', role: 'assistant' as const, content: '  [denied] ' + pendingPermission.tool, timestamp: Date.now() });
           setPendingPermission(null);
           return;
         }
@@ -309,7 +394,19 @@ export function launchREPL(deps: REPLDeps) {
 
       if (isThinking) return;
       if (vim.handleKey(char, key).handled) return;
-      if (key.ctrl && char === 'l') { setDisplayMessages([]); setShowWelcome(true); return; }
+
+      const maxScroll = Math.max(0, displayMessages.length - terminalRows + 4);
+
+      if (key.pageUp || (key.upArrow && scrollPos > 0)) {
+        setScrollPos(prev => Math.min(maxScroll, prev + terminalRows - 4));
+        return;
+      }
+      if (key.pageDown || (key.downArrow && scrollPos < maxScroll)) {
+        setScrollPos(prev => Math.max(0, prev - terminalRows + 4));
+        return;
+      }
+
+      if (key.ctrl && char === 'l') { setDisplayMessages([]); setScrollPos(0); setShowWelcome(true); return; }
       if (key.ctrl && char === 'u') { setInput(''); return; }
       if (key.ctrl && char === 'w') {
         setInput(prev => { const t = prev.trimEnd(); const i = t.lastIndexOf(' '); return i === -1 ? '' : t.slice(0, i + 1); });
@@ -320,35 +417,35 @@ export function launchREPL(deps: REPLDeps) {
         const trimmed = input.trim();
         if (!trimmed) return;
         setInput('');
+        setScrollPos(0);
 
         if (trimmed.startsWith('/')) {
           setShowWelcome(false);
+          skillLoader.rebuild(process.cwd());
           const commandDeps = {
             dataDir, model,
             setModel: (m: string) => setModelState(m),
-            clearOutput: () => { setDisplayMessages([]); setShowWelcome(true); },
-            addOutput: (line: string) => addDisplay({ id: 'cmd-' + Date.now(), role: 'assistant', content: line }),
+            clearOutput: () => { setDisplayMessages([]); setScrollPos(0); setShowWelcome(true); },
+            addOutput: (line: string) => addDisplay({ id: 'cmd-' + Date.now(), role: 'assistant' as const, content: line, timestamp: Date.now() }),
             messages: allMessagesRef.current,
-            resetMessages: () => { allMessagesRef.current = []; setMessages([]); setDisplayMessages([]); setShowWelcome(true); },
+            resetMessages: () => { allMessagesRef.current = []; setMessages([]); setDisplayMessages([]); setScrollPos(0); setShowWelcome(true); },
             setMessages: (msgs: Message[]) => { allMessagesRef.current = msgs; setMessages(msgs); },
             turnCount: messages.filter(m => m.role === 'user').length,
           };
           const result = await registry.execute(trimmed, commandDeps);
           if (result.output) {
             for (const line of result.output.split('\n')) {
-              addDisplay({ id: 'cmd-' + Date.now() + '-' + line.slice(0, 20), role: 'assistant', content: line });
+              addDisplay({ id: 'cmd-' + Date.now() + '-' + line.slice(0, 20), role: 'assistant' as const, content: line, timestamp: Date.now() });
             }
           }
           return;
         }
 
         setShowWelcome(false);
-        // Auto-generate session title from first user message
         if (!sessionTitleRef.current) {
-          const title = trimmed.length > 50 ? trimmed.slice(0, 50) + '...' : trimmed;
-          sessionTitleRef.current = title;
+          sessionTitleRef.current = trimmed.length > 50 ? trimmed.slice(0, 50) + '...' : trimmed;
         }
-        addDisplay({ id: 'user-' + Date.now(), role: 'user', content: '> ' + trimmed });
+        addDisplay({ id: 'user-' + Date.now(), role: 'user', content: '> ' + trimmed, timestamp: Date.now() });
         const userMsg: Message = { role: 'user', content: trimmed };
         setMessages(prev => {
           const all = [...prev, userMsg];
@@ -358,6 +455,15 @@ export function launchREPL(deps: REPLDeps) {
         });
         setIsThinking(true);
         setThinkingLabel('');
+
+        // Auto-match skills and inject into context
+        skillLoader.autoMatch(trimmed, process.cwd());
+        activeSkillsRef.current = skillLoader.getActiveNames();
+        // Inject active skills into context for next turn
+        const activeContents = skillLoader.getActiveContents();
+        if (activeContents.trim() && (context as any).injectSkills) {
+          (context as any).injectSkills(activeContents);
+        }
       } else if (key.backspace || key.delete) {
         setInput(prev => prev.slice(0, -1));
       } else if (key.ctrl && char === 'c') {
@@ -367,14 +473,45 @@ export function launchREPL(deps: REPLDeps) {
       }
     });
 
+    // Virtual scroll window calculation
+    const visibleStart = Math.max(0, displayMessages.length - terminalRows + 4 - scrollPos);
+    const visibleEnd = displayMessages.length - scrollPos;
+    const visibleMessages = displayMessages.slice(visibleStart, visibleEnd);
+
     const tokens = estTokens(allMessagesRef.current);
     const msgCount = allMessagesRef.current.length;
+    const turnCount = allMessagesRef.current.filter(m => m.role === 'user').length;
 
-    return React.createElement(Box, { flexDirection: 'column', height: '100%' },
-      // Welcome banner (shown once)
+    // Render
+    const msgElements: React.ReactElement[] = [];
+    for (const msg of visibleMessages) {
+      if (msg.role === 'user') {
+        msgElements.push(React.createElement(Text, { key: msg.id }, msg.content));
+      } else if (msg.role === 'system') {
+        msgElements.push(React.createElement(Text, { key: msg.id, color: 'gray' as const, dimColor: true }, msg.content));
+      } else if (msg.content) {
+        if (msg.content.startsWith('  [\u25B2 ')) {
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'yellow' as const, bold: true }, msg.content));
+        } else if (msg.content.startsWith('  [\u00D7]')) {
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'red' as const }, msg.content));
+        } else if (msg.content.startsWith('  [\u2713]')) {
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'green' as const }, msg.content));
+        } else if (msg.content.startsWith('  [\u{1F4C6}]')) {
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'blue' as const }, msg.content));
+        } else {
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'white' as const }, msg.content));
+        }
+      }
+    }
+
+    const scrollHint = scrollPos > 0
+      ? React.createElement(Text, { color: 'gray' as const, dimColor: true },
+          ' \u21D1 ' + scrollPos + ' more above (PgUp)'
+        )
+      : null;
+
+    return React.createElement(Box, { flexDirection: 'column' as const, height: '100%' as const },
       showWelcome && React.createElement(WelcomeBanner, { providerName: provider.name, model }),
-
-      // Status bar with session title and context progress
       React.createElement(StatusBar, {
         providerName: provider.name,
         model,
@@ -382,62 +519,27 @@ export function launchREPL(deps: REPLDeps) {
         msgs: msgCount,
         vimMode: vim.enabled,
         sessionTitle: sessionTitleRef.current,
+        activeSkills: activeSkillsRef.current,
+        turnCount,
       }),
-
-      // Divider
       React.createElement(Divider),
-
-      // Messages
-      ...displayMessages.slice(-MAX_OUTPUT).map((msg) => {
-        if (msg.role === 'user') {
-          return React.createElement(Text, { key: msg.id }, msg.content);
-        }
-        // Assistant messages: check for special prefixes
-        if (msg.content.startsWith('  [')) {
-          return React.createElement(Text, { key: msg.id, color: 'yellow' }, msg.content);
-        }
-        if (msg.content.startsWith('  [ok]')) {
-          return React.createElement(Text, { key: msg.id, color: 'green' }, msg.content);
-        }
-        if (msg.content.startsWith('  X ')) {
-          return React.createElement(Text, { key: msg.id, color: 'red' }, msg.content);
-        }
-        if (msg.content.startsWith('  [compress]')) {
-          return React.createElement(Text, { key: msg.id, color: 'blue' }, msg.content);
-        }
-        if (msg.content.startsWith('  [allowed]')) {
-          return React.createElement(Text, { key: msg.id, color: 'green' }, msg.content);
-        }
-        if (msg.content.startsWith('  [denied]')) {
-          return React.createElement(Text, { key: msg.id, color: 'red' }, msg.content);
-        }
-        return React.createElement(Text, { key: msg.id, color: 'white' }, msg.content);
-      }),
-
-      // Permission overlay
+      scrollHint,
+      React.createElement(Box, { flexDirection: 'column' as const }, ...msgElements),
       pendingPermission && React.createElement(PermissionDialog, {
         tool: pendingPermission.tool,
         input: pendingPermission.input,
       }),
-
-      // Thinking spinner
       isThinking && React.createElement(ThinkingSpinner, { label: thinkingLabel }),
-
-      // Spacer (pushes input to bottom)
-      React.createElement(Box, { flexGrow: 1 }),
-
-      // Input prompt
+      React.createElement(Box, { flexGrow: 1 } as any),
       React.createElement(Box, null,
         React.createElement(Text, {
-          color: vim.enabled && vim.isNormalMode ? 'yellow' : 'green',
+          color: vim.enabled && vim.isNormalMode ? 'yellow' as const : 'green' as const,
           bold: true,
         }, vim.enabled && vim.isNormalMode ? 'N ' : '> '),
         React.createElement(Text, null, input),
-        React.createElement(Text, { color: 'gray' }, '\u2588'),
+        React.createElement(Text, { color: 'gray' as const }, '\u2588'),
       ),
-
-      // Footer shortcuts
-      React.createElement(Footer, { vimMode: vim.enabled }),
+      React.createElement(Footer, { vimMode: vim.enabled, scrollPos, maxScroll: Math.max(0, displayMessages.length - terminalRows + 4) }),
     );
   }
 

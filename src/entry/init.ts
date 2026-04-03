@@ -6,6 +6,7 @@ import type { ToolDef } from '../core/types.js';
 import { createProvider } from '../providers/factory.js';
 import { ToolRegistry } from '../core/ToolRegistry.js';
 import { ContextBuilder } from '../core/Context.js';
+import { SkillAutoLoader } from '../skills/AutoLoader.js';
 import { Compressor } from '../core/Compressor.js';
 import { HookSystem } from '../core/HookSystem.js';
 import { SessionStore } from '../core/SessionStore.js';
@@ -70,7 +71,13 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
   const memoryManager = new MemoryManager(dataDir);
   const dynamicReminder = new DynamicReminder();
 
-  const context = new ContextBuilder({ dataDir, cwd: process.cwd(), additionalDirs: opts.addDir, soulLoader });
+  const skillLoader = new SkillAutoLoader(dataDir);
+  // Auto-discover skills in workspace
+  skillLoader.rebuild();
+  // Auto-match based on current working directory
+  skillLoader.autoMatch('', process.cwd());
+
+  const context = new ContextBuilder({ dataDir, cwd: process.cwd(), additionalDirs: opts.addDir, soulLoader, skillLoader });
 
   // TaskTool 需要注入依赖
   const taskTool = createTaskTool({ provider: provider!, tools, context, hooks, compressor, errorRecovery });
@@ -97,5 +104,5 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
   const watchdog = new FakeExecutionWatchdog();
   const selfImprovement = new SelfImprovement(dataDir);
 
-  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, heartbeat, dream, watchdog, selfImprovement, mcpClient, pluginRegistry, logger, dataDir };
+  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, heartbeat, dream, watchdog, selfImprovement, mcpClient, pluginRegistry, logger, dataDir, skillLoader };
 }
