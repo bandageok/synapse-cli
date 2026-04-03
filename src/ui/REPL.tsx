@@ -17,7 +17,7 @@ import { statusCommand } from '../commands/builtin/status.js';
 import { skillsCommand } from '../commands/builtin/skills.js';
 import { useVimInput } from '../vim/index.js';
 import { SkillAutoLoader } from '../skills/AutoLoader.js';
-import { PixelLogo } from './components/PixelLogo.js';
+
 import type { Message } from '../core/types.js';
 import type { Provider } from '../providers/base.js';
 import type { ToolRegistry } from '../core/ToolRegistry.js';
@@ -102,17 +102,11 @@ function getInitialModel(dataDir: string): string {
 // UI Components
 // ============================================================
 
-function WelcomeBanner({ providerName, model }: {
-  providerName: string;
-  model: string;
-}) {
-  return React.createElement(Box, { flexDirection: 'column' as const },
-    // Pixel Logo (Claude Code 风格的 ASCII 像素 Logo)
-    React.createElement(PixelLogo, null),
-    // Provider and model info
-    React.createElement(Text, { color: 'gray' as const },
-      '  ' + (BADGE[providerName] || '\u25CF') + ' ' + providerName + ' / ' + model
-    ),
+function WelcomeBanner({ providerName, model }: { providerName: string; model: string }) {
+  return React.createElement(Box, { flexDirection: 'column' as const, marginBottom: 1 },
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  C.C.Claw v' + VERSION),
+    React.createElement(Text, { color: 'gray' as const }, '  ' + (BADGE[providerName] || '\u25CF') + ' ' + providerName + ' / ' + model),
+    React.createElement(Text, { color: 'gray' as const, dimColor: true }, '  /help: commands'),
   );
 }
 
