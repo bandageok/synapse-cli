@@ -1,8 +1,10 @@
+// tests/providers.test.ts
+// Provider factory: all provider types
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { createProvider } from '../src/providers/factory.js';
 import { homedir } from 'os';
 import { join } from 'path';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { writeFileSync, mkdirSync, rmSync } from 'fs';
 
 describe('Provider Factory', () => {
   const origEnv = { ...process.env };
@@ -27,8 +29,7 @@ describe('Provider Factory', () => {
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.MINIMAX_API_KEY;
     delete process.env.CUSTOM_API_KEY;
-    const provider = createProvider();
-    expect(provider).toBeNull();
+    expect(createProvider()).toBeNull();
   });
 
   it('returns AnthropicProvider when ANTHROPIC_API_KEY is set', () => {
@@ -36,8 +37,7 @@ describe('Provider Factory', () => {
     delete process.env.MINIMAX_API_KEY;
     delete process.env.CUSTOM_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'test-key';
-    const provider = createProvider();
-    expect(provider?.name).toBe('anthropic');
+    expect(createProvider()?.name).toBe('anthropic');
   });
 
   it('returns OpenRouterProvider when OPENROUTER_API_KEY is set', () => {
@@ -45,8 +45,7 @@ describe('Provider Factory', () => {
     delete process.env.MINIMAX_API_KEY;
     delete process.env.CUSTOM_API_KEY;
     process.env.OPENROUTER_API_KEY = 'test-key';
-    const provider = createProvider();
-    expect(provider?.name).toBe('openrouter');
+    expect(createProvider()?.name).toBe('openrouter');
   });
 
   it('prefers Anthropic when both keys are set', () => {
@@ -54,8 +53,7 @@ describe('Provider Factory', () => {
     delete process.env.CUSTOM_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'test-key';
     process.env.OPENROUTER_API_KEY = 'test-key';
-    const provider = createProvider();
-    expect(provider?.name).toBe('anthropic');
+    expect(createProvider()?.name).toBe('anthropic');
   });
 
   it('returns minimax provider when baseUrl contains minimaxi.com', () => {
@@ -68,7 +66,7 @@ describe('Provider Factory', () => {
       baseUrl: 'https://api.minimaxi.com/anthropic',
       model: 'MiniMax-M2.7',
     }));
-    const provider = createProvider('MiniMax-M2.7');
-    expect(provider?.name).toBe('minimax');
+    const p = createProvider('MiniMax-M2.7');
+    expect(p?.name).toBe('minimax');
   });
 });
