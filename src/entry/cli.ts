@@ -5,7 +5,7 @@ const program = new Command();
 
 program
   .name('cclaw')
-  .description('C.C.Claw — Claude Code × Claw agent framework')
+  .description('Synapse — Claude Code × Claw agent framework')
   .version('0.2.0');
 
 program
@@ -49,7 +49,7 @@ program
       const { launchOnboarding } = await import('../ui/Onboarding.js');
       const result = await launchOnboarding();
       if (!result) {
-        console.log('  Configuration cancelled. Run `cclaw onboard` to retry.');
+        console.log('  Configuration cancelled. Run `synapse onboard` to retry.');
         process.exit(0);
       }
     }
@@ -169,7 +169,7 @@ program
   .action(async () => {
     const { init } = await import('./init.js');
     const deps = await init({});
-    console.log('C.C.Claw Doctor');
+    console.log('Synapse Doctor');
     console.log(`  Provider: ${deps.provider?.name ?? 'NONE'}`);
     console.log(`  Data dir: ${deps.dataDir}`);
     console.log(`  SOUL.md: ${deps.soulLoader.load() ? '✅' : '❌'}`);
@@ -215,7 +215,7 @@ program
       writeFileSync(mcpPath, JSON.stringify(config, null, 2));
       console.log(`✅ MCP server "${name}" removed`);
     } else {
-      console.log('Usage: cclaw mcp [list|add <name> <command>|remove <name>]');
+      console.log('Usage: synapse mcp [list|add <name> <command>|remove <name>]');
     }
   });
 
@@ -245,13 +245,13 @@ program
         }
       }
     } else {
-      console.log('Usage: cclaw plugin [list]');
+      console.log('Usage: synapse plugin [list]');
     }
   });
 
 program
   .command('update')
-  .description('Check for updates and update cclaw')
+  .description('Check for updates and Update synapse')
   .option('--check', 'Only check, do not update')
   .action(async (opts) => {
     const { execSync } = await import('child_process');
@@ -290,7 +290,7 @@ program
 
       if (opts.check) {
         console.log(`📦 Update available: ${localVersion} → ${latestVersion}`);
-        console.log('Run `cclaw update` to install.');
+        console.log('Run `synapse update` to install.');
         return;
       }
 
@@ -308,7 +308,7 @@ program
 
 program
   .command('logs')
-  .description('Show cclaw logs')
+  .description('Show synapse logs')
   .option('-f, --follow', 'Follow log output (tail -f)')
   .option('-n, --lines <n>', 'Number of lines to show', '50')
   .action(async (opts) => {

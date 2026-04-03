@@ -57,7 +57,7 @@ export class ContextBuilder {
   clearMemoryCache(): void { this.cachedMemoryFiles = null; }
 
   private layer1_defaultPrompt(): string {
-    return 'You are C.C.Claw, an agentic CLI assistant. You have access to tools and should use them to help the user.\nFollow these principles:\n- Be concise and direct\n- Use tools to verify information, never guess\n- If a task requires multiple steps, create a plan first\n- Report errors with root cause analysis';
+    return 'You are Synapse, an agentic CLI assistant. You have access to tools and should use them to help the user.\nFollow these principles:\n- Be concise and direct\n- Use tools to verify information, never guess\n- If a task requires multiple steps, create a plan first\n- Report errors with root cause analysis';
   }
 
   private layer2_soul(): string {

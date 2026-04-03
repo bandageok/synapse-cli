@@ -1,5 +1,5 @@
 // src/ui/Onboarding.tsx
-// C.C.Claw Onboarding v3 — 对标 Claude Code 首次启动流程
+// Synapse Onboarding v3 — 对标 Claude Code 首次启动流程
 // 步骤: Welcome → Provider/Key → Theme → Security → Terminal
 // 特点: 自动检测已有配置, 多步对话框, 安全提示, 主题选择
 import React, { useState, useCallback, useEffect } from 'react';
@@ -174,7 +174,7 @@ function StepIndicator({ current, total, stepLabel }: { current: number; total: 
 
 function WelcomeStep({ existing, onNext, onSkip }: { existing: Config | null; onNext: () => void; onSkip: () => void }) {
   return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
-    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  ⚡ C.C.Claw v0.2.0'),
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  ⚡ Synapse v0.2.0'),
     React.createElement(Text, { dimColor: true }, '    Claude Code × OpenClaw  开源 CLI Agent 框架'),
     React.createElement(Text, null, ''),
     existing
@@ -291,7 +291,7 @@ function DoneScreen({ config }: { config: Config }): React.ReactElement {
     React.createElement(Text, { dimColor: true }, '    .env             API Key'),
     React.createElement(Text, { dimColor: true }, '    SOUL.md          Agent 人格'),
     React.createElement(Text, null, ''),
-    React.createElement(Text, { color: 'cyan' as const, bold: true }, '  cclaw chat    ← 开始对话'),
+    React.createElement(Text, { color: 'cyan' as const, bold: true }, '  synapse chat    ← 开始对话'),
     React.createElement(Text, null, ''),
     React.createElement(Text, { dimColor: true }, '  按 Enter 退出并启动 chat'),
   );

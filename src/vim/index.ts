@@ -1,5 +1,5 @@
 /**
- * Vim Mode for C.C.Claw REPL
+ * Vim Mode for Synapse REPL
  *
  * Exports useVimInput hook that wraps the vim state machine
  * for use with Ink's useInput.

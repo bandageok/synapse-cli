@@ -1,5 +1,5 @@
 /**
- * Vim State Transition Table (C.C.Claw MVP)
+ * Vim State Transition Table (Synapse MVP)
  *
  * Simplified from Claude Code's transitions.ts.
  * Handles: idle, count, operator, operatorCount states.

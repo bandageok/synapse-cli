@@ -1,5 +1,5 @@
 /**
- * Vim Mode State Machine Types (C.C.Claw MVP)
+ * Vim Mode State Machine Types (Synapse MVP)
  *
  * Simplified from Claude Code's vim system.
  * Core: INSERT/NORMAL mode, basic motions, operators, dot-repeat.

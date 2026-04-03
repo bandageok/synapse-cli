@@ -7,7 +7,7 @@ export const doctorCommand: SlashCommand = {
     const { existsSync } = await import('fs');
     const { join } = await import('path');
     const lines = [
-      'C.C.Claw Doctor',
+      'Synapse Doctor',
       `  Data dir: ${deps.dataDir}`,
       `  Model: ${deps.model}`,
       `  SOUL.md: ${existsSync(join(deps.dataDir, 'SOUL.md')) ? '✅' : '❌'}`,

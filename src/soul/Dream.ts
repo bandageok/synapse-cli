@@ -119,7 +119,7 @@ export class Dream {
    * Run the dream consolidation.
    * Returns a summary of what was consolidated.
    *
-   * In C.C.Claw this is a synchronous file-based operation.
+   * In Synapse this is a synchronous file-based operation.
    * The LLM prompt is generated but the actual LLM call happens
    * at the integration layer (Heartbeat or REPL hook).
    */

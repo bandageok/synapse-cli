@@ -31,7 +31,7 @@ export class MemoryLoader {
   /**
    * 加载所有内存文件（严格按优先级顺序）
    * Claude Code 顺序：Managed → User → Project → Local
-   * C.C.Claw 顺序：User → Project → Local → Rules
+   * Synapse 顺序：User → Project → Local → Rules
    */
   async loadAll(): Promise<MemoryFileInfo[]> {
     const result: MemoryFileInfo[] = [];
@@ -74,7 +74,7 @@ export class MemoryLoader {
   /**
    * 加载 Project 级别内存（从 CWD 向上遍历）
    * Claude Code: CLAUDE.md, .claude/CLAUDE.md, .claude/rules/*.md
-   * C.C.Claw: CLAUDE.md, .cclaw/CLAUDE.md, .cclaw/rules/*.md
+   * Synapse: CLAUDE.md, .cclaw/CLAUDE.md, .cclaw/rules/*.md
    */
   private async loadProjectMemory(): Promise<MemoryFileInfo[]> {
     const result: MemoryFileInfo[] = [];

@@ -1,5 +1,5 @@
 /**
- * Vim Motion Functions (C.C.Claw MVP)
+ * Vim Motion Functions (Synapse MVP)
  *
  * Pure functions for resolving vim motions to cursor offset positions.
  * Works with plain strings (no Cursor class dependency).

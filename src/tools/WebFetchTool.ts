@@ -16,7 +16,7 @@ export const WebFetchTool: ToolDef<{ url: string; max_chars?: number }> = {
   execute: async (input): Promise<ToolResult> => {
     try {
       const resp = await fetch(input.url, {
-        headers: { 'User-Agent': 'C.C.Claw/0.1.0' },
+        headers: { 'User-Agent': 'Synapse/0.1.0' },
         signal: AbortSignal.timeout(15_000),
       });
       const html = await resp.text();

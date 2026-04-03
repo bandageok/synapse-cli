@@ -2,7 +2,7 @@ import type { SlashCommand } from '../registry.js';
 
 const COMMANDS = [
   { cmd: '/help', desc: 'Show this help panel' },
-  { cmd: '/exit', desc: 'Exit C.C.Claw' },
+  { cmd: '/exit', desc: 'Exit Synapse' },
   { cmd: '/clear', desc: 'Clear conversation and start fresh' },
   { cmd: '/model <name>', desc: 'Switch AI model' },
   { cmd: '/memory', desc: 'Memory system overview' },

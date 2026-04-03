@@ -1,5 +1,5 @@
 /**
- * Vim Operator Functions (C.C.Claw MVP)
+ * Vim Operator Functions (Synapse MVP)
  *
  * Simplified operators working with plain strings + offsets.
  */

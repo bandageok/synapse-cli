@@ -1,5 +1,5 @@
 // src/ui/REPL.tsx
-// C.C.Claw REPL v6 -- Complete: virtual scroll + tool detail + skills auto-load + message timeline
+// Synapse REPL v6 -- Complete: virtual scroll + tool detail + skills auto-load + message timeline
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
 import { existsSync, readFileSync } from 'fs';
@@ -104,7 +104,7 @@ function getInitialModel(dataDir: string): string {
 
 function WelcomeBanner({ providerName, model }: { providerName: string; model: string }) {
   return React.createElement(Box, { flexDirection: 'column' as const, marginBottom: 1 },
-    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  C.C.Claw v' + VERSION),
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  Synapse v' + VERSION),
     React.createElement(Text, { color: 'gray' as const }, '  ' + (BADGE[providerName] || '\u25CF') + ' ' + providerName + ' / ' + model),
     React.createElement(Text, { color: 'gray' as const, dimColor: true }, '  /help: commands'),
   );

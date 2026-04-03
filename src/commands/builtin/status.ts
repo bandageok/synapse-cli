@@ -8,7 +8,7 @@ export const statusCommand: SlashCommand = {
   handler: async (_args, deps) => {
     const dataDir = deps.dataDir;
     const lines = [
-      '=== C.C.Claw Status ===',
+      '=== Synapse Status ===',
       '',
       '-- Core --',
       '  Version:     0.2.0',

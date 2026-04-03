@@ -1,10 +1,11 @@
 {
-  "name": "cclaw",
+  "name": "synapse-cli",
   "version": "0.2.0",
-  "description": "C.C.Claw - Claude Code x Claw agent framework",
+  "description": "Synapse — Claude Code x OpenClaw agentic CLI agent framework",
   "type": "module",
+  "main": "./dist/cli.mjs",
   "bin": {
-    "cclaw": "./dist/cli.mjs"
+    "synapse": "./dist/cli.mjs"
   },
   "scripts": {
     "dev": "tsx src/entry/cli.ts",
@@ -12,6 +13,24 @@
     "test": "vitest run",
     "lint": "tsc --noEmit"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cclaw/cclaw.git"
+  },
+  "homepage": "https://github.com/cclaw/cclaw#readme",
+  "bugs": {
+    "url": "https://github.com/cclaw/cclaw/issues"
+  },
+  "keywords": [
+    "cli",
+    "agent",
+    "ai",
+    "claude",
+    "openclaw",
+    "copilot",
+    "developer-tools",
+    "typescript"
+  ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "commander": "^13.1.0",
