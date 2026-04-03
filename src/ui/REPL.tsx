@@ -1,6 +1,6 @@
 // src/ui/REPL.tsx
-// C.C.Claw REPL v3 — Claude Code 级交互架构
-// Welcome → status bar → message timeline → streaming → tool calls → footer
+// C.C.Claw REPL v4 -- Full-featured CLI (对标 Claude Code)
+// Status bar + session title + context bar + help panel + memory/tools/skills views
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
 import { existsSync, readFileSync } from 'fs';
@@ -14,8 +14,10 @@ import {
   resumeCommand, historyCommand, soulEditCommand, vimCommand,
   diffCommand, undoCommand, contextCommand,
 } from '../commands/builtin/index.js';
+import { statusCommand } from '../commands/builtin/status.js';
+import { skillsCommand } from '../commands/builtin/skills.js';
 import { useVimInput } from '../vim/index.js';
-import type { Message, ContentBlock } from '../core/types.js';
+import type { Message } from '../core/types.js';
 import type { Provider } from '../providers/base.js';
 import type { ToolRegistry } from '../core/ToolRegistry.js';
 import type { ContextBuilder } from '../core/Context.js';
@@ -30,24 +32,11 @@ import type { SelfImprovement } from '../soul/SelfImprovement.js';
 import type { Logger } from '../core/Logger.js';
 import type { SessionStore } from '../core/SessionStore.js';
 
-// ============================================================
-// 常量
-// ============================================================
 const VERSION = '0.2.0';
 const CONTEXT_WINDOW = 200_000;
-const MAX_OUTPUT = 100;
+const MAX_OUTPUT = 120;
+const SPINNER = ['\u280b','\u2819','\u2839','\u2838','\u283c','\u2834','\u2826','\u2827','\u2807','\u280f'];
 
-const SPINNER = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
-
-const PROVIDER_BADGE: Record<string, { icon: string; color: string }> = {
-  anthropic: { icon: '◆', color: '#6366f1' },
-  openrouter: { icon: '◇', color: '#a855f7' },
-  minimax:   { icon: '▲', color: '#f97316' },
-};
-
-// ============================================================
-// 类型
-// ============================================================
 interface REPLDeps {
   provider: Provider;
   tools: ToolRegistry;
@@ -69,13 +58,8 @@ interface DisplayMsg {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  toolCalls?: { name: string; input: string }[];
-  toolResults?: { name: string; output: string; error: boolean }[];
 }
 
-// ============================================================
-// 工具函数
-// ============================================================
 function estTokens(msgs: Message[]): number {
   let t = 0;
   for (const m of msgs) {
@@ -92,92 +76,47 @@ function getInitialModel(dataDir: string): string {
       const c = JSON.parse(readFileSync(p, 'utf-8'));
       if (c.model && c.model.trim()) return c.model.trim();
     }
-  } catch { /* skip */ }
+  } catch {}
   return 'claude-sonnet-4-20250514';
 }
 
-// ============================================================
-// UI 组件
-// ============================================================
+// --- Components ---
 
-// Welcome 画面
 function WelcomeBanner({ providerName, model }: { providerName: string; model: string }) {
-  const badge = PROVIDER_BADGE[providerName]?.icon || '●';
-  return React.createElement(Box, { flexDirection: 'column' as const, marginBottom: 1 },
-    React.createElement(Box, null,
-      React.createElement(Text, { bold: true, color: 'cyan' as const }, ` ⚡ C.C.Claw v${VERSION}`),
-      React.createElement(Box, { flexGrow: 1 }),
-    ),
-    React.createElement(Text, { color: 'gray' as const }, ` ${badge} ${providerName} / ${model}`),
+  return React.createElement(Box, { flexDirection: 'column', marginBottom: 1 },
+    React.createElement(Text, { bold: true, color: 'cyan' }, ' C.C.Claw v' + VERSION),
+    React.createElement(Text, { color: 'gray' }, '  ' + providerName + ' / ' + model),
   );
 }
 
-// 状态行
-function StatusBar({ providerName, model, tokens, msgs }: { providerName: string; model: string; tokens: number; msgs: number }) {
+function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle }: {
+  providerName: string; model: string; tokens: number; msgs: number;
+  vimMode: boolean; sessionTitle?: string;
+}) {
   const pct = Math.min(100, Math.round((tokens / CONTEXT_WINDOW) * 100));
   const filled = Math.round((pct / 100) * 20);
-  const bar = '█'.repeat(filled) + '░'.repeat(20 - filled);
-  const color = pct < 60 ? 'green' as const : pct < 85 ? 'yellow' as const : 'red' as const;
+  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(20 - filled);
+  const color = pct < 60 ? 'green' : pct < 85 ? 'yellow' : 'red';
   return React.createElement(Box, null,
-    React.createElement(Text, { color: 'gray' as const },
-      ` ${providerName} · ${model}`
+    React.createElement(Text, { color: 'gray' },
+      ' ' + providerName + ' ' + model
     ),
-    React.createElement(Text, { color: 'gray' as const },
-      ` · ${msgs} msgs`
-    ),
-    React.createElement(Text, {
-      color,
-    },
-      ` │ ${bar} ${pct}%`
-    ),
+    sessionTitle ? React.createElement(Text, { color: 'gray', dimColor: true },
+      ' -- ' + sessionTitle
+    ) : null,
+    React.createElement(Text, { color: 'gray' }, ' ' + msgs + ' msgs'),
+    React.createElement(Text, { color }, ' | ' + bar + ' ' + pct + '%'),
+    vimMode ? React.createElement(Text, { color: 'yellow', bold: true }, ' NORMAL') : null,
   );
 }
 
-// 分隔线
 function Divider() {
-  return React.createElement(Text, { color: 'gray' as const },
-    ' ' + '─'.repeat(60)
+  return React.createElement(Text, { color: 'gray' },
+    ' ' + '\u2500'.repeat(60)
   );
 }
 
-// 用户消息（对标 Claude Code UserTextMessage）
-function UserMsg({ text }: { text: string }) {
-  return React.createElement(Text, { color: 'green' as const, bold: true }, ` ❯ ${text}`);
-}
-
-// AI 消息（对标 Claude Code AssistantTextMessage）
-function AssistantMsg({ text }: { text: string }) {
-  return React.createElement(Text, { color: 'white' as const }, ` 🤖 ${text}`);
-}
-
-// 工具调用（对标 Claude Code AssistantToolUseMessage，带 loader）
-function ToolCall({ name, input, progress }: { name: string; input: string; progress?: boolean }) {
-  return React.createElement(Box, { flexDirection: 'column' as const },
-    React.createElement(Text, { color: 'yellow' as const, bold: true }, ` 🔧 ${name}${progress ? ' ⠋' : ''}`),
-    input.length > 0 && React.createElement(Text, { color: 'gray' as const, dimColor: true },
-      `    ${input.slice(0, 120)}${input.length > 120 ? '…' : ''}`
-    ),
-  );
-}
-
-// 工具结果（对标 Claude Code UserToolResultMessage）
-function ToolResult({ name, output, error }: { name: string; output: string; error: boolean }) {
-  const truncated = output.length > 200 ? output.slice(0, 200) + '…' : output;
-  return React.createElement(Text, { color: error ? 'red' as const : 'green' as const },
-    `   ${error ? '❌' : '→'} ${truncated}`
-  );
-}
-
-// 压缩提示
-function CompressedMsg({ before, after }: { before: number; after: number }) {
-  const saved = before - after;
-  const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
-  return React.createElement(Text, { color: 'blue' as const },
-    ` 📦 Compressed ${before.toLocaleString()} → ${after.toLocaleString()} tokens (-${pct}%)`
-  );
-}
-
-// Thinking spinner（对标 Claude Code ThinkingSpinner，带耗时）
+// Thinking spinner with elapsed time
 function ThinkingSpinner({ label }: { label: string }) {
   const t0 = Date.now();
   const [tick, setTick] = useState(0);
@@ -190,45 +129,40 @@ function ThinkingSpinner({ label }: { label: string }) {
     return () => clearInterval(timer);
   }, []);
   return React.createElement(Box, null,
-    React.createElement(Text, { color: 'cyan' as const }, ` ${SPINNER[tick]} `),
-    React.createElement(Text, { color: 'yellow' as const }, label || 'thinking'),
-    React.createElement(Text, { color: 'gray' as const, dimColor: true }, ` ${elapsed}`),
+    React.createElement(Text, { color: 'cyan' }, ' ' + SPINNER[tick] + ' '),
+    React.createElement(Text, { color: 'yellow' }, label || 'thinking'),
+    React.createElement(Text, { color: 'gray', dimColor: true }, ' ' + elapsed),
   );
 }
 
-// 权限弹窗
+// Permission dialog
 function PermissionDialog({ tool, input }: { tool: string; input: unknown }) {
   const inputStr = typeof input === 'string' ? input.slice(0, 100) : JSON.stringify(input).slice(0, 100);
   return React.createElement(Box, {
-    flexDirection: 'column' as const,
-    paddingTop: 0,
-    paddingBottom: 0,
-    paddingLeft: 1,
-    paddingRight: 1,
-    borderStyle: 'round' as const,
-    borderColor: 'yellow' as const,
+    flexDirection: 'column',
+    paddingX: 1,
+    borderStyle: 'single',
+    borderColor: 'yellow',
   },
-    React.createElement(Text, { bold: true, color: 'yellow' as const }, ` ⚠ Permission: ${tool}`),
-    React.createElement(Text, { color: 'gray' as const }, `   ${inputStr}`),
+    React.createElement(Text, { bold: true, color: 'yellow' }, ' Permission: ' + tool),
+    React.createElement(Text, { color: 'gray' }, '   ' + inputStr),
     React.createElement(Text, null, '   [A] allow   [D] deny'),
   );
 }
 
-// Footer（对标 Claude Code PromptInputFooter）
 function Footer({ vimMode }: { vimMode: boolean }) {
-  return React.createElement(Text, { color: 'gray' as const },
+  return React.createElement(Text, { color: 'gray' },
     vimMode
-      ? ' INSERT: i  NORMAL: h j k l  ESC: normal  Ctrl+C: exit'
-      : ' Enter: send  Ctrl+C: exit  Ctrl+L: clear  Ctrl+U: clear input  /help: commands'
+      ? ' i:insert  esc:normal  h/j/k/l:move  ctrl+c:exit'
+      : ' enter:send  ctrl+c:exit  ctrl+l:clear  ctrl+u:clear  /help:cmds'
   );
 }
 
-// ============================================================
-// 主 REPL
-// ============================================================
+// --- Main REPL ---
+
 export function launchREPL(deps: REPLDeps) {
   const { provider, tools, context, compressor, hooks, errorRecovery, dataDir, sessionStore, heartbeat, watchdog, selfImprovement, logger } = deps;
-  const sessionId = `session-${Date.now()}`;
+  const sessionId = 'session-' + Date.now();
   const initialModel = getInitialModel(dataDir);
 
   if (heartbeat) heartbeat.start();
@@ -239,12 +173,12 @@ export function launchREPL(deps: REPLDeps) {
     soulCommand, doctorCommand, configCommand, sessionCommand, costCommand,
     compactCommand, initCommand, resumeCommand, historyCommand, soulEditCommand,
     vimCommand, diffCommand, undoCommand, contextCommand,
+    statusCommand, skillsCommand,
   ]) {
     registry.register(cmd);
   }
 
   function REPL() {
-    // State
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [displayMessages, setDisplayMessages] = useState<DisplayMsg[]>([]);
@@ -256,19 +190,16 @@ export function launchREPL(deps: REPLDeps) {
       { tool: string; input: unknown; toolUseId: string; resolve: (v: boolean) => void } | null
     >(null);
     const allMessagesRef = useRef<Message[]>([]);
-    const currentToolCallsRef = useRef<{ name: string; input: string }[]>([]);
+    const sessionTitleRef = useRef<string>('');
     const { exit } = useApp();
     const vim = useVimInput(input, setInput);
-
     useStdout();
 
     const addDisplay = useCallback((msg: DisplayMsg) => {
       setDisplayMessages(prev => [...prev.slice(-MAX_OUTPUT), msg]);
     }, []);
 
-    // Engine loop（对标 Claude Code processUserInput → query → onQueryEvent）
     const runEngine = useCallback(async (allMessages: Message[]) => {
-      currentToolCallsRef.current = [];
       let responseText = '';
 
       try {
@@ -289,42 +220,49 @@ export function launchREPL(deps: REPLDeps) {
           switch (event.type) {
             case 'token':
               responseText += event.text;
-              // 对标 Claude Code handleMessageFromStream — 实时更新
               setDisplayMessages(prev => {
                 const last = prev[prev.length - 1];
-                if (last && last.role === 'assistant' && last.content.startsWith('🤖')) {
+                if (last && last.role === 'assistant') {
                   const updated = [...prev];
-                  updated[updated.length - 1] = { ...last, content: '🤖 ' + responseText };
+                  updated[updated.length - 1] = { ...last, content: responseText };
                   return updated;
                 }
-                return [...prev, { id: `msg-${Date.now()}`, role: 'assistant', content: '🤖 ' + responseText }];
+                return [...prev, { id: 'msg-' + Date.now(), role: 'assistant', content: responseText }];
               });
               break;
 
             case 'tool_use':
-              currentToolCallsRef.current.push({ name: event.tool, input: JSON.stringify(event.input).slice(0, 100) });
-              addDisplay({ id: `tool-${Date.now()}`, role: 'assistant', content: `🔧 ${event.tool}` });
               setThinkingLabel(event.tool);
+              addDisplay({
+                id: 'tool-' + Date.now(),
+                role: 'assistant',
+                content: '  [' + event.tool + '] calling...',
+              });
               break;
 
             case 'tool_result':
               const isError = typeof event.output === 'string' && event.output.startsWith('Error:');
               addDisplay({
-                id: `result-${Date.now()}`,
+                id: 'result-' + Date.now(),
                 role: 'assistant',
-                content: `   ${isError ? '❌' : '→'} ${event.output.slice(0, 200)}${event.output.length > 200 ? '…' : ''}`,
+                content: isError
+                  ? '  X ' + event.tool + ' failed: ' + event.output.slice(0, 150)
+                  : '  [ok] ' + event.tool + ' -- ' + event.output.slice(0, 120),
               });
               setThinkingLabel('');
               break;
 
             case 'compressed':
-              addDisplay({ id: `comp-${Date.now()}`, role: 'assistant', content: '' } as unknown as DisplayMsg);
+              addDisplay({
+                id: 'comp-' + Date.now(),
+                role: 'assistant',
+                content: '  [compress] ' + event.tokensBefore + ' -> ' + event.tokensAfter + ' tokens',
+              });
               break;
 
             case 'end_turn':
               setIsThinking(false);
               setThinkingLabel('');
-              currentToolCallsRef.current = [];
               if (sessionStore) {
                 const turns = allMessagesRef.current.filter(m => m.role === 'user').length;
                 sessionStore.save(sessionId, allMessagesRef.current, {
@@ -337,7 +275,7 @@ export function launchREPL(deps: REPLDeps) {
               break;
 
             case 'error':
-              addDisplay({ id: `err-${Date.now()}`, role: 'assistant', content: `❌ ${event.error}` });
+              addDisplay({ id: 'err-' + Date.now(), role: 'assistant', content: 'X ' + event.error });
               setIsThinking(false);
               setThinkingLabel('');
               break;
@@ -345,25 +283,23 @@ export function launchREPL(deps: REPLDeps) {
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        addDisplay({ id: `err-${Date.now()}`, role: 'assistant', content: `❌ ${msg}` });
+        addDisplay({ id: 'err-' + Date.now(), role: 'assistant', content: 'X ' + msg });
         setIsThinking(false);
         setThinkingLabel('');
       }
     }, [addDisplay]);
 
-    // Input handler
     useInput(async (char, key) => {
-      // Permission dialog
       if (pendingPermission) {
         if (char === 'a' || char === 'A') {
           pendingPermission.resolve(true);
-          addDisplay({ id: `perm-ok`, role: 'assistant' as const, content: `✅ Allowed: ${pendingPermission.tool}` });
+          addDisplay({ id: 'perm-ok', role: 'assistant', content: '  [allowed] ' + pendingPermission.tool });
           setPendingPermission(null);
           return;
         }
         if (char === 'd' || char === 'D') {
           pendingPermission.resolve(false);
-          addDisplay({ id: `perm-deny`, role: 'assistant' as const, content: `🚫 Denied: ${pendingPermission.tool}` });
+          addDisplay({ id: 'perm-deny', role: 'assistant', content: '  [denied] ' + pendingPermission.tool });
           setPendingPermission(null);
           return;
         }
@@ -390,19 +326,28 @@ export function launchREPL(deps: REPLDeps) {
             dataDir, model,
             setModel: (m: string) => setModelState(m),
             clearOutput: () => { setDisplayMessages([]); setShowWelcome(true); },
-            addOutput: (line: string) => addDisplay({ id: `cmd-${Date.now()}`, role: 'assistant' as const, content: line }),
+            addOutput: (line: string) => addDisplay({ id: 'cmd-' + Date.now(), role: 'assistant', content: line }),
             messages: allMessagesRef.current,
             resetMessages: () => { allMessagesRef.current = []; setMessages([]); setDisplayMessages([]); setShowWelcome(true); },
             setMessages: (msgs: Message[]) => { allMessagesRef.current = msgs; setMessages(msgs); },
             turnCount: messages.filter(m => m.role === 'user').length,
           };
           const result = await registry.execute(trimmed, commandDeps);
-          if (result.output) result.output.split('\n').forEach(line => addDisplay({ id: `cmd-${Date.now()}-${line.slice(0,20)}`, role: 'assistant' as const, content: line }));
+          if (result.output) {
+            for (const line of result.output.split('\n')) {
+              addDisplay({ id: 'cmd-' + Date.now() + '-' + line.slice(0, 20), role: 'assistant', content: line });
+            }
+          }
           return;
         }
 
         setShowWelcome(false);
-        addDisplay({ id: `user-${Date.now()}`, role: 'user', content: `❯ ${trimmed}`, toolCalls: [], toolResults: [] });
+        // Auto-generate session title from first user message
+        if (!sessionTitleRef.current) {
+          const title = trimmed.length > 50 ? trimmed.slice(0, 50) + '...' : trimmed;
+          sessionTitleRef.current = title;
+        }
+        addDisplay({ id: 'user-' + Date.now(), role: 'user', content: '> ' + trimmed });
         const userMsg: Message = { role: 'user', content: trimmed };
         setMessages(prev => {
           const all = [...prev, userMsg];
@@ -421,36 +366,51 @@ export function launchREPL(deps: REPLDeps) {
       }
     });
 
-    // Derived
     const tokens = estTokens(allMessagesRef.current);
     const msgCount = allMessagesRef.current.length;
 
-    // Render
-    return React.createElement(Box, { flexDirection: 'column' as const, height: '100%' as const },
-      // Welcome
+    return React.createElement(Box, { flexDirection: 'column', height: '100%' },
+      // Welcome banner (shown once)
       showWelcome && React.createElement(WelcomeBanner, { providerName: provider.name, model }),
 
-      // Status bar（对标 Claude Code StatusBar）
-      React.createElement(StatusBar, { providerName: provider.name, model, tokens, msgs: msgCount }),
+      // Status bar with session title and context progress
+      React.createElement(StatusBar, {
+        providerName: provider.name,
+        model,
+        tokens,
+        msgs: msgCount,
+        vimMode: vim.enabled,
+        sessionTitle: sessionTitleRef.current,
+      }),
 
       // Divider
       React.createElement(Divider),
 
-      // Messages（对标 Claude Code Messages 渲染管道）
-      ...displayMessages.slice(-MAX_OUTPUT).map((msg, i) => {
+      // Messages
+      ...displayMessages.slice(-MAX_OUTPUT).map((msg) => {
         if (msg.role === 'user') {
           return React.createElement(Text, { key: msg.id }, msg.content);
         }
-        // Assistant messages — check if it's a tool call, tool result, or text
-        if (msg.content.startsWith('🔧 ')) {
-          return React.createElement(ToolCall, { key: msg.id, name: msg.content.slice(3), input: '', progress: isThinking });
+        // Assistant messages: check for special prefixes
+        if (msg.content.startsWith('  [')) {
+          return React.createElement(Text, { key: msg.id, color: 'yellow' }, msg.content);
         }
-        if (msg.content.startsWith('📦 ')) {
-          return React.createElement(Text, { key: msg.id, color: 'blue' as const }, msg.content);
+        if (msg.content.startsWith('  [ok]')) {
+          return React.createElement(Text, { key: msg.id, color: 'green' }, msg.content);
         }
-        return React.createElement(Text, { key: msg.id, color: msg.content.startsWith(` ❌`) ? 'red' as const : 'white' as const },
-          msg.content
-        );
+        if (msg.content.startsWith('  X ')) {
+          return React.createElement(Text, { key: msg.id, color: 'red' }, msg.content);
+        }
+        if (msg.content.startsWith('  [compress]')) {
+          return React.createElement(Text, { key: msg.id, color: 'blue' }, msg.content);
+        }
+        if (msg.content.startsWith('  [allowed]')) {
+          return React.createElement(Text, { key: msg.id, color: 'green' }, msg.content);
+        }
+        if (msg.content.startsWith('  [denied]')) {
+          return React.createElement(Text, { key: msg.id, color: 'red' }, msg.content);
+        }
+        return React.createElement(Text, { key: msg.id, color: 'white' }, msg.content);
       }),
 
       // Permission overlay
@@ -459,23 +419,23 @@ export function launchREPL(deps: REPLDeps) {
         input: pendingPermission.input,
       }),
 
-      // Thinking spinner（对标 Claude Code ThinkingSpinner）
+      // Thinking spinner
       isThinking && React.createElement(ThinkingSpinner, { label: thinkingLabel }),
 
-      // Spacer
-      React.createElement(Box, { flexGrow: 1 } as any),
+      // Spacer (pushes input to bottom)
+      React.createElement(Box, { flexGrow: 1 }),
 
-      // Input prompt（对标 Claude Code PromptInput + PromptInputModeIndicator）
+      // Input prompt
       React.createElement(Box, null,
         React.createElement(Text, {
-          color: vim.enabled && vim.isNormalMode ? 'yellow' as const : 'green' as const,
+          color: vim.enabled && vim.isNormalMode ? 'yellow' : 'green',
           bold: true,
-        }, vim.enabled && vim.isNormalMode ? 'N ' : '❯ '),
+        }, vim.enabled && vim.isNormalMode ? 'N ' : '> '),
         React.createElement(Text, null, input),
-        React.createElement(Text, { color: 'gray' as const }, '▋'),
+        React.createElement(Text, { color: 'gray' }, '\u2588'),
       ),
 
-      // Footer（对标 Claude Code PromptInputFooter）
+      // Footer shortcuts
       React.createElement(Footer, { vimMode: vim.enabled }),
     );
   }
