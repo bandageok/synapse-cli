@@ -169,7 +169,10 @@ program
       const servers = config.mcpServers ?? {};
       if (Object.keys(servers).length === 0) { console.log('No MCP servers configured.'); return; }
       for (const [n, v] of Object.entries(servers)) {
-        console.log(`  ${n}: ${(v as any).command} ${(v as any).args?.join(' ') ?? ''}`);
+        const cfg = v as Record<string, unknown>;
+        const cmd = cfg.command as string | undefined;
+        const args = cfg.args as string[] | undefined;
+        console.log(`  ${n}: ${cmd ?? ''} ${args?.join(' ') ?? ''}`);
       }
     } else if (action === 'add' && name && command) {
       const config = existsSync(mcpPath) ? JSON.parse(readFileSync(mcpPath, 'utf-8')) : { mcpServers: {} };
@@ -246,7 +249,7 @@ program
         console.log('⚠️ Could not check registry. You can manually update with: npm update -g cclaw');
         return;
       }
-      const data = await resp.json() as any;
+      const data = (await resp.json()) as { version: string };
       const latestVersion = data.version;
 
       console.log(`Latest version:  ${latestVersion}`);

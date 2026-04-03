@@ -60,13 +60,13 @@ export async function* createEngine(
       })) {
         switch (chunk.type) {
           case 'content_block_start': {
-            const block = (chunk as any).content_block;
+            const block = chunk.content_block;
             contentBlocks.push(block);
             currentBlockIndex = contentBlocks.length - 1;
             break;
           }
           case 'content_block_delta': {
-            const delta = (chunk as any).delta;
+            const delta = chunk.delta;
             const block = contentBlocks[currentBlockIndex];
             if (block?.type === 'text' && delta.type === 'text_delta') {
               block.text += delta.text;

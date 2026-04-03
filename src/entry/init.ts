@@ -48,7 +48,7 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
   const provider = createProvider(opts.model);
   const tools = new ToolRegistry();
   const logger = new Logger({ dataDir });
-  const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider });
+  const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider: provider ?? undefined });
   const hooks = new HookSystem();
   const sessionStore = new SessionStore(join(dataDir, 'sessions'));
   const errorRecovery = new ErrorRecovery();

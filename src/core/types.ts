@@ -5,7 +5,12 @@ export interface Message {
   content: string | ContentBlock[];
 }
 
-export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+export interface ImageBlock {
+  type: 'image';
+  source: { type: string; data: string; media_type: string };
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ImageBlock;
 
 export interface TextBlock {
   type: 'text';
@@ -26,6 +31,34 @@ export interface ToolResultBlock {
   tool_use_id: string;
   content: string;
   is_error?: boolean;
+}
+
+/** Type guards for ContentBlock narrowing */
+export function isTextBlock(block: ContentBlock): block is TextBlock {
+  return block.type === 'text';
+}
+export function isToolUseBlock(block: ContentBlock): block is ToolUseBlock {
+  return block.type === 'tool_use';
+}
+export function isToolResultBlock(block: ContentBlock): block is ToolResultBlock {
+  return block.type === 'tool_result';
+}
+export function isImageBlock(block: ContentBlock): block is ImageBlock {
+  return block.type === 'image';
+}
+
+/** Type guards for StreamChunk narrowing */
+export function isStreamChunkDelta(chunk: StreamChunk): chunk is StreamChunkContentBlockDelta {
+  return chunk.type === 'content_block_delta';
+}
+export function isStreamChunkStart(chunk: StreamChunk): chunk is StreamChunkContentBlockStart {
+  return chunk.type === 'content_block_start';
+}
+export function isStreamChunkStop(chunk: StreamChunk): chunk is StreamChunkContentBlockStop {
+  return chunk.type === 'content_block_stop';
+}
+export function isTextDelta(delta: TextDelta | InputJsonDelta): delta is TextDelta {
+  return delta.type === 'text_delta';
 }
 
 export interface ToolUse {
@@ -62,10 +95,42 @@ export type EngineEvent =
   | { type: 'error'; error: string }
   | { type: 'permission_ask'; tool: string; input: Record<string, unknown>; toolUseId: string };
 
-export interface StreamChunk {
-  type: string;
-  [key: string]: unknown;
+export interface StreamChunkContentBlockStart {
+  type: 'content_block_start';
+  content_block: TextBlock | ToolUseBlock;
+  index?: number;
 }
+
+export interface StreamChunkContentBlockDelta {
+  type: 'content_block_delta';
+  index?: number;
+  delta: TextDelta | InputJsonDelta;
+}
+
+export interface TextDelta {
+  type: 'text_delta';
+  text: string;
+}
+
+export interface InputJsonDelta {
+  type: 'input_json_delta';
+  partial_json: string;
+}
+
+export interface StreamChunkContentBlockStop {
+  type: 'content_block_stop';
+  index?: number;
+}
+
+export interface StreamChunkMessageStop {
+  type: 'message_stop';
+}
+
+export type StreamChunk =
+  | StreamChunkContentBlockStart
+  | StreamChunkContentBlockDelta
+  | StreamChunkContentBlockStop
+  | StreamChunkMessageStop;
 
 export interface StreamParams {
   system: string[];

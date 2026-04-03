@@ -106,7 +106,7 @@ export function launchOnboarding() {
 
       // 保存 MCP 配置
       if (config.mcpServers.length > 0) {
-        const mcpConfig = { mcpServers: {} as any };
+        const mcpConfig: { mcpServers: Record<string, { command: string; args?: string[] }> } = { mcpServers: {} };
         for (const s of config.mcpServers) {
           mcpConfig.mcpServers[s.name] = { command: s.command, args: s.args };
         }

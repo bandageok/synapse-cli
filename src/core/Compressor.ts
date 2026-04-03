@@ -1,10 +1,11 @@
 // src/core/Compressor.ts
-import type { Message, CompressionResult, ContentBlock } from './types.js';
+import type { Message, CompressionResult, Provider } from './types.js';
+import { isTextBlock, isStreamChunkDelta, isTextDelta } from './types.js';
 
 export interface CompressorConfig {
   contextWindow: number;
   model: string;
-  provider?: unknown;  // 可选 Provider 用于 LLM 摘要
+  provider?: Provider;  // 可选 Provider 用于 LLM 摘要
 }
 
 export class Compressor {
@@ -12,7 +13,7 @@ export class Compressor {
   private warningThreshold: number;
   private consecutiveFailures = 0;
   private readonly MAX_CONSECUTIVE_FAILURES = 3;
-  private provider: unknown;
+  private provider?: Provider;
 
   constructor(config: CompressorConfig) {
     // Claude Code: contextWindow - 20_000 (reserved for summary output)
@@ -78,11 +79,14 @@ export class Compressor {
     }
   }
 
+  /**
+   * Remove image blocks from messages to produce text-only transcripts
+   */
   static stripImages(messages: Message[]): Message[] {
     return messages.map(msg => {
       if (typeof msg.content === 'string') return msg;
-      const filtered = (msg.content as ContentBlock[]).filter(
-        block => (block as any).type !== 'image'
+      const filtered = msg.content.filter(
+        block => block.type !== 'image'
       );
       return { ...msg, content: filtered };
     });
@@ -142,15 +146,14 @@ export class Compressor {
   private buildSummary(messages: Message[]): string {
     const recent = messages.slice(-10);
     return recent.map(m => {
-      const role = m.role;
       const content = typeof m.content === 'string'
         ? m.content.slice(0, 200)
         : m.content
-            .filter(b => b.type === 'text')
-            .map(b => (b as any).text)
+            .filter(block => isTextBlock(block))
+            .map(b => b.text)
             .join(' ')
             .slice(0, 200);
-      return `${role}: ${content}`;
+      return `${m.role}: ${content}`;
     }).join('\n');
   }
 
@@ -159,29 +162,25 @@ export class Compressor {
    */
   private async buildLlmSummary(messages: Message[]): Promise<string> {
     const transcript = messages.map(m => {
-      const role = m.role;
       const content = typeof m.content === 'string'
         ? m.content.slice(0, 500)
         : m.content
-            .filter(b => b.type === 'text')
-            .map(b => (b as any).text)
+            .filter(block => isTextBlock(block))
+            .map(b => b.text)
             .join(' ')
             .slice(0, 500);
-      return `${role}: ${content}`;
+      return `${m.role}: ${content}`;
     }).join('\n');
 
     try {
       const chunks: string[] = [];
-      for await (const chunk of (this.provider as { stream: (p: unknown) => AsyncIterable<{ type?: string; delta?: { type?: string; text?: string } }> }).stream({
+      for await (const chunk of this.provider!.stream({
         system: ['You are a conversation summarizer. Summarize the key points, decisions, and context from this conversation in under 500 words. Focus on: what was discussed, what was decided, what was accomplished, and what remains to be done.'],
         messages: [{ role: 'user', content: `Summarize this conversation:\n\n${transcript}` }],
         tools: [],
       })) {
-        if (chunk.type === 'content_block_delta') {
-          const delta = (chunk as any).delta;
-          if (delta?.type === 'text_delta') {
-            chunks.push(delta.text);
-          }
+        if (isStreamChunkDelta(chunk) && isTextDelta(chunk.delta)) {
+          chunks.push(chunk.delta.text);
         }
       }
       const summary = chunks.join('').trim();

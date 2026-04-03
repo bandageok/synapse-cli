@@ -41,9 +41,9 @@ export interface MCPSamplingParams {
 }
 
 export interface MCPServerCapabilities {
-  tools?: {};
+  tools?: Record<string, unknown>;
   resources?: { subscribe?: boolean };
-  prompts?: {};
-  sampling?: {};
-  logging?: {};
+  prompts?: Record<string, unknown>;
+  sampling?: Record<string, unknown>;
+  logging?: Record<string, unknown>;
 }

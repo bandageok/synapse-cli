@@ -19,8 +19,8 @@ export const undoCommand: SlashCommand = {
         if (block.type !== 'tool_use') continue;
         if (!['FileEdit', 'FileWrite'].includes(block.name)) continue;
 
-        const input = block.input as any;
-        const filePath = input.file_path;
+        const input = block.input;
+        const filePath = input.file_path as string | undefined;
         if (!filePath) continue;
 
         // 检查 .bak 文件
@@ -37,15 +37,17 @@ export const undoCommand: SlashCommand = {
         }
 
         // FileEdit 尝试反向操作
-        if (block.name === 'FileEdit' && input.old_string && input.new_string) {
+        const oldStr = input.old_string as string | undefined;
+        const newStr = input.new_string as string | undefined;
+        if (block.name === 'FileEdit' && oldStr && newStr) {
           if (!existsSync(filePath)) {
             return `⚠️ File ${filePath} no longer exists.`;
           }
           const current = readFileSync(filePath, 'utf-8');
-          if (current.includes(input.new_string)) {
-            const reverted = current.replace(input.new_string, input.old_string);
+          if (current.includes(newStr)) {
+            const reverted = current.replace(newStr, oldStr);
             writeFileSync(filePath, reverted);
-            return `✅ Undone: FileEdit on ${filePath}\nReplaced "${input.new_string.slice(0, 50)}..." back to "${input.old_string.slice(0, 50)}..."`;
+            return `✅ Undone: FileEdit on ${filePath}\nReplaced "${newStr.slice(0, 50)}..." back to "${oldStr.slice(0, 50)}..."`;
           }
           return `⚠️ Cannot undo — new_string not found in ${filePath}. File may have been modified further.`;
         }

@@ -3,12 +3,11 @@
 // 支持 tools/resources/prompts/sampling
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type MCPResponse = Record<string, any>;
 import { spawn, type ChildProcess } from 'child_process';
 import type { MCPServerConfig, MCPTool, MCPResource, MCPPrompt, MCPServerCapabilities } from './types.js';
 import type { ToolDef, ToolResult } from '../../core/types.js';
+
+type MCPResponse = { jsonrpc: string; id?: number; result?: { capabilities?: { tools?: unknown; resources?: unknown; prompts?: unknown }; tools?: MCPTool[]; resources?: MCPResource[]; prompts?: MCPPrompt[]; contents?: Array<{ text?: string; blob?: string }>; messages?: Array<{ content?: { text?: string } }>; content?: Array<{ text?: string }>; [k: string]: unknown }; error?: { code: number; message: string } };
 
 export class MCPClient {
   private servers: Map<string, {
@@ -29,7 +28,8 @@ export class MCPClient {
       const config = JSON.parse(readFileSync(path, 'utf-8'));
       const servers: MCPServerConfig[] = [];
       for (const [name, value] of Object.entries(config.mcpServers ?? {})) {
-        servers.push({ name, ...(value as any) });
+        const cfg = value as Record<string, unknown>;
+        servers.push({ name, command: cfg.command as string, args: cfg.args as string[] | undefined, env: cfg.env as Record<string, string> | undefined });
       }
       return servers;
     } catch {
@@ -61,7 +61,7 @@ export class MCPClient {
         clientInfo: { name: 'cclaw', version: '0.2.0' },
       });
 
-      serverEntry.capabilities = initResp?.result?.capabilities ?? {};
+      serverEntry.capabilities = (initResp?.result?.capabilities ?? {}) as MCPServerCapabilities;
 
       // Send initialized notification
       this.sendNotification(proc, 'notifications/initialized', {});
@@ -118,7 +118,7 @@ export class MCPClient {
     if (!server?.process) return `Error: MCP server ${serverName} not connected`;
 
     const resp = await this.sendRequest(server.process, 'resources/read', { uri });
-    const contents = resp?.result?.contents ?? [];
+    const contents = (resp?.result?.contents as Array<{ text?: string; blob?: string }> | undefined) ?? [];
     return contents.map((c: { text?: string; blob?: string }) => c.text ?? c.blob ?? '').join('\n') || 'Empty resource';
   }
 
@@ -128,7 +128,7 @@ export class MCPClient {
     if (!server?.process) return `Error: MCP server ${serverName} not connected`;
 
     const resp = await this.sendRequest(server.process, 'prompts/get', { name, arguments: args });
-    const messages = resp?.result?.messages ?? [];
+    const messages = (resp?.result?.messages as Array<{ content?: { text?: string } }> | undefined) ?? [];
     return messages.map((m: { content?: { text?: string } }) => m.content?.text ?? '').join('\n') || 'Empty prompt';
   }
 
@@ -153,7 +153,7 @@ export class MCPClient {
           return { output: `MCP error: ${resp.error.message}`, isError: true };
         }
 
-        const content = resp?.result?.content?.[0]?.text ?? JSON.stringify(resp?.result ?? 'No result');
+        const content = (resp?.result?.content as Array<{ text?: string }> | undefined)?.[0]?.text ?? JSON.stringify(resp?.result ?? 'No result');
         return { output: content, isError: false };
       },
     };
@@ -205,7 +205,7 @@ export class MCPClient {
         }
       };
       proc.stdout?.on('data', handler);
-      setTimeout(() => resolve({}), 10000);
+      setTimeout(() => resolve({ jsonrpc: '2.0' }), 10000);
     });
   }
 
