@@ -392,6 +392,12 @@ export function launchREPL(deps: REPLDeps) {
     }, [addDisplay]);
 
     useInput(async (char, key) => {
+      // Ctrl+C must remain available while a provider request is in flight.
+      if (key.ctrl && char === 'c') {
+        exit();
+        return;
+      }
+
       if (pendingPermission) {
         if (char === 'a' || char === 'A') {
           pendingPermission.resolve(true);
@@ -483,8 +489,6 @@ export function launchREPL(deps: REPLDeps) {
         }
       } else if (key.backspace || key.delete) {
         setInput(prev => prev.slice(0, -1));
-      } else if (key.ctrl && char === 'c') {
-        exit();
       } else if (!key.ctrl && !key.meta && char) {
         setInput(prev => prev + char);
       }

@@ -60,6 +60,10 @@ export interface ProviderTestResult {
   ok: true;
 }
 
+export interface ProviderProbeOptions {
+  timeoutMs?: number;
+}
+
 // Presets are convenience data only. Any provider name and compatible BaseURL can be configured.
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
   {
@@ -397,6 +401,80 @@ export function setProvider(
   return resolveProviderRuntime(undefined, dataDir)!;
 }
 
+function describeProviderError(error: unknown, runtime: ProviderRuntime, timeoutMs: number): Error {
+  if (error instanceof Error && error.name === 'AbortError') {
+    return new Error(`${runtime.name} test timed out after ${timeoutMs}ms. Check the endpoint or increase --timeout.`);
+  }
+  if (error instanceof Error) {
+    const cause = error.cause as { code?: string; errno?: string; syscall?: string } | undefined;
+    const code = cause?.code || cause?.errno;
+    if (error.message === 'fetch failed' || error.name === 'TypeError') {
+      const detail = code ? ` (${code})` : '';
+      return new Error(
+        `${runtime.name} could not reach ${runtime.baseUrl}${detail}. `
+        + 'Check your network/proxy or set a reachable custom BaseURL.',
+      );
+    }
+    return error;
+  }
+  return new Error(`${runtime.name} connection failed: ${String(error)}`);
+}
+
+export async function probeProvider(
+  runtime: ProviderRuntime,
+  options: ProviderProbeOptions = {},
+): Promise<ProviderTestResult> {
+  if (!runtime.apiKey) {
+    throw new Error(`${runtime.name} is missing ${runtime.keyName}.`);
+  }
+  const timeoutMs = options.timeoutMs ?? 15_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000) {
+    throw new Error('Timeout must be an integer between 100 and 120000 milliseconds.');
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+  const endpoint = `${runtime.baseUrl}${runtime.protocol === 'openai' ? '/chat/completions' : `${runtime.baseUrl.endsWith('/v1') ? '' : '/v1'}/messages`}`;
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (runtime.auth === 'bearer') headers.authorization = `Bearer ${runtime.apiKey}`;
+  else {
+    headers['x-api-key'] = runtime.apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+  }
+  const body = runtime.protocol === 'openai'
+    ? { model: runtime.model, max_tokens: 1, stream: false, messages: [{ role: 'user', content: 'Reply OK' }] }
+    : { model: runtime.model, max_tokens: 1, messages: [{ role: 'user', content: 'Reply OK' }] };
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal,
+    });
+    if (!response.ok) {
+      const detail = (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 500);
+      const hint = response.status === 401 || response.status === 403
+        ? ' Check the API key and account permissions.'
+        : response.status === 404
+          ? ' Check the BaseURL and model id.'
+          : response.status === 429
+            ? ' The provider is rate limiting requests; retry later.'
+            : '';
+      throw new Error(`${runtime.name} test failed: HTTP ${response.status}${detail ? ` - ${detail}` : ''}.${hint}`);
+    }
+    return {
+      provider: runtime.id,
+      protocol: runtime.protocol,
+      model: runtime.model,
+      endpoint,
+      latencyMs: Date.now() - startedAt,
+      ok: true,
+    };
+  } catch (error) {
+    throw describeProviderError(error, runtime, timeoutMs);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function testProvider(
   options: { provider?: string; timeoutMs?: number; dataDir?: string } = {},
 ): Promise<ProviderTestResult> {
@@ -414,49 +492,5 @@ export async function testProvider(
       ? `Provider "${options.provider}" is not a preset or the active custom provider.`
       : 'No provider is configured. Run `synapse provider set <provider>` first.');
   }
-  if (!runtime.apiKey) {
-    throw new Error(`${runtime.name} is missing ${runtime.keyName}. Use --api-key or set it in the environment.`);
-  }
-  const timeoutMs = options.timeoutMs ?? 15_000;
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000) {
-    throw new Error('Timeout must be an integer between 100 and 120000 milliseconds.');
-  }
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  const startedAt = Date.now();
-  const endpoint = `${runtime.baseUrl}${runtime.protocol === 'openai' ? '/chat/completions' : '/v1/messages'}`;
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (runtime.auth === 'bearer') headers.authorization = `Bearer ${runtime.apiKey}`;
-  else {
-    headers['x-api-key'] = runtime.apiKey;
-    headers['anthropic-version'] = '2023-06-01';
-  }
-  const body = runtime.protocol === 'openai'
-    ? { model: runtime.model, max_tokens: 1, stream: false, messages: [{ role: 'user', content: 'Reply OK' }] }
-    : { model: runtime.model, max_tokens: 1, messages: [{ role: 'user', content: 'Reply OK' }] };
-
-  try {
-    const response = await fetch(endpoint, {
-      method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal,
-    });
-    if (!response.ok) {
-      const detail = (await response.text()).replace(/\s+/g, ' ').trim().slice(0, 500);
-      throw new Error(`${runtime.name} test failed: HTTP ${response.status}${detail ? ` - ${detail}` : ''}`);
-    }
-    return {
-      provider: runtime.id,
-      protocol: runtime.protocol,
-      model: runtime.model,
-      endpoint,
-      latencyMs: Date.now() - startedAt,
-      ok: true,
-    };
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`${runtime.name} test timed out after ${timeoutMs}ms.`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return probeProvider(runtime, { timeoutMs: options.timeoutMs });
 }

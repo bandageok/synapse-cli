@@ -5,6 +5,7 @@ import { createProvider } from '../src/providers/factory.js';
 import {
   listProviders,
   PROVIDER_PRESETS,
+  probeProvider,
   setProvider,
   testProvider,
 } from '../src/providers/management.js';
@@ -123,6 +124,52 @@ describe('Provider Factory', () => {
       expect(result.provider).toBe('local-gateway');
       expect(String(request.input)).toBe('http://127.0.0.1:8080/v1/chat/completions');
       expect((request.init?.headers as Record<string, string>).authorization).toBe('Bearer local-key');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('explains unreachable provider endpoints instead of returning bare fetch failed', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENETUNREACH' } });
+    };
+    try {
+      await expect(probeProvider({
+        id: 'local-gateway',
+        name: 'Local gateway',
+        protocol: 'openai',
+        auth: 'bearer',
+        apiKey: 'local-key',
+        keySource: 'environment',
+        keyName: 'SYNAPSE_API_KEY',
+        model: 'local-model',
+        baseUrl: 'https://llm.example.com/v1',
+        preset: false,
+      }, { timeoutMs: 1000 })).rejects.toThrow(
+        'Local gateway could not reach https://llm.example.com/v1 (ENETUNREACH)',
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('adds actionable hints for authentication and model errors', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response('unauthorized', { status: 401 });
+    try {
+      await expect(probeProvider({
+        id: 'gateway',
+        name: 'Gateway',
+        protocol: 'openai',
+        auth: 'bearer',
+        apiKey: 'key',
+        keySource: 'file',
+        keyName: 'KEY',
+        model: 'model',
+        baseUrl: 'https://llm.example.com/v1',
+        preset: false,
+      }, { timeoutMs: 1000 })).rejects.toThrow('Check the API key and account permissions.');
     } finally {
       globalThis.fetch = originalFetch;
     }

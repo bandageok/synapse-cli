@@ -127,7 +127,7 @@ Search and export exclude session transcripts by default. Add `--include-session
 
 ```text
 $ synapse doctor
-Synapse Doctor v0.2.1
+Synapse Doctor v0.2.2
   [PASS] Node.js: 22.x
   [PASS] Data directory: ~/.synapse is readable and writable
   [PASS] Provider config: ~/.synapse/.synapse.json is valid
@@ -136,7 +136,7 @@ Synapse Doctor v0.2.1
 Result: ready (8 passed, 0 warnings, 0 failed)
 
 $ synapse chat
-  Synapse v0.2.1
+  Synapse v0.2.2
   ● company-gateway / company-model
 
 You> Explain what the Soul system does

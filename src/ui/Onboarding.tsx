@@ -10,6 +10,7 @@ import { homedir } from 'os';
 import { VERSION } from '../version.js';
 import {
   PROVIDER_PRESETS,
+  probeProvider,
   setProvider,
   type ProviderAuth,
   type ProviderProtocol,
@@ -77,9 +78,9 @@ const SOUL_TEMPLATE = `# SOUL.md
 
 // --- 状态 ---
 
-type Step = 'welcome' | 'provider' | 'model' | 'apikey' | 'customUrl' | 'customProtocol' | 'customModel' | 'theme' | 'security' | 'done';
+type Step = 'welcome' | 'provider' | 'model' | 'apikey' | 'customUrl' | 'customProtocol' | 'test' | 'security' | 'done';
 
-interface Config {
+export interface Config {
   provider: string;
   baseUrl: string;
   model: string;
@@ -94,6 +95,21 @@ interface Config {
 
 function getEnvVar(name: string, dataDir: string): string | undefined {
   return process.env[name] || parseEnvFile(join(dataDir, '.env'))[name];
+}
+
+export function providerIndexFromKey(char: string, providerCount: number): number | null {
+  if (!/^[0-9]$/.test(char)) return null;
+  const number = char === '0' ? 10 : Number(char);
+  const index = number - 1;
+  return index >= 0 && index < providerCount ? index : null;
+}
+
+export function isReconfigureKey(char: string): boolean {
+  return char === ' ' || char.toLowerCase() === 'r';
+}
+
+export function maskSecret(value: string): string {
+  return value ? '*'.repeat(value.length) : '';
 }
 
 function parseEnvFile(path: string): Record<string, string> {
@@ -116,7 +132,19 @@ function checkExistingConfig(): Config | null {
   try {
     const p = getCfgPath();
     if (!existsSync(p)) return null;
-    return JSON.parse(readFileSync(p, 'utf-8')) as Config;
+    const dataDir = join(p, '..');
+    const parsed = JSON.parse(readFileSync(p, 'utf-8')) as Partial<Config>;
+    const apiKeyEnv = parsed.apiKeyEnv || 'SYNAPSE_API_KEY';
+    return {
+      provider: parsed.provider || 'custom',
+      baseUrl: parsed.baseUrl || '',
+      model: parsed.model || '',
+      apiKey: getEnvVar(apiKeyEnv, dataDir) || '',
+      apiKeyEnv,
+      protocol: parsed.protocol || 'openai',
+      auth: parsed.auth || 'bearer',
+      theme: parsed.theme || 'dark',
+    };
   } catch { return null; }
 }
 
@@ -192,11 +220,11 @@ function ProviderStep({ cursor, providers, onSelect }: { cursor: number; provide
     React.createElement(Text, null, ''),
     ...providers.map((p, i) =>
       React.createElement(Text, { key: p.id, color: i === cursor ? 'cyan' as const : 'gray' as const, bold: i === cursor },
-        `  ${i === cursor ? '▸' : ' '} [${i + 1}] ${p.name.padEnd(12)} ${p.desc}${p.models.length > 0 ? ` (${p.models.length} 个模型)` : ''}`
+        `  ${i === cursor ? '▸' : ' '} [${i + 1}] ${p.name.padEnd(12)} ${p.desc}${p.models.length > 0 ? ` (default: ${p.models[0]})` : ''}`
       )
     ),
     React.createElement(Text, null, ''),
-    React.createElement(Text, { color: 'gray' as const }, '  ↑↓ 选择  ·  Enter 确认  ·  Esc 退出'),
+    React.createElement(Text, { color: 'gray' as const }, '  ↑↓ 或数字键选择  ·  Enter 确认  ·  Esc 返回'),
   );
 }
 
@@ -210,23 +238,62 @@ function ModelStep({ cursor, models, onSelect }: { cursor: number; models: strin
       )
     ),
     React.createElement(Text, null, ''),
-    React.createElement(Text, { color: 'gray' as const }, '  ↑↓ 选择  ·  Enter 确认  ·  Esc 退出'),
+    React.createElement(Text, { color: 'gray' as const }, '  ↑↓ 选择  ·  Enter 确认  ·  Esc 返回'),
   );
 }
 
-function ApiKeyStep({ input, provider, baseUrl, onInput }: { input: string; provider: string; baseUrl?: string; onInput: (v: string) => void }) {
+function ModelInputStep({ input, provider }: { input: string; provider: string }) {
+  return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  🤖 设置模型 ID'),
+    React.createElement(Text, null, ''),
+    React.createElement(Text, { dimColor: true }, `  ${provider} 的模型 ID（可直接修改预填值）`),
+    React.createElement(Box, null,
+      React.createElement(Text, { color: 'gray' as const }, '  > '),
+      React.createElement(Text, null, input),
+      React.createElement(Text, { bold: true }, '▋'),
+    ),
+    React.createElement(Text, null, ''),
+    React.createElement(Text, { color: 'gray' as const }, '  Enter 确认  ·  Ctrl+U 清空  ·  Esc 返回'),
+  );
+}
+
+function ApiKeyStep({ input, provider, baseUrl }: { input: string; provider: string; baseUrl?: string }) {
   const p = PROVIDERS.find(pr => pr.id === provider);
   return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
     React.createElement(Text, { bold: true, color: 'cyan' as const }, `  🔑 输入 ${p?.name ?? provider} API Key`),
     React.createElement(Text, null, ''),
     React.createElement(Text, null, `  ${p?.envKey ?? 'API_KEY'}=`),
     React.createElement(Box, null,
-      React.createElement(Text, { color: 'yellow' as const }, `  ${input || ''}`),
+      React.createElement(Text, { color: 'yellow' as const }, `  ${maskSecret(input)}`),
       React.createElement(Text, { color: 'yellow' as const, bold: true }, '▋'),
     ),
     baseUrl ? React.createElement(Text, { dimColor: true }, `  端点: ${baseUrl}`) : null,
     React.createElement(Text, null, ''),
-    React.createElement(Text, { color: 'gray' as const }, '  粘贴后按 Enter 确认  ·  Esc 退出'),
+    React.createElement(Text, { color: 'gray' as const }, '  粘贴后按 Enter 测试  ·  Ctrl+U 清空  ·  Esc 返回'),
+  );
+}
+
+function ConnectionTestStep({ status, error }: { status: 'testing' | 'passed' | 'failed'; error?: string }) {
+  if (status === 'testing') {
+    return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
+      React.createElement(Text, { bold: true, color: 'cyan' as const }, '  🔌 测试 Provider 连通性'),
+      React.createElement(Text, null, ''),
+      React.createElement(Text, null, '  正在发送最小请求（最多 1 token）...'),
+    );
+  }
+  if (status === 'passed') {
+    return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
+      React.createElement(Text, { bold: true, color: 'green' as const }, '  ✓ Provider 测试通过'),
+      React.createElement(Text, null, ''),
+      React.createElement(Text, null, '  Enter 继续安全确认'),
+    );
+  }
+  return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
+    React.createElement(Text, { bold: true, color: 'red' as const }, '  × Provider 测试失败'),
+    React.createElement(Text, null, ''),
+    React.createElement(Text, { color: 'red' as const }, `  ${error || 'Unknown provider error'}`),
+    React.createElement(Text, null, ''),
+    React.createElement(Text, { color: 'gray' as const }, '  R 重试  ·  S 仍然保存  ·  B 返回修改  ·  Esc 返回'),
   );
 }
 
@@ -243,7 +310,7 @@ function CustomUrlStep({ input, onInput }: { input: string; onInput: (v: string)
       React.createElement(Text, { bold: true }, '▋'),
     ),
     React.createElement(Text, null, ''),
-    React.createElement(Text, { color: 'gray' as const }, '  Enter 确认  ·  Esc 退出'),
+    React.createElement(Text, { color: 'gray' as const }, '  Enter 确认  ·  Esc 返回'),
   );
 }
 
@@ -263,7 +330,7 @@ function CustomProtocolStep({ cursor }: { cursor: number }) {
       }, `  ${index === cursor ? '>' : ' '} ${protocol.label.padEnd(22)} ${protocol.detail}`)
     ),
     React.createElement(Text, null, ''),
-    React.createElement(Text, { color: 'gray' as const }, '  Up/Down select  |  Enter confirm  |  Esc exit'),
+    React.createElement(Text, { color: 'gray' as const }, '  Up/Down or 1/2 select  |  Enter confirm  |  Esc back'),
   );
 }
 
@@ -318,44 +385,118 @@ function DoneScreen({ config }: { config: Config }): React.ReactElement {
     React.createElement(Text, null, ''),
     React.createElement(Text, { color: 'cyan' as const, bold: true }, '  synapse chat    ← 开始对话'),
     React.createElement(Text, null, ''),
-    React.createElement(Text, { dimColor: true }, '  按 Enter 退出并启动 chat'),
+    React.createElement(Text, { dimColor: true }, '  按 Enter 完成；随后运行 synapse chat'),
   );
 }
 
 // --- 主组件 ---
 
-function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => void; existing: Config | null }) {
-  const [step, setStep] = useState<Step>(existing ? 'welcome' : 'welcome');
+export function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => void; existing: Config | null }) {
+  const [step, setStep] = useState<Step>('welcome');
   const [config, setConfig] = useState<Config>({
-    provider: 'anthropic',
-    baseUrl: PROVIDERS[0].baseUrl,
-    model: PROVIDERS[0].models[0],
-    apiKey: '',
-    apiKeyEnv: PROVIDERS[0].envKey,
-    protocol: PROVIDERS[0].protocol,
-    auth: PROVIDERS[0].auth,
-    theme: 'dark',
+    provider: existing?.provider || PROVIDERS[0].id,
+    baseUrl: existing?.baseUrl || PROVIDERS[0].baseUrl,
+    model: existing?.model || PROVIDERS[0].models[0],
+    apiKey: existing?.apiKey || '',
+    apiKeyEnv: existing?.apiKeyEnv || PROVIDERS[0].envKey,
+    protocol: existing?.protocol || PROVIDERS[0].protocol,
+    auth: existing?.auth || PROVIDERS[0].auth,
+    theme: existing?.theme || 'dark',
   });
   const [input, setInput] = useState('');
   const [cursor, setCursor] = useState(0);
+  const [testStatus, setTestStatus] = useState<'testing' | 'passed' | 'failed'>('testing');
+  const [testError, setTestError] = useState('');
+  const [testAttempt, setTestAttempt] = useState(0);
   const { exit } = useApp();
 
   const stepLabels: Record<Step, string> = {
     welcome: '欢迎', provider: '提供商', model: '模型', apikey: 'API Key',
-    customUrl: '端点', customProtocol: '协议', customModel: '模型',
-    theme: '主题', security: '安全', done: '完成',
+    customUrl: '端点', customProtocol: '协议', test: '连接测试',
+    security: '安全', done: '完成',
   };
-  const activeSteps: Step[] = ['welcome', 'provider', 'customUrl', 'customProtocol', 'customModel', 'model', 'apikey', 'theme', 'security', 'done'];
+  const activeSteps: Step[] = config.provider === 'custom'
+    ? ['welcome', 'provider', 'customUrl', 'customProtocol', 'model', 'apikey', 'test', 'security', 'done']
+    : ['welcome', 'provider', 'model', 'apikey', 'test', 'security', 'done'];
   const currentIdx = activeSteps.indexOf(step);
 
-  // Provider 过滤：如果有已有配置，跳过后续
+  const chooseProvider = (index: number) => {
+    const p = PROVIDERS[index];
+    if (!p) return;
+    setCursor(0);
+    setConfig(current => ({
+      ...current,
+      provider: p.id,
+      baseUrl: p.baseUrl,
+      model: p.models[0] || '',
+      apiKey: '',
+      apiKeyEnv: p.envKey,
+      protocol: p.protocol,
+      auth: p.auth,
+    }));
+    setInput(p.id === 'custom' ? '' : p.models[0] || '');
+    setStep(p.id === 'custom' ? 'customUrl' : 'model');
+  };
+
+  const goBack = () => {
+    if (step === 'welcome') { exit(); return; }
+    if (step === 'provider') { setStep('welcome'); return; }
+    if (step === 'customUrl') { setStep('provider'); return; }
+    if (step === 'customProtocol') { setInput(config.baseUrl); setStep('customUrl'); return; }
+    if (step === 'model') {
+      setInput('');
+      setStep(config.provider === 'custom' ? 'customProtocol' : 'provider');
+      return;
+    }
+    if (step === 'apikey' || step === 'test') {
+      setInput(config.model);
+      setStep('model');
+      return;
+    }
+    if (step === 'security') setStep('test');
+  };
+
+  useEffect(() => {
+    if (step !== 'test') return;
+    let active = true;
+    setTestStatus('testing');
+    setTestError('');
+    const provider = PROVIDERS.find(item => item.id === config.provider);
+    probeProvider({
+      id: config.provider,
+      name: provider?.name || config.provider,
+      protocol: config.protocol,
+      auth: config.auth,
+      apiKey: config.apiKey,
+      keySource: 'file',
+      keyName: config.apiKeyEnv,
+      model: config.model,
+      baseUrl: config.baseUrl,
+      preset: config.provider !== 'custom',
+    }).then(() => {
+      if (!active) return;
+      saveConfig(config);
+      setTestStatus('passed');
+    }).catch(error => {
+      if (!active) return;
+      setTestStatus('failed');
+      setTestError(error instanceof Error ? error.message : String(error));
+    });
+    return () => { active = false; };
+  }, [step, testAttempt]);
+
   useInput((char, key) => {
-    // 全局 q/Esc 退出
-    if (char === 'q' && step !== 'done') { exit(); return; }
+    if (key.ctrl && char === 'c') { exit(); return; }
+    if (key.escape) { goBack(); return; }
 
     // Welcome
     if (step === 'welcome') {
-      if (existing && (char === 's' || key.return)) { onDone(existing); return; }
+      if (existing && key.return) { onDone(existing); return; }
+      if (existing && isReconfigureKey(char)) {
+        setCursor(Math.max(0, PROVIDERS.findIndex(provider => provider.id === existing.provider)));
+        setStep('provider');
+        return;
+      }
       if (key.return) setStep('provider');
       return;
     }
@@ -364,28 +505,16 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
     if (step === 'provider') {
       if (key.upArrow) setCursor(c => (c - 1 + PROVIDERS.length) % PROVIDERS.length);
       else if (key.downArrow) setCursor(c => (c + 1) % PROVIDERS.length);
-      else if (key.return) {
-        const p = PROVIDERS[cursor];
-        setConfig(c => ({
-          ...c,
-          provider: p.id,
-          baseUrl: p.baseUrl,
-          model: p.models[0] || '',
-          apiKeyEnv: p.envKey,
-          protocol: p.protocol,
-          auth: p.auth,
-        }));
-        setCursor(0);
-        if (p.id === 'custom') setStep('customUrl');
-        else if (p.models.length <= 1) setStep('apikey');
-        else setStep('model');
-      } else if (key.escape) { exit(); }
+      else if (key.return) chooseProvider(cursor);
+      else {
+        const directIndex = providerIndexFromKey(char, PROVIDERS.length);
+        if (directIndex !== null) chooseProvider(directIndex);
+      }
       return;
     }
 
     // Custom URL
     if (step === 'customUrl') {
-      if (key.escape) { exit(); return; }
       if (key.return && input.trim()) {
         setConfig(c => ({ ...c, baseUrl: input.trim() }));
         setInput(''); setCursor(0); setStep('customProtocol');
@@ -395,8 +524,8 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
     }
 
     if (step === 'customProtocol') {
-      if (key.escape) { exit(); return; }
-      if (key.upArrow || key.downArrow) setCursor(value => value === 0 ? 1 : 0);
+      if (char === '1' || char === '2') setCursor(Number(char) - 1);
+      else if (key.upArrow || key.downArrow) setCursor(value => value === 0 ? 1 : 0);
       else if (key.return) {
         const protocol: ProviderProtocol = cursor === 0 ? 'openai' : 'anthropic';
         setConfig(c => ({
@@ -404,44 +533,43 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
           protocol,
           auth: protocol === 'openai' ? 'bearer' : 'x-api-key',
         }));
-        setCursor(0); setInput(''); setStep('customModel');
+        setCursor(0); setInput(''); setStep('model');
       }
-      return;
-    }
-
-    if (step === 'customModel') {
-      if (key.escape) { exit(); return; }
-      if (key.return && input.trim()) {
-        setConfig(c => ({ ...c, model: input.trim() }));
-        setInput(''); setStep('apikey');
-      } else if (key.backspace) setInput(value => value.slice(0, -1));
-      else if (char && !key.ctrl && !key.meta) setInput(value => value + char);
       return;
     }
 
     // Model
     if (step === 'model') {
-      if (key.escape) { exit(); return; }
-      const models = PROVIDERS.find(p => p.id === config.provider)?.models || PROVIDERS[0].models;
-      if (key.upArrow) setCursor(c => (c - 1 + models.length) % models.length);
-      else if (key.downArrow) setCursor(c => (c + 1) % models.length);
-      else if (key.return) {
-        setConfig(c => ({ ...c, model: models[cursor] }));
-        setCursor(0); setStep('apikey');
-      }
+      if (key.ctrl && char === 'u') setInput('');
+      else if (key.return && input.trim()) {
+        setConfig(c => ({ ...c, model: input.trim() }));
+        setInput('');
+        setStep('apikey');
+      } else if (key.backspace) setInput(value => value.slice(0, -1));
+      else if (char && !key.ctrl && !key.meta) setInput(value => value + char);
       return;
     }
 
     // API Key
     if (step === 'apikey') {
-      if (key.escape) { exit(); return; }
-      if (key.return && input.trim()) {
-        saveConfig({ ...config, apiKey: input.trim() });
+      if (key.ctrl && char === 'u') setInput('');
+      else if (key.return && input.trim()) {
         setConfig(c => ({ ...c, apiKey: input.trim() }));
         setInput('');
-        setStep('security');
+        setStep('test');
       } else if (key.backspace) setInput(v => v.slice(0, -1));
       else if (char && !key.ctrl && !key.meta) setInput(v => v + char);
+      return;
+    }
+
+    if (step === 'test') {
+      if (testStatus === 'testing') return;
+      if (testStatus === 'passed' && key.return) { setStep('security'); return; }
+      if (testStatus === 'failed') {
+        if (char.toLowerCase() === 'r') setTestAttempt(value => value + 1);
+        else if (char.toLowerCase() === 's') { saveConfig(config); setStep('security'); }
+        else if (char.toLowerCase() === 'b') { setInput(config.apiKey); setStep('apikey'); }
+      }
       return;
     }
 
@@ -464,12 +592,9 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
       case 'provider': return React.createElement(ProviderStep, { cursor, providers: PROVIDERS, onSelect: () => {} });
       case 'customUrl': return React.createElement(CustomUrlStep, { input, onInput: setInput });
       case 'customProtocol': return React.createElement(CustomProtocolStep, { cursor });
-      case 'customModel': return React.createElement(CustomModelStep, { input });
-      case 'model': {
-        const models = PROVIDERS.find(p => p.id === config.provider)?.models || [];
-        return React.createElement(ModelStep, { cursor, models, onSelect: () => {} });
-      }
-      case 'apikey': return React.createElement(ApiKeyStep, { input, provider: config.provider, baseUrl: config.provider === 'custom' ? config.baseUrl : undefined, onInput: setInput });
+      case 'model': return React.createElement(ModelInputStep, { input, provider: config.provider });
+      case 'apikey': return React.createElement(ApiKeyStep, { input, provider: config.provider, baseUrl: config.baseUrl });
+      case 'test': return React.createElement(ConnectionTestStep, { status: testStatus, error: testError });
       case 'security': return React.createElement(SecurityStep);
       case 'done': return React.createElement(DoneScreen, { config });
       default: return null;
@@ -477,7 +602,11 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
   };
 
   const stepIndicator = step !== 'welcome' && step !== 'done' ?
-    React.createElement(StepIndicator, { current: currentIdx, total: activeSteps.filter(s => s !== 'welcome' && s !== 'done').length + 1, stepLabel: stepLabels[step] }) : null;
+    React.createElement(StepIndicator, {
+      current: Math.max(0, currentIdx - 1),
+      total: activeSteps.length - 2,
+      stepLabel: stepLabels[step],
+    }) : null;
 
   return React.createElement(Box, { flexDirection: 'column' as const },
     stepIndicator,
