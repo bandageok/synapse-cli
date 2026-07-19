@@ -1,6 +1,7 @@
 import type { SlashCommand } from '../registry.js';
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { VERSION } from '../../version.js';
 
 export const statusCommand: SlashCommand = {
   name: 'status',
@@ -11,7 +12,7 @@ export const statusCommand: SlashCommand = {
       '=== Synapse Status ===',
       '',
       '-- Core --',
-      '  Version:     0.2.0',
+      '  Version:     ' + VERSION,
       '  Model:       ' + deps.model,
       '  Provider:    auto-detected',
       '  Turns:       ' + deps.turnCount,

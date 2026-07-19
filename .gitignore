@@ -4,6 +4,7 @@ dist/
 .synapse/
 .env
 *.log
+*.tgz
 db.json
 *.local.json
 .DS_Store

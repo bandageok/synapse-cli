@@ -99,6 +99,12 @@ synapse provider set private-anthropic \
 
 # Validate key, endpoint, protocol, and model with a one-token request
 synapse provider test
+
+# Diagnose local readiness (no network request by default)
+synapse doctor
+
+# Include a minimal live provider request
+synapse doctor --live
 ```
 
 `--api-key` writes the credential to `~/.synapse/.env` and never prints it. To keep secrets out of shell history, set the environment variable named by `--api-key-env` instead.
@@ -119,27 +125,19 @@ Search and export exclude session transcripts by default. Add `--include-session
 
 ## Demo
 
-```
+```text
+$ synapse doctor
+Synapse Doctor v0.2.1
+  [PASS] Node.js: 22.x
+  [PASS] Data directory: ~/.synapse is readable and writable
+  [PASS] Provider config: ~/.synapse/.synapse.json is valid
+  [PASS] Provider: company-gateway / company-model via environment (SYNAPSE_API_KEY)
+
+Result: ready (8 passed, 0 warnings, 0 failed)
+
 $ synapse chat
-🤖 Synapse v0.2.0 — multi-provider coding agent
-
-[Provider] Select provider: (anthropic/openrouter/minimax/custom)
-> anthropic
-
-[Model] Select model: (claude-sonnet-4-20250514/claude-opus-4-5...)
-> claude-sonnet-4-20250514
-
-[API Key] Paste your Anthropic API key:
-> sk-ant-...
-
-✅ Configured. Starting session...
-─────────────────────────────────────────────
-  Synapse Doctor
-  Provider: anthropic
-  Model: claude-sonnet-4-20250514
-  Tools: 19 registered
-  Engine: AsyncGenerator v0.2.0
-─────────────────────────────────────────────
+  Synapse v0.2.1
+  ● company-gateway / company-model
 
 You> Explain what the Soul system does
 

@@ -6,6 +6,7 @@ import { join } from 'path';
 import { spawn, type ChildProcess } from 'child_process';
 import type { MCPServerConfig, MCPTool, MCPResource, MCPPrompt, MCPServerCapabilities } from './types.js';
 import type { ToolDef, ToolResult } from '../../core/types.js';
+import { VERSION } from '../../version.js';
 
 type MCPResponse = { jsonrpc: string; id?: number; result?: { capabilities?: { tools?: unknown; resources?: unknown; prompts?: unknown }; tools?: MCPTool[]; resources?: MCPResource[]; prompts?: MCPPrompt[]; contents?: Array<{ text?: string; blob?: string }>; messages?: Array<{ content?: { text?: string } }>; content?: Array<{ text?: string }>; [k: string]: unknown }; error?: { code: number; message: string } };
 
@@ -58,7 +59,7 @@ export class MCPClient {
       const initResp = await this.sendRequest(proc, 'initialize', {
         protocolVersion: '2024-11-05',
         capabilities: { sampling: {} },
-        clientInfo: { name: 'synapse', version: '0.2.0' },
+        clientInfo: { name: 'synapse', version: VERSION },
       });
 
       serverEntry.capabilities = (initResp?.result?.capabilities ?? {}) as MCPServerCapabilities;

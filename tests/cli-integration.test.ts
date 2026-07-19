@@ -3,6 +3,7 @@ import { execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { VERSION } from '../src/version.js';
 
 const root = process.cwd();
 const tsxCli = join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs');
@@ -100,15 +101,27 @@ describe('CLI integration', () => {
 
   it('checks updates against a configurable registry URL', async () => {
     const dataDir = tempDir('synapse-cli-update-');
-    const registryUrl = 'data:application/json,' + encodeURIComponent(JSON.stringify({ version: '0.2.0' }));
+    const registryUrl = 'data:application/json,' + encodeURIComponent(JSON.stringify({ version: VERSION }));
 
     const output = runCli(['update', '--check'], dataDir, {
       SYNAPSE_REGISTRY_URL: registryUrl,
     });
 
-    expect(output).toContain('Current version: 0.2.0');
-    expect(output).toContain('Latest version:  0.2.0');
+    expect(output).toContain(`Current version: ${VERSION}`);
+    expect(output).toContain(`Latest version:  ${VERSION}`);
     expect(output).toContain('Already up to date');
+  });
+
+  it('does not offer to downgrade when the registry version is older', () => {
+    const dataDir = tempDir('synapse-cli-update-older-');
+    const registryUrl = 'data:application/json,' + encodeURIComponent(JSON.stringify({ version: '0.1.0' }));
+
+    const output = runCli(['update', '--check'], dataDir, {
+      SYNAPSE_REGISTRY_URL: registryUrl,
+    });
+
+    expect(output).toContain('newer than the registry version');
+    expect(output).not.toContain('Update available');
   });
 
   it('configures and lists an arbitrary compatible provider', () => {

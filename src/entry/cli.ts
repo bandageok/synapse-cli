@@ -1,19 +1,23 @@
 // src/entry/cli.ts
 import { Command } from 'commander';
 import type { Message } from '../core/types.js';
+import { registerDoctorCli } from '../commands/doctor-cli.js';
 import { registerMemoryCli } from '../commands/memory-cli.js';
 import { registerProviderCli } from '../commands/provider-cli.js';
+import { compareVersions } from '../utils/semver.js';
 import { findTemplateDir } from '../utils/templates.js';
+import { VERSION } from '../version.js';
 
 const program = new Command();
 
 program
   .name('synapse')
   .description('Synapse — multi-provider agentic coding CLI')
-  .version('0.2.0');
+  .version(VERSION);
 
 registerProviderCli(program);
 registerMemoryCli(program);
+registerDoctorCli(program, VERSION);
 
 program
   .command('onboard')
@@ -239,22 +243,6 @@ program
   });
 
 program
-  .command('doctor')
-  .description('Diagnose configuration issues')
-  .action(async () => {
-    const { init } = await import('./init.js');
-    const deps = await init({});
-    console.log('Synapse Doctor');
-    console.log(`  Provider: ${deps.provider?.name ?? 'NONE'}`);
-    console.log(`  Data dir: ${deps.dataDir}`);
-    console.log(`  SOUL.md: ${deps.soulLoader.load() ? '✅' : '❌'}`);
-    console.log(`  Tools: ${deps.tools.schemas().length} registered`);
-    console.log(`  Engine: AsyncGenerator v0.2.0`);
-    console.log(`  Context: 6-layer builder`);
-    console.log(`  Compressor: 4-level defense`);
-  });
-
-program
   .command('mcp')
   .description('Manage MCP servers')
   .argument('[action]', 'add | list | remove')
@@ -380,24 +368,11 @@ program
 
 program
   .command('update')
-  .description('Check for updates and Update synapse')
+  .description('Check for and install Synapse updates')
   .option('--check', 'Only check, do not update')
   .action(async (opts) => {
     const { execSync } = await import('child_process');
-    const { readFileSync, existsSync } = await import('fs');
-    const { join, dirname } = await import('path');
-    const { fileURLToPath } = await import('url');
-
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    let pkgPath = join(__dirname, '..', 'package.json');
-    if (!existsSync(pkgPath)) {
-      pkgPath = join(__dirname, '..', '..', 'package.json');
-    }
-    let localVersion = '0.0.0';
-    try {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-      localVersion = pkg.version;
-    } catch {}
+    const localVersion = VERSION;
 
     console.log(`Current version: ${localVersion}`);
 
@@ -414,8 +389,13 @@ program
 
       console.log(`Latest version:  ${latestVersion}`);
 
-      if (localVersion === latestVersion) {
+      const comparison = compareVersions(latestVersion, localVersion);
+      if (comparison === 0) {
         console.log('✅ Already up to date!');
+        return;
+      }
+      if (comparison < 0) {
+        console.log('Installed version is newer than the registry version; no update needed.');
         return;
       }
 

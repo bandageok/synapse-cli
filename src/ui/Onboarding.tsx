@@ -7,6 +7,7 @@ import { render, Text, Box, useInput, useApp, useStdin } from 'ink';
 import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { VERSION } from '../version.js';
 import {
   PROVIDER_PRESETS,
   setProvider,
@@ -163,7 +164,7 @@ function StepIndicator({ current, total, stepLabel }: { current: number; total: 
 
 function WelcomeStep({ existing, onNext, onSkip }: { existing: Config | null; onNext: () => void; onSkip: () => void }) {
   return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
-    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  ⚡ Synapse v0.2.0'),
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, `  ⚡ Synapse v${VERSION}`),
     React.createElement(Text, { dimColor: true }, '    Multi-provider coding agent CLI'),
     React.createElement(Text, null, ''),
     existing
