@@ -2437,7 +2437,7 @@ git commit -m "feat: REPL UI + CLI integration with all components wired up"
 ## Quick Start
 
 ```bash
-npm i -g synapse-cli
+npm install -g @bandageok/synapse-cli
 export ANTHROPIC_API_KEY=sk-ant-xxx
 # or
 export OPENROUTER_API_KEY=sk-or-xxx

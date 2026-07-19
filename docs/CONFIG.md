@@ -236,14 +236,19 @@ SOUL.md (人格) > USER.md (用户) > .synapse.md (项目) > MEMORY.md (记忆)
 
 ```bash
 # 1. 安装
-npm i -g synapse-cli
+npm install -g @bandageok/synapse-cli
 
-# 2. 设置 API Key
-export ANTHROPIC_API_KEY=sk-ant-xxx
-# 或
-export OPENROUTER_API_KEY=sk-or-xxx
+# 2. 选择 provider、模型和 API Key
+synapse provider list
+synapse provider set deepseek --api-key "$DEEPSEEK_API_KEY"
+# 也可以连接任意兼容端点：
+# synapse provider set company-gateway \
+#   --base-url https://llm.example.com/v1 \
+#   --protocol openai \
+#   --model company-model \
+#   --api-key-env COMPANY_API_KEY
 
-# 3. 初始化配置（可选，不配置也有默认行为）
+# 3. 初始化人格配置（可选）
 mkdir -p ~/.synapse
 cat > ~/.synapse/SOUL.md << 'EOF'
 # SOUL.md
@@ -260,6 +265,8 @@ synapse chat
 # 5. 诊断
 synapse doctor
 ```
+
+Provider 预设只是快捷配置，运行时不会把厂商写死。任何 OpenAI-compatible 或 Anthropic-compatible BaseURL 都可以通过 `provider set` 接入；API key 建议放在环境变量或 `~/.synapse/.env`，不要提交到仓库。
 
 ---
 

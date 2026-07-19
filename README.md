@@ -158,13 +158,13 @@ synapse-cli/
 ├── src/
 │   ├── core/           # Engine, Context, Compressor, ToolRegistry, HookSystem
 │   ├── tools/          # 19 built-in tools
-│   ├── providers/      # Anthropic, OpenRouter, MiniMax, Custom
+│   ├── providers/      # Presets plus arbitrary compatible endpoints
 │   ├── soul/           # SoulLoader, Heartbeat, Dream, MemoryManager,
 │   │                   # SelfImprovement, FakeExecutionWatchdog
 │   ├── ui/             # REPL (Ink + Vim mode), Onboarding
 │   └── services/       # MCP Client, Plugin Registry
-├── dist/               # Built output (~230 KB)
-└── tests/              # 26 test files, 188 tests
+├── dist/               # Built output (~287 KB)
+└── tests/              # 34 test files, 227 tests
 ```
 
 ---

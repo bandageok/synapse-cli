@@ -2,6 +2,12 @@
 
 All notable changes to Synapse are documented in this file.
 
+## 0.2.3 - 2026-07-19
+
+- Updated configuration documentation to use the scoped npm package and arbitrary compatible BaseURL workflow.
+- Removed the legacy identity from the generated template.
+- Refreshed README architecture and test/build statistics.
+
 ## 0.2.2 - 2026-07-19
 
 - Reworked onboarding into a predictable provider, model, key, connection test, and security flow.

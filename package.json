@@ -1,6 +1,6 @@
 {
   "name": "@bandageok/synapse-cli",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Synapse — a multi-provider agentic coding CLI",
   "type": "module",
   "main": "./dist/cli.mjs",
