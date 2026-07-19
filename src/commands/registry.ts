@@ -18,6 +18,7 @@ export interface CommandDeps {
   messages: Message[];
   resetMessages: () => void;
   setMessages?: (msgs: Message[]) => void;
+  clearMemoryCache?: () => void;
   turnCount: number;
 }
 

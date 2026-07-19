@@ -180,4 +180,45 @@ describe('Engine', () => {
     expect(toolResult).toBeDefined();
     expect(toolResult.output).toContain('Tool exploded');
   });
+
+  it('audits tool permission and execution lifecycle', async () => {
+    const messages: Message[] = [{ role: 'user', content: 'echo hello' }];
+    const provider = mockToolProvider('Echo', { text: 'hello' }, 'Done!');
+    const auditEvents: { action: string; meta?: Record<string, unknown> }[] = [];
+
+    const echoTool: ToolDef = {
+      name: 'Echo',
+      description: 'Echo',
+      schema: {},
+      permissions: 'read',
+      isEnabled: () => true,
+      execute: async (input: any) => ({ output: `Echoed: ${input.text}`, isError: false }),
+    };
+
+    const tools = new ToolRegistry();
+    tools.register(echoTool);
+
+    for await (const _event of createEngine(
+      messages,
+      provider,
+      tools,
+      noopContext,
+      noopHooks,
+      noopCompressor,
+      noopErrorRecovery,
+      {
+        logger: {
+          info: () => {},
+          warn: () => {},
+          error: () => {},
+          audit: (action, meta) => auditEvents.push({ action, meta }),
+        },
+      },
+    )) {}
+
+    expect(auditEvents.map(e => e.action)).toContain('tool.permission_decision');
+    expect(auditEvents.map(e => e.action)).toContain('tool.execution_started');
+    expect(auditEvents.map(e => e.action)).toContain('tool.execution_finished');
+    expect(auditEvents.find(e => e.action === 'tool.permission_decision')?.meta?.decision).toBe('allow');
+  });
 });

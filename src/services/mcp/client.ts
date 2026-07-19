@@ -58,7 +58,7 @@ export class MCPClient {
       const initResp = await this.sendRequest(proc, 'initialize', {
         protocolVersion: '2024-11-05',
         capabilities: { sampling: {} },
-        clientInfo: { name: 'cclaw', version: '0.2.0' },
+        clientInfo: { name: 'synapse', version: '0.2.0' },
       });
 
       serverEntry.capabilities = (initResp?.result?.capabilities ?? {}) as MCPServerCapabilities;

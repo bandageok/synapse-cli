@@ -43,11 +43,12 @@ import { MCPClient } from '../services/mcp/client.js';
 import { PluginRegistry } from '../plugins/registry.js';
 
 export async function init(opts: { model?: string; addDir?: string[] }) {
-  const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+  const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
   const provider = createProvider(opts.model);
   const tools = new ToolRegistry();
+  tools.initPermissions(dataDir);
   const logger = new Logger({ dataDir });
   const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider: provider ?? undefined });
   const hooks = new HookSystem();

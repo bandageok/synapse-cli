@@ -8,7 +8,7 @@ import { GrepTool } from '../src/tools/GrepTool.js';
 describe('GlobTool', () => {
   let tmpDir: string;
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-glob-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-glob-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
     mkdirSync(join(tmpDir, 'src'), { recursive: true });
     writeFileSync(join(tmpDir, 'test.ts'), 'content', 'utf-8');
@@ -42,7 +42,7 @@ describe('GlobTool', () => {
 describe('GrepTool', () => {
   let tmpDir: string;
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-grep-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-grep-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
     writeFileSync(join(tmpDir, 'hello.txt'), 'hello world\nsecond line', 'utf-8');
     writeFileSync(join(tmpDir, 'data.csv'), 'name,age\nalice,30', 'utf-8');

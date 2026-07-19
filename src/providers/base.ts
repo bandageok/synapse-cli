@@ -5,6 +5,8 @@ export interface ProviderConfig {
   apiKey: string;
   model?: string;
   baseUrl?: string;
+  name?: string;
+  auth?: 'bearer' | 'x-api-key';
 }
 
 /** Provider 实例接口 — 核心流式接口 */

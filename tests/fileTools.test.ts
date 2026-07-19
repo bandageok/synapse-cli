@@ -10,7 +10,7 @@ import { FileEditTool } from '../src/tools/FileEditTool.js';
 describe('FileReadTool', () => {
   let tmpDir: string;
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-ft-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-ft-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
   });
   afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });
@@ -40,7 +40,7 @@ describe('FileReadTool', () => {
 describe('FileWriteTool', () => {
   let tmpDir: string;
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-fw-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-fw-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
   });
   afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });
@@ -77,7 +77,7 @@ describe('FileWriteTool', () => {
 describe('FileEditTool', () => {
   let tmpDir: string;
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-fe-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-fe-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
   });
   afterEach(() => { rmSync(tmpDir, { recursive: true, force: true }); });

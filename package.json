@@ -1,7 +1,7 @@
 {
-  "name": "synapse-cli",
+  "name": "@bandageok/synapse-cli",
   "version": "0.2.0",
-  "description": "Synapse — Claude Code x OpenClaw agentic CLI agent framework",
+  "description": "Synapse — a multi-provider agentic coding CLI",
   "type": "module",
   "main": "./dist/cli.mjs",
   "bin": {
@@ -11,22 +11,24 @@
     "dev": "tsx src/entry/cli.ts",
     "build": "tsup",
     "test": "vitest run",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run lint && npm test && npm run build"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cclaw/cclaw.git"
+    "url": "https://github.com/bandageok/synapse-cli.git"
   },
-  "homepage": "https://github.com/cclaw/cclaw#readme",
+  "homepage": "https://github.com/bandageok/synapse-cli#readme",
   "bugs": {
-    "url": "https://github.com/cclaw/cclaw/issues"
+    "url": "https://github.com/bandageok/synapse-cli/issues"
   },
   "keywords": [
     "cli",
     "agent",
     "ai",
     "claude",
-    "openclaw",
+    "multi-provider",
     "copilot",
     "developer-tools",
     "typescript"
@@ -49,10 +51,14 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/PROVIDER-MEMORY-CLI.md"
   ],
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -20,7 +20,12 @@ export interface EngineOptions {
   onPermissionAsk?: (tool: string, input: Record<string, unknown>, toolUseId: string) => Promise<boolean>;
   watchdog?: { recordTurn: (turn: number, content: string, hasToolCall: boolean) => void; report: () => string };
   selfImprovement?: { logError: (tool: string, command: string, error: string) => void };
-  logger?: { info: (msg: string, meta?: unknown) => void; error: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
+  logger?: {
+    info: (msg: string, meta?: Record<string, unknown>) => void;
+    error: (msg: string, meta?: Record<string, unknown>) => void;
+    warn: (msg: string, meta?: Record<string, unknown>) => void;
+    audit?: (action: string, meta?: Record<string, unknown>) => void;
+  };
 }
 
 export async function* createEngine(
@@ -121,6 +126,10 @@ export async function* createEngine(
       // 6. Execute tools
       for (const toolUse of toolUses) {
         if (toolUse._parseError) {
+          options?.logger?.audit?.('tool.input.invalid_json', {
+            toolUseId: toolUse.id,
+            tool: toolUse.name,
+          });
           messages.push({
             role: 'user',
             content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Error: Invalid JSON in tool input' }],
@@ -130,6 +139,12 @@ export async function* createEngine(
 
         const hookResult = await hooks.preToolUse(toolUse);
         if (hookResult.blocked) {
+          options?.logger?.audit?.('tool.blocked_by_hook', {
+            toolUseId: toolUse.id,
+            tool: toolUse.name,
+            input: toolUse.input,
+            reason: hookResult.reason ?? 'Blocked by hook',
+          });
           messages.push({
             role: 'user',
             content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: hookResult.reason ?? 'Blocked by hook' }],
@@ -138,6 +153,12 @@ export async function* createEngine(
         }
 
         const permission = tools.checkPermission(toolUse);
+        options?.logger?.audit?.('tool.permission_decision', {
+          toolUseId: toolUse.id,
+          tool: toolUse.name,
+          input: toolUse.input,
+          decision: permission,
+        });
         if (permission === 'deny') {
           messages.push({
             role: 'user',
@@ -153,6 +174,11 @@ export async function* createEngine(
           // 如果提供了回调，使用回调确认
           if (options?.onPermissionAsk) {
             const allowed = await options.onPermissionAsk(toolUse.name, toolUse.input, toolUse.id);
+            options?.logger?.audit?.('tool.user_permission_response', {
+              toolUseId: toolUse.id,
+              tool: toolUse.name,
+              allowed,
+            });
             if (!allowed) {
               messages.push({
                 role: 'user',
@@ -162,6 +188,12 @@ export async function* createEngine(
             }
           } else {
             // 无回调时默认拒绝（安全优先）
+            options?.logger?.audit?.('tool.user_permission_response', {
+              toolUseId: toolUse.id,
+              tool: toolUse.name,
+              allowed: false,
+              reason: 'no handler',
+            });
             messages.push({
               role: 'user',
               content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied (no handler)' }],
@@ -171,6 +203,11 @@ export async function* createEngine(
         }
 
         yield { type: 'tool_use', tool: toolUse.name, input: toolUse.input };
+        options?.logger?.audit?.('tool.execution_started', {
+          toolUseId: toolUse.id,
+          tool: toolUse.name,
+          input: toolUse.input,
+        });
 
         let result: ToolResult;
         try {
@@ -192,6 +229,12 @@ export async function* createEngine(
         }
 
         await hooks.postToolUse(toolUse, result);
+        options?.logger?.audit?.('tool.execution_finished', {
+          toolUseId: toolUse.id,
+          tool: toolUse.name,
+          isError: result.isError,
+          outputPreview: result.output.slice(0, 500),
+        });
 
         messages.push({
           role: 'user',

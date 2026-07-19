@@ -1,4 +1,4 @@
-# C.C.Claw P0 修复计划
+# Synapse P0 修复计划
 
 ## 进度追踪
 - [x] P0-1: 实现 /resume（读 SessionStore + 恢复 messages）
@@ -29,8 +29,8 @@
 - 使用 setMessages 替换消息历史
 
 ### P0-3: /undo 实现 ✅
-- FileEdit 执行前创建 .cclaw-bak 快照
-- /undo 从 .cclaw-bak 恢复或反向替换
+- FileEdit 执行前创建 .synapse-bak 快照
+- /undo 从 .synapse-bak 恢复或反向替换
 - 支持 FileEdit 反向操作
 
 ### P0-4: AgentTool 替换 ✅

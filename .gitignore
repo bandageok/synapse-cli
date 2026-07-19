@@ -1,7 +1,7 @@
 ﻿node_modules/
 dist/
 *.tsbuildinfo
-.cclaw/
+.synapse/
 .env
 *.log
 db.json

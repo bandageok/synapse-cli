@@ -1,12 +1,12 @@
-# C.C.Claw v0.2.0 — 完整系统架构对比
+# Synapse v0.2.0 — 完整系统架构对比
 
-> Claude Code × OpenClaw 杂交产物
+> Synapse architecture and product audit
 
 ---
 
 ## 1. 项目总览
 
-| 指标 | C.C.Claw v0.2.0 | Claude Code | OpenClaw |
+| 指标 | Synapse v0.2.0 | Claude Code | OpenClaw |
 |------|-----------------|-------------|----------|
 | 源码文件 | 71 | ~1,884 | 闭源 |
 | 源码行数 | 3,692 | ~100,000+ | N/A |
@@ -23,53 +23,53 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    C.C.Claw v0.2.0 架构                         │
+│                    Synapse v0.2.0 架构                         │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
 │  │  CLI层   │  │  CLI层   │  │  CLI层   │  │  CLI层   │       │
-│  │ cclaw    │  │ claude   │  │ openclaw │  │          │       │
+│  │ synapse    │  │ claude   │  │ openclaw │  │          │       │
 │  │ 7 命令   │  │ 60+ 命令 │  │ gateway  │  │          │       │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────┘       │
 │       │              │              │                           │
 │  ┌────▼──────────────▼──────────────▼─────┐                    │
 │  │           REPL / TUI 层                 │                    │
-│  │  C.C.Claw: Ink + 16 斜杠命令 + Vim     │                    │
+│  │  Synapse: Ink + 16 斜杠命令 + Vim     │                    │
 │  │  Claude Code: Ink + 50+ 斜杠命令       │                    │
 │  │  OpenClaw: 飞书/Telegram/Discord       │                    │
 │  └────┬───────────────────────────────────┘                    │
 │       │                                                        │
 │  ┌────▼───────────────────────────────────┐                    │
 │  │           核心引擎 (Engine)             │                    │
-│  │  C.C.Claw: AsyncGenerator ✅            │                    │
+│  │  Synapse: AsyncGenerator ✅            │                    │
 │  │  Claude Code: AsyncGenerator ✅         │                    │
 │  │  OpenClaw: Gateway session loop         │                    │
 │  └────┬───────────────────────────────────┘                    │
 │       │                                                        │
 │  ┌────▼───────────────────────────────────┐                    │
 │  │           上下文系统 (Context)           │                    │
-│  │  C.C.Claw: 6层注入 ✅                   │                    │
+│  │  Synapse: 6层注入 ✅                   │                    │
 │  │  Claude Code: 6层注入 ✅                │                    │
 │  │  OpenClaw: 静态文件注入                 │                    │
 │  └────┬───────────────────────────────────┘                    │
 │       │                                                        │
 │  ┌────▼───────────────────────────────────┐                    │
 │  │           压缩系统 (Compressor)         │                    │
-│  │  C.C.Claw: 4级防御 ✅                   │                    │
+│  │  Synapse: 4级防御 ✅                   │                    │
 │  │  Claude Code: 4级防御 ✅                │                    │
 │  │  OpenClaw: Gateway 管理                │                    │
 │  └────┬───────────────────────────────────┘                    │
 │       │                                                        │
 │  ┌────▼───────────────────────────────────┐                    │
 │  │           Provider 层                   │                    │
-│  │  C.C.Claw: Anthropic + OpenRouter ✅    │                    │
+│  │  Synapse: Anthropic + OpenRouter ✅    │                    │
 │  │  Claude Code: Anthropic 原生            │                    │
 │  │  OpenClaw: OpenRouter 多模型            │                    │
 │  └────┬───────────────────────────────────┘                    │
 │       │                                                        │
 │  ┌────▼───────────────────────────────────┐                    │
 │  │           工具系统 (Tools)              │                    │
-│  │  C.C.Claw: 17 工具 + Hook ✅            │                    │
+│  │  Synapse: 17 工具 + Hook ✅            │                    │
 │  │  Claude Code: 55 工具 + Hook + MCP      │                    │
 │  │  OpenClaw: ~20 工具 + 扩展              │                    │
 │  └────┬───────────────────────────────────┘                    │
@@ -90,7 +90,7 @@
 
 ### 3.1 核心引擎
 
-| 功能 | C.C.Claw | Claude Code | OpenClaw | 来源 |
+| 功能 | Synapse | Claude Code | OpenClaw | 来源 |
 |------|----------|-------------|----------|------|
 | AsyncGenerator 循环 | ✅ | ✅ | ❌ | Claude Code |
 | 6层上下文注入 | ✅ | ✅ | ❌ | Claude Code |
@@ -102,7 +102,7 @@
 
 ### 3.2 灵魂系统
 
-| 功能 | C.C.Claw | Claude Code | OpenClaw | 来源 |
+| 功能 | Synapse | Claude Code | OpenClaw | 来源 |
 |------|----------|-------------|----------|------|
 | SOUL.md 人格 | ✅ | ❌ | ✅ | OpenClaw |
 | MEMORY.md 4类 | ✅ | ✅ | ✅ | 两者 |
@@ -117,7 +117,7 @@
 
 ### 3.3 工具系统
 
-| 工具 | C.C.Claw | Claude Code | 来源 |
+| 工具 | Synapse | Claude Code | 来源 |
 |------|----------|-------------|------|
 | Bash | ✅ | ✅ | 两者 |
 | FileRead/Edit/Write | ✅ | ✅ | 两者 |
@@ -136,7 +136,7 @@
 
 ### 3.4 CLI & REPL
 
-| 功能 | C.C.Claw | Claude Code | OpenClaw |
+| 功能 | Synapse | Claude Code | OpenClaw |
 |------|----------|-------------|----------|
 | CLI 命令 | 7 | 60+ | N/A |
 | REPL 斜杠命令 | 16 | 50+ | N/A |
@@ -149,7 +149,7 @@
 
 ### 3.5 基础设施
 
-| 功能 | C.C.Claw | Claude Code | OpenClaw |
+| 功能 | Synapse | Claude Code | OpenClaw |
 |------|----------|-------------|----------|
 | 构建系统 | tsup | bun:bundle | N/A |
 | 测试框架 | Vitest | 无公开 | N/A |
@@ -162,7 +162,7 @@
 ## 4. 目录结构对比
 
 ```
-C.C.Claw v0.2.0 (71 files)          Claude Code (1884 files)
+Synapse v0.2.0 (71 files)          Claude Code (1884 files)
 ─────────────────────────           ─────────────────────────
 src/
 ├── commands/       (18)            ├── commands/       (15)
@@ -224,7 +224,7 @@ templates/ (7 files)                ├── hooks/          (70+)
 
 ## 6. 结论
 
-**C.C.Claw = Claude Code 的骨架 + OpenClaw 的灵魂**
+**Synapse = multi-provider terminal workflow + persistent agent memory**
 
 - 骨架完成度：~40%（核心引擎 100%，CLI/工具/MCP ~40%）
 - 灵魂完成度：~90%（SOUL/MEMORY/Heartbeat/Self-Improvement/假执行/Dream 全部实现）

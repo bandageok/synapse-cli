@@ -67,7 +67,7 @@ describe('MemoryExtractor', () => {
 describe('SessionIndex', () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'cclaw-sidx-'));
+    dir = mkdtempSync(join(tmpdir(), 'synapse-sidx-'));
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
@@ -215,7 +215,7 @@ describe('SessionIndex', () => {
 describe('Dream', () => {
   let dir: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'cclaw-dream-'));
+    dir = mkdtempSync(join(tmpdir(), 'synapse-dream-'));
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });

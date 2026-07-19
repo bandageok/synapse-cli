@@ -9,7 +9,7 @@ import { tmpdir } from 'os';
 
 describe('Heartbeat', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cclaw-hb-')); });
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'synapse-hb-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('loads builtin tasks', () => {
@@ -38,7 +38,7 @@ describe('SelfImprovement', () => {
   let dir: string;
   let si: SelfImprovement;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'cclaw-si-'));
+    dir = mkdtempSync(join(tmpdir(), 'synapse-si-'));
     si = new SelfImprovement(dir);
   });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });

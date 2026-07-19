@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { BashTool } from '../src/tools/BashTool.js';
+import { BashTool, createBashTool } from '../src/tools/BashTool.js';
 import { PowerShellTool } from '../src/tools/PowerShellTool.js';
+import { mkdtempSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 describe('BashTool', () => {
   const isWin = process.platform === 'win32';
@@ -22,6 +25,21 @@ describe('BashTool', () => {
   it('blocks dd commands', async () => {
     const result = await BashTool.execute({ command: 'dd of=/dev/sda' }, { cwd: process.cwd(), abortSignal: new AbortController().signal });
     expect(result.isError).toBe(true);
+  });
+
+  it('does not allow sibling paths that only share a prefix', async () => {
+    const base = mkdtempSync(join(tmpdir(), 'synapse-allowed-'));
+    const sibling = base + '-sibling';
+    mkdirSync(sibling, { recursive: true });
+    const scopedBash = createBashTool({ allowedDirs: [base] });
+
+    const result = await scopedBash.execute(
+      { command: 'echo should-not-run' },
+      { cwd: sibling, abortSignal: new AbortController().signal },
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain('not in the allowed list');
   });
 
   if (hasBash) {

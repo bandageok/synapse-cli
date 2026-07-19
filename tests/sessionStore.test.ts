@@ -11,7 +11,7 @@ describe('SessionStore', () => {
   let store: SessionStore;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-ss-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-ss-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
     store = new SessionStore(tmpDir);
   });

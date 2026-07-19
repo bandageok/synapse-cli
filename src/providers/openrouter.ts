@@ -3,25 +3,29 @@ import type { StreamChunk, StreamParams } from '../core/types.js';
 import type { Provider, ProviderConfig } from './base.js';
 
 export class OpenRouterProvider implements Provider {
-  name = 'openrouter';
+  name: string;
   private apiKey: string;
   private model: string;
   private baseUrl: string;
 
   constructor(config: ProviderConfig) {
+    this.name = config.name ?? 'openai-compatible';
     this.apiKey = config.apiKey;
     this.model = config.model ?? 'xiaomi/mimo-v2-pro';
     this.baseUrl = config.baseUrl ?? 'https://openrouter.ai/api/v1';
   }
 
   async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json',
+    };
+    if (this.name === 'openrouter') {
+      headers['HTTP-Referer'] = 'https://github.com/bandageok/synapse-cli';
+    }
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/cclaw/cclaw',
-      },
+      headers,
       body: JSON.stringify({
         model: this.model,
         messages: [
@@ -52,7 +56,7 @@ export class OpenRouterProvider implements Provider {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`OpenRouter API error: ${response.status} - ${body}`);
+      throw new Error(`${this.name} API error: ${response.status} - ${body}`);
     }
 
     const reader = response.body!.getReader();

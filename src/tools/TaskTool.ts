@@ -115,7 +115,7 @@ async function executeSpawned(
         const maxTurns = ${input.max_turns ?? 20};
         // 简化版子代理：执行单个命令或返回任务描述
         console.log(JSON.stringify({
-          output: '[Spawned SubAgent] Task received: ' + task + '\\nMax turns: ' + maxTurns + '\\nNote: Full spawn isolation requires cclaw binary in PATH.',
+          output: '[Spawned SubAgent] Task received: ' + task + '\\nMax turns: ' + maxTurns + '\\nNote: Full spawn isolation requires synapse binary in PATH.',
           isError: false,
         }));
       `,

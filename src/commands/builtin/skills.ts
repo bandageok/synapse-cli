@@ -26,7 +26,7 @@ export const skillsCommand: SlashCommand = {
         `  Searched in:`,
         `    - ${join(dataDir, 'skills')}`,
         `    - ${join(process.cwd(), 'skills')}`,
-        `    - ${join(process.cwd(), '.cclaw', 'skills')}`,
+        `    - ${join(process.cwd(), '.synapse', 'skills')}`,
         '',
         `  Discovered: ${allSkills.length}`,
         '',
@@ -73,7 +73,7 @@ export const skillsCommand: SlashCommand = {
       lines.push('  No skills found.');
       lines.push('');
       lines.push('  To add skills:');
-      lines.push('    1. Place skill folders in ~/.cclaw/skills/');
+      lines.push('    1. Place skill folders in ~/.synapse/skills/');
       lines.push('    2. Each skill needs a SKILL.md file');
       lines.push('    3. Optionally add manifest.json for metadata');
       lines.push('');

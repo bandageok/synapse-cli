@@ -1,25 +1,24 @@
 import { existsSync, mkdirSync, copyFileSync } from 'fs';
 import { join } from 'path';
 import type { SlashCommand } from '../registry.js';
+import { findTemplateDir } from '../../utils/templates.js';
 
 export const initCommand: SlashCommand = {
   name: 'init',
-  description: 'Initialize ~/.cclaw/ config',
+  description: 'Initialize ~/.synapse/ config',
   handler: async (_args, deps) => {
     const dataDir = deps.dataDir;
     if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
-    const templateDir = join(import.meta.url.replace('file:///', ''), '..', '..', '..', 'templates').replace(/%20/g, ' ');
+    const templateDir = findTemplateDir();
     const files = ['SOUL.md', 'USER.md', 'IDENTITY.md', 'MEMORY.md', 'HEARTBEAT.md', 'TOOLS.md'];
 
     let created = 0;
     for (const file of files) {
       const dst = join(dataDir, file);
       if (!existsSync(dst)) {
-        try {
-          copyFileSync(join(templateDir, file), dst);
-          created++;
-        } catch {}
+        copyFileSync(join(templateDir, file), dst);
+        created++;
       }
     }
 

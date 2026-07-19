@@ -40,7 +40,7 @@ export class SkillAutoLoader {
       searchDirs.push(join(cwd, 'skills'));
       let currentDir = cwd;
       while (currentDir !== resolve(currentDir, '..')) {
-        const parentSkills = join(currentDir, '.cclaw', 'skills');
+        const parentSkills = join(currentDir, '.synapse', 'skills');
         if (existsSync(parentSkills)) {
           searchDirs.push(parentSkills);
         }

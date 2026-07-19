@@ -1,12 +1,19 @@
 // src/entry/cli.ts
 import { Command } from 'commander';
+import type { Message } from '../core/types.js';
+import { registerMemoryCli } from '../commands/memory-cli.js';
+import { registerProviderCli } from '../commands/provider-cli.js';
+import { findTemplateDir } from '../utils/templates.js';
 
 const program = new Command();
 
 program
   .name('synapse')
-  .description('Synapse — Claude Code × Claw agent framework')
+  .description('Synapse — multi-provider agentic coding CLI')
   .version('0.2.0');
+
+registerProviderCli(program);
+registerMemoryCli(program);
 
 program
   .command('onboard')
@@ -27,8 +34,8 @@ program
     const { join } = await import('path');
     const { homedir } = await import('os');
     const { existsSync, readFileSync } = await import('fs');
-    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
-    const cfgPath = join(dataDir, '.cclaw.json');
+    const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
+    const cfgPath = join(dataDir, '.synapse.json');
 
     // 检测配置：无文件或关键字段空 → 引导 onboard
     let needOnboard = false;
@@ -77,7 +84,8 @@ program
         try {
           for await (const event of createEngine(
             messages, deps.provider!, deps.tools, deps.context,
-            deps.hooks, deps.compressor, deps.errorRecovery
+            deps.hooks, deps.compressor, deps.errorRecovery,
+            { logger: deps.logger }
           )) {
             if (event.type === 'token') {
               process.stdout.write(event.text);
@@ -105,20 +113,15 @@ program
 
 program
   .command('init')
-  .description('Initialize ~/.cclaw/ with template config files')
+  .description('Initialize ~/.synapse/ with template config files')
   .action(async () => {
     const { homedir } = await import('os');
     const { join } = await import('path');
     const { mkdirSync, existsSync, copyFileSync } = await import('fs');
-    const { fileURLToPath } = await import('url');
-    const { dirname } = await import('path');
-
-    const dataDir = join(homedir(), '.cclaw');
+    const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
     if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
-    // templates are relative to dist/cli.js → ../../templates/
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const templateDir = join(__dirname, '..', 'templates');
+    const templateDir = findTemplateDir();
 
     const files = [
       { src: 'SOUL.md', dst: 'SOUL.md' },
@@ -159,8 +162,80 @@ program
 program
   .command('resume')
   .description('Resume a previous session')
-  .action(async () => {
-    console.log('Session resume — coming soon');
+  .argument('[session]', 'Session id or recent-session number')
+  .action(async (session?: string) => {
+    const { homedir } = await import('os');
+    const { join, basename } = await import('path');
+    const { existsSync, readdirSync, readFileSync } = await import('fs');
+    const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
+    const sessionsDir = join(dataDir, 'sessions');
+
+    if (!existsSync(sessionsDir)) {
+      console.log('No sessions found.');
+      return;
+    }
+
+    const entries = readdirSync(sessionsDir)
+      .filter(file => file.endsWith('.json'))
+      .map(file => {
+        try {
+          const data = JSON.parse(readFileSync(join(sessionsDir, file), 'utf-8'));
+          return { file, data };
+        } catch {
+          return null;
+        }
+      })
+      .filter((entry): entry is { file: string; data: { messages?: unknown[]; metadata?: { id?: string; updatedAt?: string; model?: string; turnCount?: number } } } => entry !== null)
+      .sort((a, b) => (b.data.metadata?.updatedAt ?? '').localeCompare(a.data.metadata?.updatedAt ?? ''));
+
+    if (entries.length === 0) {
+      console.log('No sessions found.');
+      return;
+    }
+
+    if (!session) {
+      console.log('Recent sessions:');
+      for (const [index, entry] of entries.slice(0, 10).entries()) {
+        const meta = entry.data.metadata;
+        console.log(`  ${index + 1}. ${meta?.id ?? basename(entry.file, '.json')} (${meta?.turnCount ?? 0} turns, ${meta?.model ?? '?'})`);
+      }
+      console.log('\nUsage: synapse resume <number|session-id>');
+      return;
+    }
+
+    const numeric = Number.parseInt(session, 10);
+    const selected = Number.isInteger(numeric) && String(numeric) === session
+      ? entries[numeric - 1]
+      : entries.find(entry =>
+          entry.data.metadata?.id === session ||
+          basename(entry.file, '.json') === session
+        );
+
+    if (!selected) {
+      console.error(`Session not found: ${session}`);
+      process.exit(1);
+    }
+
+    if (!Array.isArray(selected.data.messages)) {
+      console.error(`Session is invalid: ${selected.data.metadata?.id ?? selected.file}`);
+      process.exit(1);
+    }
+
+    const { init } = await import('./init.js');
+    const deps = await init({});
+    if (!deps.provider) {
+      console.error('Error: No API key found. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY.');
+      process.exit(1);
+    }
+    const provider = deps.provider;
+
+    const { launchREPL } = await import('../ui/REPL.js');
+    await launchREPL({
+      ...deps,
+      provider,
+      initialMessages: selected.data.messages as Message[],
+      initialSessionId: selected.data.metadata?.id ?? basename(selected.file, '.json'),
+    });
   });
 
 program
@@ -185,11 +260,12 @@ program
   .argument('[action]', 'add | list | remove')
   .argument('[name]', 'Server name')
   .argument('[command]', 'Server command')
-  .action(async (action, name, command) => {
+  .argument('[args...]', 'Server arguments')
+  .action(async (action, name, command, args: string[] = []) => {
     const { homedir } = await import('os');
     const { join } = await import('path');
     const { readFileSync, writeFileSync, existsSync } = await import('fs');
-    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+    const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
     const mcpPath = join(dataDir, '.mcp.json');
 
     if (action === 'list' || !action) {
@@ -205,7 +281,7 @@ program
       }
     } else if (action === 'add' && name && command) {
       const config = existsSync(mcpPath) ? JSON.parse(readFileSync(mcpPath, 'utf-8')) : { mcpServers: {} };
-      config.mcpServers[name] = { command, args: process.argv.slice(6) };
+      config.mcpServers[name] = { command, args };
       writeFileSync(mcpPath, JSON.stringify(config, null, 2));
       console.log(`✅ MCP server "${name}" added`);
     } else if (action === 'remove' && name) {
@@ -223,13 +299,17 @@ program
   .command('plugin')
   .description('Manage plugins')
   .argument('[action]', 'list | install | remove')
-  .argument('[name]', 'Plugin name')
-  .action(async (action, _name) => {
+  .argument('[target]', 'Plugin name or local plugin directory')
+  .action(async (action, target) => {
     const { homedir } = await import('os');
-    const { join } = await import('path');
-    const { readdirSync, readFileSync, existsSync } = await import('fs');
-    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+    const { join, resolve, relative, isAbsolute } = await import('path');
+    const { readdirSync, readFileSync, existsSync, mkdirSync, cpSync, rmSync } = await import('fs');
+    const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
     const pluginsDir = join(dataDir, 'plugins');
+    const isInside = (base: string, child: string) => {
+      const rel = relative(resolve(base), resolve(child));
+      return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+    };
 
     if (action === 'list' || !action) {
       if (!existsSync(pluginsDir)) { console.log('No plugins installed.'); return; }
@@ -244,8 +324,57 @@ program
           console.log(`  ${dir.name} (no manifest)`);
         }
       }
+    } else if (action === 'install' && target) {
+      const sourceDir = resolve(target);
+      const manifestPath = join(sourceDir, 'plugin.json');
+      if (!existsSync(manifestPath)) {
+        console.error(`Plugin manifest not found: ${manifestPath}`);
+        process.exit(1);
+      }
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { name?: string; version?: string };
+      if (!manifest.name || !manifest.version) {
+        console.error('Invalid plugin.json: name and version are required.');
+        process.exit(1);
+      }
+      if (!existsSync(pluginsDir)) mkdirSync(pluginsDir, { recursive: true });
+      const destination = resolve(pluginsDir, manifest.name);
+      if (!isInside(pluginsDir, destination)) {
+        console.error(`Invalid plugin name: ${manifest.name}`);
+        process.exit(1);
+      }
+      if (existsSync(destination)) {
+        console.error(`Plugin already installed: ${manifest.name}`);
+        process.exit(1);
+      }
+      cpSync(sourceDir, destination, { recursive: true });
+      console.log(`✅ Plugin "${manifest.name}" installed`);
+    } else if (action === 'remove' && target) {
+      if (!existsSync(pluginsDir)) { console.log('No plugins installed.'); return; }
+      const dirs = readdirSync(pluginsDir, { withFileTypes: true }).filter(d => d.isDirectory());
+      const match = dirs.find(dir => {
+        if (dir.name === target) return true;
+        const manifestPath = join(pluginsDir, dir.name, 'plugin.json');
+        if (!existsSync(manifestPath)) return false;
+        try {
+          const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { name?: string };
+          return manifest.name === target;
+        } catch {
+          return false;
+        }
+      });
+      if (!match) {
+        console.error(`Plugin not found: ${target}`);
+        process.exit(1);
+      }
+      const destination = resolve(pluginsDir, match.name);
+      if (!isInside(pluginsDir, destination)) {
+        console.error(`Refusing to remove path outside plugin directory: ${destination}`);
+        process.exit(1);
+      }
+      rmSync(destination, { recursive: true, force: true });
+      console.log(`✅ Plugin "${target}" removed`);
     } else {
-      console.log('Usage: synapse plugin [list]');
+      console.log('Usage: synapse plugin [list|install <local-dir>|remove <name>]');
     }
   });
 
@@ -255,14 +384,15 @@ program
   .option('--check', 'Only check, do not update')
   .action(async (opts) => {
     const { execSync } = await import('child_process');
-    const { readFileSync } = await import('fs');
-    const { join } = await import('path');
+    const { readFileSync, existsSync } = await import('fs');
+    const { join, dirname } = await import('path');
     const { fileURLToPath } = await import('url');
-    const { dirname } = await import('path');
 
-    // 获取本地版本
     const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkgPath = join(__dirname, '..', 'package.json');
+    let pkgPath = join(__dirname, '..', 'package.json');
+    if (!existsSync(pkgPath)) {
+      pkgPath = join(__dirname, '..', '..', 'package.json');
+    }
     let localVersion = '0.0.0';
     try {
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
@@ -273,9 +403,10 @@ program
 
     // 查询 npm registry
     try {
-      const resp = await fetch('https://registry.npmjs.org/cclaw/latest');
+      const registryUrl = process.env.SYNAPSE_REGISTRY_URL || 'https://registry.npmjs.org/@bandageok%2fsynapse-cli/latest';
+      const resp = await fetch(registryUrl);
       if (!resp.ok) {
-        console.log('⚠️ Could not check registry. You can manually update with: npm update -g synapse-cli');
+        console.log('Could not check registry. Update manually with: npm update -g @bandageok/synapse-cli');
         return;
       }
       const data = (await resp.json()) as { version: string };
@@ -296,13 +427,13 @@ program
 
       console.log(`📦 Updating ${localVersion} → ${latestVersion}...`);
       try {
-        execSync('npm update -g synapse-cli', { stdio: 'inherit' });
-        console.log('✅ Update complete! Restart cclaw to use the new version.');
+        execSync('npm update -g @bandageok/synapse-cli', { stdio: 'inherit' });
+        console.log('✅ Update complete! Restart synapse to use the new version.');
       } catch {
-        console.log('⚠️ Auto-update failed. Try manually: npm update -g synapse-cli');
+        console.log('Auto-update failed. Try manually: npm update -g @bandageok/synapse-cli');
       }
     } catch {
-      console.log('⚠️ Could not check registry. You can manually update with: npm update -g synapse-cli');
+      console.log('Could not check registry. Update manually with: npm update -g @bandageok/synapse-cli');
     }
   });
 
@@ -315,8 +446,8 @@ program
     const { homedir } = await import('os');
     const { join } = await import('path');
     const { existsSync, readFileSync, watchFile, unwatchFile } = await import('fs');
-    const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
-    const logPath = join(dataDir, 'logs', 'cclaw.log');
+    const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
+    const logPath = join(dataDir, 'logs', 'synapse.log');
 
     if (!existsSync(logPath)) {
       console.log('No log file found. Logs are created during chat sessions.');
@@ -356,4 +487,4 @@ program
     }
   });
 
-program.parse();
+await program.parseAsync();

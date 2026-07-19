@@ -12,7 +12,7 @@ describe('Heartbeat', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-hb-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-hb-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
     // Create heartbeat.md
     writeFileSync(join(tmpDir, 'HEARTBEAT.md'), '', 'utf-8');
@@ -49,7 +49,7 @@ describe('SoulLoader', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-sl-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-sl-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
   });
 

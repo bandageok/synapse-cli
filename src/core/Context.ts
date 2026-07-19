@@ -81,14 +81,14 @@ export class ContextBuilder {
   }
 
   private layer4_memoryMechanics(): string {
-    return '## Memory System\nYou have access to a persistent memory system:\n- MEMORY.md contains long-term memory (always loaded)\n- memory/ directory contains daily logs\n- CLAUDE.md files provide project/user instructions (auto-discovered)\n- .cclaw/rules/*.md files provide conditional rules\n- Use the memory system to remember user preferences and project context\n- IMPORTANT: Never fabricate or assume memory content. Only reference what exists.';
+    return '## Memory System\nYou have access to a persistent memory system:\n- MEMORY.md contains long-term memory (always loaded)\n- memory/ directory contains daily logs\n- CLAUDE.md files provide project/user instructions (auto-discovered)\n- .synapse/rules/*.md files provide conditional rules\n- Use the memory system to remember user preferences and project context\n- IMPORTANT: Never fabricate or assume memory content. Only reference what exists.';
   }
 
   private layer5_userContext(memoryFiles: MemoryFileInfo[]): string {
     const parts: string[] = [];
-    const userConfig = join(this.config.dataDir, '.cclaw.md');
+    const userConfig = join(this.config.dataDir, '.synapse.md');
     if (existsSync(userConfig)) parts.push(readFileSync(userConfig, 'utf-8'));
-    const projectConfig = join(this.config.cwd, '.cclaw.md');
+    const projectConfig = join(this.config.cwd, '.synapse.md');
     if (existsSync(projectConfig)) parts.push(readFileSync(projectConfig, 'utf-8'));
     const memoryPath = join(this.config.dataDir, 'MEMORY.md');
     if (existsSync(memoryPath)) {
@@ -101,8 +101,8 @@ export class ContextBuilder {
       for (const dir of this.config.additionalDirs) {
         const claudeMdPath = join(dir, 'CLAUDE.md');
         if (existsSync(claudeMdPath)) parts.push('Contents of ' + claudeMdPath + ' (from --add-dir):\n\n' + readFileSync(claudeMdPath, 'utf-8'));
-        const dotCclawPath = join(dir, '.cclaw', 'CLAUDE.md');
-        if (existsSync(dotCclawPath)) parts.push('Contents of ' + dotCclawPath + ' (from --add-dir):\n\n' + readFileSync(dotCclawPath, 'utf-8'));
+        const dotSynapsePath = join(dir, '.synapse', 'CLAUDE.md');
+        if (existsSync(dotSynapsePath)) parts.push('Contents of ' + dotSynapsePath + ' (from --add-dir):\n\n' + readFileSync(dotSynapsePath, 'utf-8'));
       }
     }
     return parts.join('\n\n');

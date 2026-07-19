@@ -1,8 +1,8 @@
-# C.C.Claw Implementation Plan
+# Synapse Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build C.C.Claw — an open-source CLI agent framework combining Claude Code's engineering architecture with OpenClaw's personality/memory system.
+**Goal:** Build Synapse — an open-source CLI agent framework combining Claude Code's engineering architecture with OpenClaw's personality/memory system.
 
 **Architecture:** AsyncGenerator core loop with 6-layer context injection, 4-level compression, 12 MVP tools, SOUL.md personality system, and plugin architecture. Monorepo with pnpm workspaces.
 
@@ -13,7 +13,7 @@
 ## File Structure
 
 ```
-c.c.claw/
+synapse-cli/
 ├── src/
 │   ├── entry/cli.ts
 │   ├── entry/init.ts
@@ -76,7 +76,7 @@ c.c.claw/
 - [ ] **Step 1: Initialize project**
 
 ```bash
-mkdir -p c.c.claw && cd c.c.claw
+mkdir -p synapse-cli && cd synapse-cli
 npm init -y
 npm install commander @anthropic-ai/sdk ink react zod
 npm install -D typescript tsup vitest biome @types/node @types/react tsx
@@ -86,10 +86,10 @@ npm install -D typescript tsup vitest biome @types/node @types/react tsx
 
 ```json
 {
-  "name": "cclaw",
+  "name": "synapse",
   "version": "0.1.0",
   "type": "module",
-  "bin": { "cclaw": "./dist/cli.js" },
+  "bin": { "synapse": "./dist/cli.js" },
   "scripts": {
     "dev": "tsx src/entry/cli.ts",
     "build": "tsup",
@@ -271,15 +271,15 @@ import { Command } from 'commander';
 const program = new Command();
 
 program
-  .name('cclaw')
-  .description('C.C.Claw — Claude Code × Claw agent framework')
+  .name('synapse')
+  .description('Synapse — multi-provider agentic coding CLI')
   .version('0.1.0');
 
 program
   .command('chat')
   .description('Start interactive chat')
   .action(async () => {
-    console.log('C.C.Claw v0.1.0 — not yet implemented');
+    console.log('Synapse v0.1.0 — not yet implemented');
   });
 
 program.parse();
@@ -292,7 +292,7 @@ npx tsx src/entry/cli.ts --version
 # Expected: 0.1.0
 
 npx tsx src/entry/cli.ts chat
-# Expected: C.C.Claw v0.1.0 — not yet implemented
+# Expected: Synapse v0.1.0 — not yet implemented
 ```
 
 - [ ] **Step 7: Commit**
@@ -436,7 +436,7 @@ export class OpenRouterProvider implements Provider {
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/cclaw/cclaw',
+        'HTTP-Referer': 'https://github.com/synapse-cli/synapse-cli',
       },
       body: JSON.stringify({
         model: this.model,
@@ -912,19 +912,19 @@ describe('ContextBuilder', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'cclaw-test-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'synapse-test-'));
   });
 
   it('builds 6 layers', async () => {
     writeFileSync(join(tempDir, 'SOUL.md'), '# Soul\nBe helpful.');
     writeFileSync(join(tempDir, 'MEMORY.md'), '# Memory\n- User likes concise answers');
-    writeFileSync(join(tempDir, '.cclaw.md'), '# Project\nUse TypeScript');
+    writeFileSync(join(tempDir, '.synapse.md'), '# Project\nUse TypeScript');
 
     const builder = new ContextBuilder({ dataDir: tempDir, cwd: tempDir });
     const layers = await builder.build(1);
 
     expect(layers).toHaveLength(6);
-    expect(layers[0]).toContain('C.C.Claw'); // default prompt
+    expect(layers[0]).toContain('Synapse'); // default prompt
     expect(layers[1]).toContain('Be helpful'); // soul
     expect(layers[3]).toContain('TypeScript'); // project context
   });
@@ -946,7 +946,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
 export interface ContextConfig {
-  dataDir: string;   // ~/.cclaw/
+  dataDir: string;   // ~/.synapse/
   cwd: string;       // current working directory
 }
 
@@ -965,7 +965,7 @@ export class ContextBuilder {
   }
 
   private layer1_defaultPrompt(): string {
-    return `You are C.C.Claw, an agentic CLI assistant. You have access to tools and should use them to help the user.
+    return `You are Synapse, an agentic CLI assistant. You have access to tools and should use them to help the user.
 Follow these principles:
 - Be concise and direct
 - Use tools to verify information, never guess
@@ -993,14 +993,14 @@ You have access to a persistent memory system:
   private layer4_userContext(): string {
     const parts: string[] = [];
 
-    // User-level .cclaw.md
-    const userConfig = join(this.config.dataDir, '.cclaw.md');
+    // User-level .synapse.md
+    const userConfig = join(this.config.dataDir, '.synapse.md');
     if (existsSync(userConfig)) {
       parts.push(readFileSync(userConfig, 'utf-8'));
     }
 
-    // Project-level .cclaw.md
-    const projectConfig = join(this.config.cwd, '.cclaw.md');
+    // Project-level .synapse.md
+    const projectConfig = join(this.config.cwd, '.synapse.md');
     if (existsSync(projectConfig)) {
       parts.push(readFileSync(projectConfig, 'utf-8'));
     }
@@ -1283,7 +1283,7 @@ describe('SessionStore', () => {
   let store: SessionStore;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'cclaw-session-'));
+    dir = mkdtempSync(join(tmpdir(), 'synapse-session-'));
     store = new SessionStore(dir);
   });
 
@@ -1497,7 +1497,7 @@ import { tmpdir } from 'os';
 
 describe('SoulLoader', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cclaw-soul-')); });
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'synapse-soul-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('loads SOUL.md when it exists', () => {
@@ -1514,7 +1514,7 @@ describe('SoulLoader', () => {
 
 describe('MemoryManager', () => {
   let dir: string;
-  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'cclaw-mem-')); });
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'synapse-mem-')); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('enforces 200 line limit', async () => {
@@ -1726,7 +1726,7 @@ describe('BashTool', () => {
 
 describe('FileReadTool', () => {
   it('reads a file', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     writeFileSync(join(dir, 'test.txt'), 'hello world');
     const result = await FileReadTool.execute({ file_path: join(dir, 'test.txt') }, { cwd: dir, abortSignal: new AbortController().signal });
     expect(result.output).toContain('hello world');
@@ -1736,7 +1736,7 @@ describe('FileReadTool', () => {
 
 describe('FileWriteTool', () => {
   it('writes a file', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     const result = await FileWriteTool.execute(
       { file_path: join(dir, 'out.txt'), content: 'test content' },
       { cwd: dir, abortSignal: new AbortController().signal }
@@ -1748,7 +1748,7 @@ describe('FileWriteTool', () => {
 
 describe('GlobTool', () => {
   it('finds files by pattern', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     writeFileSync(join(dir, 'a.ts'), '');
     writeFileSync(join(dir, 'b.js'), '');
     const result = await GlobTool.execute({ pattern: '*.ts' }, { cwd: dir, abortSignal: new AbortController().signal });
@@ -2029,7 +2029,7 @@ export const WebFetchTool: ToolDef<{ url: string; max_chars?: number }> = {
   execute: async (input): Promise<ToolResult> => {
     try {
       const resp = await fetch(input.url, {
-        headers: { 'User-Agent': 'C.C.Claw/0.1.0' },
+        headers: { 'User-Agent': 'Synapse/0.1.0' },
         signal: AbortSignal.timeout(15_000),
       });
       const html = await resp.text();
@@ -2068,7 +2068,7 @@ export const AgentTool: ToolDef<{ task: string; tools?: string[]; max_turns?: nu
   permissions: 'execute',
   isEnabled: () => true,
   execute: async (input, ctx): Promise<ToolResult> => {
-    // MVP: spawn as child process running cclaw
+    // MVP: spawn as child process running synapse
     // Full implementation would use Engine directly
     return {
       output: `[Agent stub] Task received: ${input.task}. Full agent spawning not yet implemented.`,
@@ -2211,8 +2211,8 @@ import { init } from './init.js';
 const program = new Command();
 
 program
-  .name('cclaw')
-  .description('C.C.Claw — Claude Code × Claw agent framework')
+  .name('synapse')
+  .description('Synapse — multi-provider agentic coding CLI')
   .version('0.1.0');
 
 program
@@ -2241,7 +2241,7 @@ program
   .description('Diagnose configuration issues')
   .action(async () => {
     const deps = await init({});
-    console.log('C.C.Claw Doctor');
+    console.log('Synapse Doctor');
     console.log(`  Provider: ${deps.provider?.name ?? 'NONE'}`);
     console.log(`  Data dir: ${deps.dataDir}`);
     console.log(`  SOUL.md: ${deps.soulLoader.load() ? '✅' : '❌'}`);
@@ -2281,7 +2281,7 @@ import { AskUserQuestionTool } from '../tools/AskUserQuestionTool.js';
 import { SkillTool } from '../tools/SkillTool.js';
 
 export async function init(opts: { model?: string }) {
-  const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+  const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
   const provider = createProvider();
@@ -2373,7 +2373,7 @@ export function launchREPL(deps: any) {
     });
 
     return React.createElement(Box, { flexDirection: 'column' },
-      React.createElement(Text, { bold: true, color: 'cyan' }, 'C.C.Claw v0.1.0'),
+      React.createElement(Text, { bold: true, color: 'cyan' }, 'Synapse v0.1.0'),
       ...output.slice(-20).map((line, i) =>
         React.createElement(Text, { key: i, color: line.startsWith('>') ? 'green' : 'white' }, line)
       ),
@@ -2421,9 +2421,9 @@ git commit -m "feat: REPL UI + CLI integration with all components wired up"
 - [ ] **Step 1: Create README**
 
 ```markdown
-# C.C.Claw
+# Synapse
 
-> Claude Code × Claw — An open-source CLI agent framework with personality.
+> Synapse — an open-source multi-provider coding agent CLI with persistent memory and personality.
 
 ## Features
 
@@ -2437,18 +2437,18 @@ git commit -m "feat: REPL UI + CLI integration with all components wired up"
 ## Quick Start
 
 ```bash
-npm i -g cclaw
+npm i -g synapse-cli
 export ANTHROPIC_API_KEY=sk-ant-xxx
 # or
 export OPENROUTER_API_KEY=sk-or-xxx
 
-cclaw chat
+synapse chat
 ```
 
 ## Configuration
 
 ```
-~/.cclaw/
+~/.synapse/
 ├── SOUL.md       # Agent personality
 ├── MEMORY.md     # Long-term memory
 ├── HEARTBEAT.md  # Scheduled tasks
@@ -2480,7 +2480,7 @@ MIT
 node_modules/
 dist/
 *.tsbuildinfo
-.cclaw/
+.synapse/
 .env
 ```
 
@@ -2489,7 +2489,7 @@ dist/
 ```
 MIT License
 
-Copyright (c) 2026 C.C.Claw Contributors
+Copyright (c) 2026 Synapse Contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

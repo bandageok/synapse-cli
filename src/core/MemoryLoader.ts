@@ -16,7 +16,7 @@ export interface MemoryFileInfo {
 }
 
 export interface MemoryLoaderConfig {
-  dataDir: string;    // ~/.cclaw/
+  dataDir: string;    // ~/.synapse/
   cwd: string;        // current working directory
 }
 
@@ -37,7 +37,7 @@ export class MemoryLoader {
     const result: MemoryFileInfo[] = [];
     this.processedPaths.clear();
 
-    // 1. User memory (~/.cclaw/CLAUDE.md)
+    // 1. User memory (~/.synapse/CLAUDE.md)
     result.push(...await this.loadUserMemory());
 
     // 2. Project memory (从 CWD 向上遍历到根)
@@ -46,14 +46,14 @@ export class MemoryLoader {
     // 3. Local memory (CLAUDE.local.md)
     result.push(...await this.loadLocalMemory());
 
-    // 4. Rules (.cclaw/rules/*.md)
+    // 4. Rules (.synapse/rules/*.md)
     result.push(...await this.loadRules());
 
     return result;
   }
 
   /**
-   * 加载 User 级别内存 (~/.cclaw/CLAUDE.md)
+   * 加载 User 级别内存 (~/.synapse/CLAUDE.md)
    */
   private async loadUserMemory(): Promise<MemoryFileInfo[]> {
     const result: MemoryFileInfo[] = [];
@@ -64,7 +64,7 @@ export class MemoryLoader {
       result.push(...files);
     }
 
-    // 加载 User 级别的 rules (~/.cclaw/rules/*.md)
+    // 加载 User 级别的 rules (~/.synapse/rules/*.md)
     const userRulesDir = join(this.config.dataDir, 'rules');
     result.push(...await this.loadRulesFromDir(userRulesDir, 'User'));
 
@@ -74,7 +74,7 @@ export class MemoryLoader {
   /**
    * 加载 Project 级别内存（从 CWD 向上遍历）
    * Claude Code: CLAUDE.md, .claude/CLAUDE.md, .claude/rules/*.md
-   * Synapse: CLAUDE.md, .cclaw/CLAUDE.md, .cclaw/rules/*.md
+   * Synapse: CLAUDE.md, .synapse/CLAUDE.md, .synapse/rules/*.md
    */
   private async loadProjectMemory(): Promise<MemoryFileInfo[]> {
     const result: MemoryFileInfo[] = [];
@@ -88,14 +88,14 @@ export class MemoryLoader {
         result.push(...await this.processMemoryFile(projectPath, 'Project'));
       }
 
-      // .cclaw/CLAUDE.md (Project)
-      const dotCclawPath = join(dir, '.cclaw', 'CLAUDE.md');
-      if (existsSync(dotCclawPath)) {
-        result.push(...await this.processMemoryFile(dotCclawPath, 'Project'));
+      // .synapse/CLAUDE.md (Project)
+      const dotSynapsePath = join(dir, '.synapse', 'CLAUDE.md');
+      if (existsSync(dotSynapsePath)) {
+        result.push(...await this.processMemoryFile(dotSynapsePath, 'Project'));
       }
 
-      // .cclaw/rules/*.md (Project)
-      const rulesDir = join(dir, '.cclaw', 'rules');
+      // .synapse/rules/*.md (Project)
+      const rulesDir = join(dir, '.synapse', 'rules');
       result.push(...await this.loadRulesFromDir(rulesDir, 'Project'));
     }
 
@@ -120,14 +120,14 @@ export class MemoryLoader {
   }
 
   /**
-   * 加载 Rules (.cclaw/rules/*.md)
+   * 加载 Rules (.synapse/rules/*.md)
    */
   private async loadRules(): Promise<MemoryFileInfo[]> {
     const result: MemoryFileInfo[] = [];
     const dirs = this.getDirectoriesUpward();
 
     for (const dir of dirs.reverse()) {
-      const rulesDir = join(dir, '.cclaw', 'rules');
+      const rulesDir = join(dir, '.synapse', 'rules');
       result.push(...await this.loadRulesFromDir(rulesDir, 'Rules'));
     }
 

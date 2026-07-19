@@ -1,4 +1,4 @@
-# .cclaw.md
+# .synapse.md
 
 ## 项目概述
 [项目描述]

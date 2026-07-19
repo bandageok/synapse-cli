@@ -8,7 +8,7 @@ import { tmpdir } from 'os';
 
 describe('PluginRegistry', () => {
   let dir: string;
-  beforeEach(() => { dir = join(tmpdir(), 'cclaw-plg-' + Date.now()); mkdirSync(dir, { recursive: true }); });
+  beforeEach(() => { dir = join(tmpdir(), 'synapse-plg-' + Date.now()); mkdirSync(dir, { recursive: true }); });
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('returns empty list when plugins dir does not exist', () => {

@@ -1,13 +1,22 @@
 // tests/toolRegistry.test.ts
 // ToolRegistry: registration, retrieval, execution, permissions
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ToolRegistry } from '../src/core/ToolRegistry.js';
+import { mkdtempSync, rmSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 describe('ToolRegistry', () => {
   let registry: ToolRegistry;
+  let tmpDir: string;
 
   beforeEach(() => {
     registry = new ToolRegistry();
+    tmpDir = mkdtempSync(join(tmpdir(), 'synapse-perm-'));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it('starts empty', () => {
@@ -150,5 +159,20 @@ describe('ToolRegistry', () => {
     expect(names).toContain('A');
     expect(names).toContain('B');
     expect(names.length).toBe(2);
+  });
+
+  it('loads default permissions for execute tools', () => {
+    registry.initPermissions(tmpDir);
+    expect(existsSync(join(tmpDir, 'permissions.json'))).toBe(true);
+
+    registry.register({
+      name: 'PowerShell',
+      description: 'ps',
+      schema: {},
+      permissions: 'execute' as const,
+      isEnabled: () => true,
+      execute: async () => ({ output: 'ok', isError: false }),
+    });
+    expect(registry.checkPermission({ id: '1', name: 'PowerShell', input: {} })).toBe('ask');
   });
 });

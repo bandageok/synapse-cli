@@ -1,12 +1,12 @@
-# C.C.Claw P2-4 & P2-5 实现方案
+# Synapse P2-4 & P2-5 实现方案
 
-## P2-4: `cclaw update` 自动更新
+## P2-4: `synapse update` 自动更新
 
 ### 方案设计
 - 对标 OpenClaw `openclaw update`
 - 使用 npm registry 检查最新版本
 - 比较本地 package.json 版本
-- 自动执行 `npm update -g cclaw`
+- 自动执行 `npm update -g synapse`
 
 ### 实现步骤
 1. CLI 添加 `update` 命令
@@ -15,11 +15,11 @@
 4. 比较版本号
 5. 执行更新命令
 
-## P2-5: `cclaw logs` 日志系统
+## P2-5: `synapse logs` 日志系统
 
 ### 方案设计
 - 对标 OpenClaw `openclaw logs --follow`
-- 日志文件：`~/.cclaw/logs/cclaw.log`
+- 日志文件：`~/.synapse/logs/synapse.log`
 - 支持实时跟踪（tail -f）
 - 日志级别：info/warn/error/debug
 

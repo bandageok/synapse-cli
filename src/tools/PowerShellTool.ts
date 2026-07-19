@@ -1,5 +1,5 @@
 // src/tools/PowerShellTool.ts
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
 
 export const PowerShellTool: ToolDef<{ command: string; timeout?: number }> = {
@@ -37,9 +37,14 @@ export const PowerShellTool: ToolDef<{ command: string; timeout?: number }> = {
     }
 
     try {
-      // 使用 -Command 参数，避免执行策略问题
-      const psCommand = `powershell.exe -NoProfile -NonInteractive -Command "${input.command.replace(/"/g, '""')}"`;
-      const output = execSync(psCommand, {
+      const output = execFileSync('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        input.command,
+      ], {
         cwd: ctx.cwd,
         timeout: input.timeout ?? 30_000,
         encoding: 'utf-8',

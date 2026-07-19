@@ -1,5 +1,5 @@
 // src/core/Logger.ts
-// 日志系统 — 对标 OpenClaw logs
+// Logging system
 
 import { appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -20,6 +20,7 @@ const LEVEL_PRIORITY: Record<LogLevel, number> = {
 
 export class Logger {
   private logPath: string;
+  private auditPath: string;
   private level: LogLevel;
 
   constructor(config: LoggerConfig) {
@@ -27,7 +28,8 @@ export class Logger {
     if (!existsSync(logsDir)) {
       mkdirSync(logsDir, { recursive: true });
     }
-    this.logPath = join(logsDir, 'cclaw.log');
+    this.logPath = join(logsDir, 'synapse.log');
+    this.auditPath = join(logsDir, 'audit.jsonl');
     this.level = config.level ?? 'info';
   }
 
@@ -65,8 +67,25 @@ export class Logger {
     this.write('error', message, meta);
   }
 
+  audit(action: string, meta: Record<string, unknown> = {}): void {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      action,
+      ...meta,
+    };
+    try {
+      appendFileSync(this.auditPath, JSON.stringify(entry) + '\n');
+    } catch {
+      // Logging must never break tool execution.
+    }
+  }
+
   /** 获取日志文件路径 */
   getPath(): string {
     return this.logPath;
+  }
+
+  getAuditPath(): string {
+    return this.auditPath;
   }
 }

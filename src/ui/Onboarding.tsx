@@ -7,6 +7,12 @@ import { render, Text, Box, useInput, useApp, useStdin } from 'ink';
 import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import {
+  PROVIDER_PRESETS,
+  setProvider,
+  type ProviderAuth,
+  type ProviderProtocol,
+} from '../providers/management.js';
 
 // --- 常量 ---
 
@@ -16,41 +22,31 @@ interface ProviderEntry {
   baseUrl: string;
   envKey: string;
   models: string[];
+  protocol: ProviderProtocol;
+  auth: ProviderAuth;
   desc: string;
 }
 
 const PROVIDERS: ProviderEntry[] = [
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    envKey: 'ANTHROPIC_API_KEY',
-    models: ['claude-sonnet-4-20250514', 'claude-haiku-35-20241022', 'claude-opus-4-20250514'],
-    desc: '官方 Claude API',
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    baseUrl: 'https://openrouter.ai/api/v1',
-    envKey: 'OPENROUTER_API_KEY',
-    models: ['anthropic/claude-sonnet-4', 'google/gemini-2.5-pro-preview', 'openai/gpt-4o', 'minimax/minimax-m2.7'],
-    desc: '多模型聚合路由',
-  },
-  {
-    id: 'minimax',
-    name: 'MiniMax',
-    baseUrl: 'https://api.minimaxi.com/anthropic',
-    envKey: 'MINIMAX_API_KEY',
-    models: ['MiniMax-M2.7'],
-    desc: '国产大模型 (Anthropic 兼容)',
-  },
+  ...PROVIDER_PRESETS.map(preset => ({
+    id: preset.id,
+    name: preset.name,
+    baseUrl: preset.baseUrl,
+    envKey: preset.envKeys[0],
+    models: [preset.defaultModel],
+    protocol: preset.protocol,
+    auth: preset.auth,
+    desc: `${preset.protocol === 'openai' ? 'OpenAI' : 'Anthropic'} compatible`,
+  })),
   {
     id: 'custom',
-    name: '自定义',
+    name: 'Custom BaseURL',
     baseUrl: '',
-    envKey: 'CUSTOM_API_KEY',
+    envKey: 'SYNAPSE_API_KEY',
     models: [],
-    desc: '代理 / 本地部署',
+    protocol: 'openai',
+    auth: 'bearer',
+    desc: 'Any compatible gateway or local endpoint',
   },
 ];
 
@@ -80,13 +76,16 @@ const SOUL_TEMPLATE = `# SOUL.md
 
 // --- 状态 ---
 
-type Step = 'welcome' | 'provider' | 'model' | 'apikey' | 'customUrl' | 'theme' | 'security' | 'done';
+type Step = 'welcome' | 'provider' | 'model' | 'apikey' | 'customUrl' | 'customProtocol' | 'customModel' | 'theme' | 'security' | 'done';
 
 interface Config {
   provider: string;
   baseUrl: string;
   model: string;
   apiKey: string;
+  apiKeyEnv: string;
+  protocol: ProviderProtocol;
+  auth: ProviderAuth;
   theme: 'dark' | 'light';
 }
 
@@ -109,7 +108,7 @@ function parseEnvFile(path: string): Record<string, string> {
 }
 
 function getCfgPath(): string {
-  return join(process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw'), '.cclaw.json');
+  return join(process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse'), '.synapse.json');
 }
 
 function checkExistingConfig(): Config | null {
@@ -125,27 +124,17 @@ function writeUtf8(path: string, content: string) {
 }
 
 function saveConfig(cfg: Config) {
-  const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+  const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-
-  // .cclaw.json
-  writeUtf8(join(dataDir, '.cclaw.json'), JSON.stringify({
+  setProvider(cfg.provider, {
+    dataDir,
     model: cfg.model,
-    provider: cfg.provider,
-    ...(cfg.baseUrl ? { baseUrl: cfg.baseUrl } : {}),
-    hasCompletedOnboarding: true,
-  }, null, 2));
-
-  // .env
-  const envKey = cfg.provider === 'minimax' ? 'ANTHROPIC_API_KEY'
-    : cfg.provider === 'custom' ? 'CUSTOM_API_KEY'
-    : cfg.provider === 'openrouter' ? 'OPENROUTER_API_KEY'
-    : 'ANTHROPIC_API_KEY';
-  let env = `${envKey}=${cfg.apiKey}\n`;
-  if (cfg.baseUrl && cfg.provider !== 'anthropic' && cfg.provider !== 'openrouter') {
-    env += `API_BASE_URL=${cfg.baseUrl}\n`;
-  }
-  writeUtf8(join(dataDir, '.env'), env);
+    baseUrl: cfg.baseUrl,
+    protocol: cfg.protocol,
+    auth: cfg.auth,
+    apiKeyEnv: cfg.apiKeyEnv,
+    apiKey: cfg.apiKey,
+  });
 
   // SOUL.md
   if (!existsSync(join(dataDir, 'SOUL.md'))) {
@@ -175,7 +164,7 @@ function StepIndicator({ current, total, stepLabel }: { current: number; total: 
 function WelcomeStep({ existing, onNext, onSkip }: { existing: Config | null; onNext: () => void; onSkip: () => void }) {
   return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
     React.createElement(Text, { bold: true, color: 'cyan' as const }, '  ⚡ Synapse v0.2.0'),
-    React.createElement(Text, { dimColor: true }, '    Claude Code × OpenClaw  开源 CLI Agent 框架'),
+    React.createElement(Text, { dimColor: true }, '    Multi-provider coding agent CLI'),
     React.createElement(Text, null, ''),
     existing
       ? React.createElement(React.Fragment, null,
@@ -257,6 +246,41 @@ function CustomUrlStep({ input, onInput }: { input: string; onInput: (v: string)
   );
 }
 
+function CustomProtocolStep({ cursor }: { cursor: number }) {
+  const protocols = [
+    { id: 'openai', label: 'OpenAI-compatible', detail: '/chat/completions + Bearer auth' },
+    { id: 'anthropic', label: 'Anthropic-compatible', detail: '/v1/messages + x-api-key' },
+  ];
+  return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  Select endpoint protocol'),
+    React.createElement(Text, null, ''),
+    ...protocols.map((protocol, index) =>
+      React.createElement(Text, {
+        key: protocol.id,
+        color: index === cursor ? 'cyan' as const : 'gray' as const,
+        bold: index === cursor,
+      }, `  ${index === cursor ? '>' : ' '} ${protocol.label.padEnd(22)} ${protocol.detail}`)
+    ),
+    React.createElement(Text, null, ''),
+    React.createElement(Text, { color: 'gray' as const }, '  Up/Down select  |  Enter confirm  |  Esc exit'),
+  );
+}
+
+function CustomModelStep({ input }: { input: string }) {
+  return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
+    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  Enter model id'),
+    React.createElement(Text, null, ''),
+    React.createElement(Text, { dimColor: true }, '  Use the exact model id accepted by your endpoint.'),
+    React.createElement(Box, null,
+      React.createElement(Text, { color: 'gray' as const }, '  > '),
+      React.createElement(Text, null, input),
+      React.createElement(Text, { bold: true }, '|'),
+    ),
+    React.createElement(Text, null, ''),
+    React.createElement(Text, { color: 'gray' as const }, '  Enter confirm  |  Esc exit'),
+  );
+}
+
 function SecurityStep(): React.ReactElement {
   return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
     React.createElement(Text, { bold: true, color: 'cyan' as const }, '  🛡️ 安全须知'),
@@ -277,7 +301,7 @@ function SecurityStep(): React.ReactElement {
 }
 
 function DoneScreen({ config }: { config: Config }): React.ReactElement {
-  const dataDir = process.env.CCLAW_DATA_DIR || join(homedir(), '.cclaw');
+  const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
   return React.createElement(Box, { flexDirection: 'column' as const, padding: 1 },
     React.createElement(Text, { bold: true, color: 'green' as const }, '  🎉 配置完成！'),
     React.createElement(Text, null, ''),
@@ -287,7 +311,7 @@ function DoneScreen({ config }: { config: Config }): React.ReactElement {
     React.createElement(Text, null, `  数据目录:   ${dataDir}`),
     React.createElement(Text, null, ''),
     React.createElement(Text, { color: 'gray' as const }, '  生成的文件:'),
-    React.createElement(Text, { dimColor: true }, '    .cclaw.json      主配置'),
+    React.createElement(Text, { dimColor: true }, '    .synapse.json      主配置'),
     React.createElement(Text, { dimColor: true }, '    .env             API Key'),
     React.createElement(Text, { dimColor: true }, '    SOUL.md          Agent 人格'),
     React.createElement(Text, null, ''),
@@ -303,21 +327,24 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
   const [step, setStep] = useState<Step>(existing ? 'welcome' : 'welcome');
   const [config, setConfig] = useState<Config>({
     provider: 'anthropic',
-    baseUrl: '',
+    baseUrl: PROVIDERS[0].baseUrl,
     model: PROVIDERS[0].models[0],
     apiKey: '',
+    apiKeyEnv: PROVIDERS[0].envKey,
+    protocol: PROVIDERS[0].protocol,
+    auth: PROVIDERS[0].auth,
     theme: 'dark',
   });
   const [input, setInput] = useState('');
   const [cursor, setCursor] = useState(0);
   const { exit } = useApp();
 
-  const steps: Step[] = ['welcome', 'provider', 'model', 'apikey', 'customUrl', 'theme', 'security', 'done'];
   const stepLabels: Record<Step, string> = {
     welcome: '欢迎', provider: '提供商', model: '模型', apikey: 'API Key',
-    customUrl: '端点', theme: '主题', security: '安全', done: '完成',
+    customUrl: '端点', customProtocol: '协议', customModel: '模型',
+    theme: '主题', security: '安全', done: '完成',
   };
-  const activeSteps: Step[] = ['welcome', 'provider', 'model', 'apikey', 'customUrl', 'theme', 'security', 'done'];
+  const activeSteps: Step[] = ['welcome', 'provider', 'customUrl', 'customProtocol', 'customModel', 'model', 'apikey', 'theme', 'security', 'done'];
   const currentIdx = activeSteps.indexOf(step);
 
   // Provider 过滤：如果有已有配置，跳过后续
@@ -338,7 +365,15 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
       else if (key.downArrow) setCursor(c => (c + 1) % PROVIDERS.length);
       else if (key.return) {
         const p = PROVIDERS[cursor];
-        setConfig(c => ({ ...c, provider: p.id, baseUrl: p.baseUrl, model: p.models[0] || '' }));
+        setConfig(c => ({
+          ...c,
+          provider: p.id,
+          baseUrl: p.baseUrl,
+          model: p.models[0] || '',
+          apiKeyEnv: p.envKey,
+          protocol: p.protocol,
+          auth: p.auth,
+        }));
         setCursor(0);
         if (p.id === 'custom') setStep('customUrl');
         else if (p.models.length <= 1) setStep('apikey');
@@ -352,9 +387,34 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
       if (key.escape) { exit(); return; }
       if (key.return && input.trim()) {
         setConfig(c => ({ ...c, baseUrl: input.trim() }));
-        setInput(''); setStep('apikey');
+        setInput(''); setCursor(0); setStep('customProtocol');
       } else if (key.backspace) setInput(v => v.slice(0, -1));
       else if (char && !key.ctrl && !key.meta) setInput(v => v + char);
+      return;
+    }
+
+    if (step === 'customProtocol') {
+      if (key.escape) { exit(); return; }
+      if (key.upArrow || key.downArrow) setCursor(value => value === 0 ? 1 : 0);
+      else if (key.return) {
+        const protocol: ProviderProtocol = cursor === 0 ? 'openai' : 'anthropic';
+        setConfig(c => ({
+          ...c,
+          protocol,
+          auth: protocol === 'openai' ? 'bearer' : 'x-api-key',
+        }));
+        setCursor(0); setInput(''); setStep('customModel');
+      }
+      return;
+    }
+
+    if (step === 'customModel') {
+      if (key.escape) { exit(); return; }
+      if (key.return && input.trim()) {
+        setConfig(c => ({ ...c, model: input.trim() }));
+        setInput(''); setStep('apikey');
+      } else if (key.backspace) setInput(value => value.slice(0, -1));
+      else if (char && !key.ctrl && !key.meta) setInput(value => value + char);
       return;
     }
 
@@ -402,6 +462,8 @@ function OnboardingApp({ onDone, existing }: { onDone: (cfg: Config | null) => v
       case 'welcome': return React.createElement(WelcomeStep, { existing, onNext: () => setStep('provider'), onSkip: () => onDone(existing) });
       case 'provider': return React.createElement(ProviderStep, { cursor, providers: PROVIDERS, onSelect: () => {} });
       case 'customUrl': return React.createElement(CustomUrlStep, { input, onInput: setInput });
+      case 'customProtocol': return React.createElement(CustomProtocolStep, { cursor });
+      case 'customModel': return React.createElement(CustomModelStep, { input });
       case 'model': {
         const models = PROVIDERS.find(p => p.id === config.provider)?.models || [];
         return React.createElement(ModelStep, { cursor, models, onSelect: () => {} });

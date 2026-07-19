@@ -1,6 +1,6 @@
-# C.C.Claw v0.3.0 — 完善计划
+# Synapse v0.3.0 — 完善计划
 
-> 目标：将 C.C.Claw 从 40% 骨架完成度提升到 90%+，达到 Claude Code + OpenClaw 融合体的完整度
+> 目标：将 Synapse 从 40% 骨架完成度提升到 90%+，达到独立 CLI 编程 Agent 产品的完整度
 
 ## 阶段 1：核心引擎加固（P0）
 
@@ -41,19 +41,19 @@
 ## 阶段 3：CLI & REPL 完善（P1）
 
 ### 3.1 CLI 命令扩展（7 → 20+）
-- [ ] cclaw config — 配置管理
-- [ ] cclaw update — 自更新
-- [ ] cclaw login — API key 管理
-- [ ] cclaw logs — 日志查看
-- [ ] cclaw benchmark — 性能测试
-- [ ] cclaw export — 会话导出
-- [ ] cclaw import — 会话导入
-- [ ] cclaw theme — 主题管理
-- [ ] cclaw alias — 命令别名
-- [ ] cclaw shell — 交互式 shell
-- [ ] cclaw serve — HTTP API 服务
-- [ ] cclaw watch — 文件监控模式
-- [ ] cclaw pipe — 管道模式
+- [ ] synapse config — 配置管理
+- [ ] synapse update — 自更新
+- [ ] synapse login — API key 管理
+- [ ] synapse logs — 日志查看
+- [ ] synapse benchmark — 性能测试
+- [ ] synapse export — 会话导出
+- [ ] synapse import — 会话导入
+- [ ] synapse theme — 主题管理
+- [ ] synapse alias — 命令别名
+- [ ] synapse shell — 交互式 shell
+- [ ] synapse serve — HTTP API 服务
+- [ ] synapse watch — 文件监控模式
+- [ ] synapse pipe — 管道模式
 
 ### 3.2 REPL 命令扩展（16 → 30+）
 - [ ] /undo — 撤销上一步
@@ -94,11 +94,11 @@
 - [ ] 提示词管理
 
 ### 4.2 MCP 管理
-- [ ] cclaw mcp add — 添加服务器
-- [ ] cclaw mcp remove — 移除服务器
-- [ ] cclaw mcp list — 列出服务器
-- [ ] cclaw mcp test — 测试连接
-- [ ] cclaw mcp logs — 查看日志
+- [ ] synapse mcp add — 添加服务器
+- [ ] synapse mcp remove — 移除服务器
+- [ ] synapse mcp list — 列出服务器
+- [ ] synapse mcp test — 测试连接
+- [ ] synapse mcp logs — 查看日志
 
 ## 阶段 5：灵魂系统增强（P2）
 

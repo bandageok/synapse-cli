@@ -18,7 +18,7 @@ export const statusCommand: SlashCommand = {
       '',
       '-- Directories --',
       '  Data dir:    ' + dataDir,
-      '  Config:      ' + (existsSync(join(dataDir, '.cclaw.json')) ? 'yes' : 'no'),
+      '  Config:      ' + (existsSync(join(dataDir, '.synapse.json')) ? 'yes' : 'no'),
       '  SOUL.md:     ' + (existsSync(join(dataDir, 'SOUL.md')) ? 'yes' : 'no'),
       '  MEMORY.md:   ' + (existsSync(join(dataDir, 'MEMORY.md')) ? 'yes' : 'no'),
       '  permissions: ' + (existsSync(join(dataDir, 'permissions.json')) ? 'yes' : 'no'),

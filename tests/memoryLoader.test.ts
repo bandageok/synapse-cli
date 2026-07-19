@@ -9,7 +9,7 @@ import { MemoryLoader } from '../src/core/MemoryLoader.js';
 describe('MemoryLoader', () => {
   let tmpDir: string;
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-ml-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-ml-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
     mkdirSync(join(tmpDir, 'memory'), { recursive: true });
   });

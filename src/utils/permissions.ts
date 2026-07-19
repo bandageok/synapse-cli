@@ -9,9 +9,9 @@ export interface PermissionConfig {
 }
 
 const DEFAULT_CONFIG: PermissionConfig = {
-  allowedTools: ['FileRead', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'GitStatus', 'GitDiff', 'NotebookRead', 'TodoWrite', 'AskUserQuestion', 'Skill', 'Agent'],
+  allowedTools: ['FileRead', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'GitStatus', 'GitDiff', 'NotebookRead', 'TodoWrite', 'AskUserQuestion', 'Skill'],
   deniedTools: [],
-  askForTools: ['Bash', 'FileEdit', 'FileWrite', 'NotebookEdit', 'GitCommit'],
+  askForTools: ['Bash', 'PowerShell', 'Task', 'FileEdit', 'FileWrite', 'NotebookEdit', 'GitCommit'],
 };
 
 export function loadPermissions(dataDir: string): PermissionConfig {

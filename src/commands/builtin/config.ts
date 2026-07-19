@@ -7,7 +7,7 @@ export const configCommand: SlashCommand = {
   description: 'Show current configuration',
   handler: async (_args, deps) => {
     const dataDir = deps.dataDir;
-    const cfgPath = join(dataDir, '.cclaw.json');
+    const cfgPath = join(dataDir, '.synapse.json');
     let cfg: any = {};
     if (existsSync(cfgPath)) {
       try { cfg = JSON.parse(readFileSync(cfgPath, 'utf-8')); } catch {}
@@ -23,7 +23,7 @@ export const configCommand: SlashCommand = {
       '  Turns:       ' + deps.turnCount,
       '',
       '  Files:',
-      '  .cclaw.json    ' + (existsSync(cfgPath) ? 'found' : 'missing'),
+      '  .synapse.json    ' + (existsSync(cfgPath) ? 'found' : 'missing'),
       '  SOUL.md        ' + (existsSync(join(dataDir, 'SOUL.md')) ? 'found' : 'missing'),
       '  MEMORY.md      ' + (existsSync(join(dataDir, 'MEMORY.md')) ? 'found' : 'missing'),
       '  permissions    ' + (existsSync(join(dataDir, 'permissions.json')) ? 'found' : 'missing'),

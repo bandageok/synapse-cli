@@ -62,6 +62,8 @@ interface REPLDeps {
   dataDir: string;
   sessionStore?: SessionStore;
   skillLoader?: SkillAutoLoader;
+  initialMessages?: Message[];
+  initialSessionId?: string;
 }
 
 interface DisplayMsg {
@@ -89,7 +91,7 @@ function estTokens(msgs: Message[]): number {
 
 function getInitialModel(dataDir: string): string {
   try {
-    const p = join(dataDir, '.cclaw.json');
+    const p = join(dataDir, '.synapse.json');
     if (existsSync(p)) {
       const c = JSON.parse(readFileSync(p, 'utf-8'));
       if (c.model && c.model.trim()) return c.model.trim();
@@ -188,8 +190,12 @@ function Footer({ vimMode, scrollPos, maxScroll }: { vimMode: boolean; scrollPos
 // ============================================================
 
 export function launchREPL(deps: REPLDeps) {
-  const { provider, tools, context, compressor, hooks, errorRecovery, dataDir, sessionStore, heartbeat, watchdog, selfImprovement, logger, skillLoader: skillLoaderFromDeps } = deps;
-  const sessionId = 'session-' + Date.now();
+  const {
+    provider, tools, context, compressor, hooks, errorRecovery, dataDir,
+    sessionStore, heartbeat, watchdog, selfImprovement, logger,
+    skillLoader: skillLoaderFromDeps, initialMessages, initialSessionId,
+  } = deps;
+  const sessionId = initialSessionId ?? 'session-' + Date.now();
   const initialModel = getInitialModel(dataDir);
 
   if (heartbeat) heartbeat.start();
@@ -210,8 +216,17 @@ export function launchREPL(deps: REPLDeps) {
 
   function REPL() {
     const [input, setInput] = useState('');
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [displayMessages, setDisplayMessages] = useState<DisplayMsg[]>([]);
+    const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
+    const [displayMessages, setDisplayMessages] = useState<DisplayMsg[]>(() =>
+      initialMessages && initialMessages.length > 0
+        ? [{
+            id: 'resumed-' + Date.now(),
+            role: 'system' as const,
+            content: `  [resumed] ${sessionId} (${initialMessages.length} messages loaded)`,
+            timestamp: Date.now(),
+          }]
+        : [],
+    );
     const [isThinking, setIsThinking] = useState(false);
     const [thinkingLabel, setThinkingLabel] = useState('');
     const [model, setModelState] = useState(initialModel);
@@ -226,7 +241,7 @@ export function launchREPL(deps: REPLDeps) {
     const rows = (stdout as any).rows;
     const vim = useVimInput(input, setInput);
 
-    const allMessagesRef = useRef<Message[]>([]);
+    const allMessagesRef = useRef<Message[]>(initialMessages ? [...initialMessages] : []);
     const sessionTitleRef = useRef<string>('');
     const activeSkillsRef = useRef<string[]>([]);
 
@@ -431,6 +446,7 @@ export function launchREPL(deps: REPLDeps) {
             messages: allMessagesRef.current,
             resetMessages: () => { allMessagesRef.current = []; setMessages([]); setDisplayMessages([]); setScrollPos(0); setShowWelcome(true); },
             setMessages: (msgs: Message[]) => { allMessagesRef.current = msgs; setMessages(msgs); },
+            clearMemoryCache: () => context.clearMemoryCache(),
             turnCount: messages.filter(m => m.role === 'user').length,
           };
           const result = await registry.execute(trimmed, commandDeps);

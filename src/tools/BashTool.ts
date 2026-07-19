@@ -1,5 +1,6 @@
 // src/tools/BashTool.ts
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import { isAbsolute, relative, resolve } from 'path';
 import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
 
 // ============================================================================
@@ -76,7 +77,7 @@ function buildSandboxPolicy(cwd: string): string {
 function executeSandboxed(command: string, cwd: string, timeout: number, maxBuffer: number): string {
   if (process.platform === 'darwin') {
     const policy = buildSandboxPolicy(cwd);
-    return execSync(`sandbox-exec -p '${policy}' sh -c "${command.replace(/"/g, '\\"')}"`, {
+    return execFileSync('sandbox-exec', ['-p', policy, 'sh', '-c', command], {
       cwd,
       timeout,
       encoding: 'utf-8',
@@ -84,7 +85,15 @@ function executeSandboxed(command: string, cwd: string, timeout: number, maxBuff
     });
   }
   // Linux: fallback to normal exec (seccomp requires container)
-  return execSync(command, {
+  return runShellCommand(command, cwd, timeout, maxBuffer);
+}
+
+function runShellCommand(command: string, cwd: string, timeout: number, maxBuffer: number): string {
+  const file = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
+  const args = process.platform === 'win32'
+    ? ['/d', '/s', '/c', command]
+    : ['-c', command];
+  return execFileSync(file, args, {
     cwd,
     timeout,
     encoding: 'utf-8',
@@ -111,7 +120,12 @@ function isDangerous(command: string): { dangerous: boolean; reason?: string } {
 
 function isDirAllowed(cwd: string, allowedDirs: string[]): boolean {
   if (allowedDirs.length === 0) return true;
-  return allowedDirs.some(dir => cwd.startsWith(dir));
+  const normalizedCwd = resolve(cwd);
+  return allowedDirs.some(dir => {
+    const normalizedDir = resolve(dir);
+    const rel = relative(normalizedDir, normalizedCwd);
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+  });
 }
 
 // ============================================================================
@@ -161,12 +175,7 @@ export function createBashTool(userConfig: BashToolConfig = {}): ToolDef<{ comma
         if (config.sandbox) {
           output = executeSandboxed(input.command, ctx.cwd, timeout, maxBuffer);
         } else {
-          output = execSync(input.command, {
-            cwd: ctx.cwd,
-            timeout,
-            encoding: 'utf-8',
-            maxBuffer,
-          });
+          output = runShellCommand(input.command, ctx.cwd, timeout, maxBuffer);
         }
         return { output, isError: false };
       } catch (err: unknown) {

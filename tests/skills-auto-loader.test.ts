@@ -12,8 +12,8 @@ describe('SkillAutoLoader', () => {
   let loader: SkillAutoLoader;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-skills-' + Date.now());
-    cwd = join(tmpdir(), 'cclaw-cwd-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-skills-' + Date.now());
+    cwd = join(tmpdir(), 'synapse-cwd-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
     mkdirSync(join(tmpDir, 'skills'), { recursive: true });
     mkdirSync(cwd, { recursive: true });

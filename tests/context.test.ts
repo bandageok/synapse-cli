@@ -12,7 +12,7 @@ describe('ContextBuilder', () => {
   let sl: SoulLoader;
 
   beforeEach(() => {
-    tmpDir = join(tmpdir(), 'cclaw-ctx-' + Date.now());
+    tmpDir = join(tmpdir(), 'synapse-ctx-' + Date.now());
     mkdirSync(tmpDir, { recursive: true });
     sl = new SoulLoader(tmpDir);
   });
@@ -35,8 +35,8 @@ describe('ContextBuilder', () => {
 
   it('supports additional directories', async () => {
     const otherDir = join(tmpDir, 'other');
-    mkdirSync(join(otherDir, '.cclaw'), { recursive: true });
-    writeFileSync(join(otherDir, '.cclaw', 'SOUL.md'), '# other soul', 'utf-8');
+    mkdirSync(join(otherDir, '.synapse'), { recursive: true });
+    writeFileSync(join(otherDir, '.synapse', 'SOUL.md'), '# other soul', 'utf-8');
     const cb = new ContextBuilder({ dataDir: tmpDir, cwd: otherDir, soulLoader: sl, additionalDirs: [otherDir] });
     const result = await cb.build(0);
     expect(result).toBeDefined();

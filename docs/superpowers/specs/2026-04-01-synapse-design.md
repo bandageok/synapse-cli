@@ -1,14 +1,14 @@
-# C.C.Claw Design Spec
+# Synapse Design Spec
 
-> **C.C.Claw** = Claude Code × Claw (OpenClaw)
-> 融合 Claude Code 的工程化架构 + OpenClaw 的人格/记忆/多 Channel 系统
+> **Synapse** = a multi-provider coding agent CLI with persistent memory and personality
+> 面向终端编程工作流，融合多模型路由、可持续记忆、工具权限和可扩展插件系统
 > 数据脱敏、可共享、可移植复用的开源 CLI Agent 框架
 
 ---
 
 ## 1. 定位
 
-| 维度 | Claude Code | OpenClaw/Bronya | C.C.Claw |
+| 维度 | Claude Code | OpenClaw/Bronya | Synapse |
 |------|-------------|-----------------|----------|
 | 本质 | 工具 | 平台 | **框架** |
 | 人格 | 无 | SOUL.md | SOUL.md (一等公民) |
@@ -41,7 +41,7 @@ Lint:        Biome
 ## 3. 架构总览
 
 ```
-c.c.claw/
+synapse-cli/
 ├── src/
 │   ├── entry/
 │   │   ├── cli.ts              # 入口：Commander 路由
@@ -95,11 +95,11 @@ c.c.claw/
 │       ├── sandbox.ts          # 沙箱抽象层
 │       └── config.ts           # 配置管理
 ├── packages/                   # Monorepo 子包 (发布用)
-│   ├── @cclaw/core            # re-export src/core/
-│   ├── @cclaw/cli             # CLI 入口
-│   ├── @cclaw/soul            # 人格系统
-│   └── @cclaw/tools-core      # 核心工具集
-├── .cclaw/                     # 用户数据目录
+│   ├── @synapse/core            # re-export src/core/
+│   ├── @synapse/cli             # CLI 入口
+│   ├── @synapse/soul            # 人格系统
+│   └── @synapse/tools-core      # 核心工具集
+├── .synapse/                     # 用户数据目录
 │   ├── SOUL.md                 # 人格定义
 │   ├── MEMORY.md               # 长期记忆
 │   ├── HEARTBEAT.md            # 定时任务定义
@@ -108,7 +108,7 @@ c.c.claw/
 │   ├── skills/                 # 用户技能
 │   ├── plugins/                # 插件
 │   └── projects/<slug>/        # 项目级配置
-│       └── .cclaw.md           # 项目指令 (CLAUDE.md 等价)
+│       └── .synapse.md           # 项目指令 (CLAUDE.md 等价)
 ├── package.json
 ├── tsconfig.json
 ├── biome.json
@@ -433,7 +433,7 @@ class Dream {
 ```typescript
 class Heartbeat {
   // 定时任务引擎
-  // 读取 .cclaw/HEARTBEAT.md 定义任务
+  // 读取 .synapse/HEARTBEAT.md 定义任务
   // 每个任务 = shell 命令 + 条件判断 + 响应动作
   // 默认间隔：5 分钟
   // 内置任务：假执行监控、记忆总结、MEMORY.md 归档
@@ -495,7 +495,7 @@ interface SessionStore {
   delete(sessionId: string): Promise<void>;
 }
 
-// 存储位置：.cclaw/sessions/<sessionId>.json
+// 存储位置：.synapse/sessions/<sessionId>.json
 // 格式：{ messages, metadata: { model, createdAt, updatedAt, tokenUsage } }
 // /resume 命令：列出最近会话 → 选择 → 恢复 messages + context
 ```
@@ -612,7 +612,7 @@ interface HookSystem {
   postToolUse(toolUse: ToolUse, result: ToolResult): Promise<void>;
 }
 
-// Hook 配置来自 .cclaw/hooks.json
+// Hook 配置来自 .synapse/hooks.json
 // 支持 shell 命令 + 条件匹配
 // 示例：
 // {
@@ -664,7 +664,7 @@ class ContextBuilder {
       await this.layer1_defaultPrompt(),      // 基础行为指令
       await this.layer2_soul(),               // SOUL.md 人格
       await this.layer3_memoryMechanics(),    // 记忆系统指令
-      await this.layer4_userContext(),        // .cclaw.md (用户 + 项目级)
+      await this.layer4_userContext(),        // .synapse.md (用户 + 项目级)
       await this.layer5_systemContext(),      // git status / env / 动态状态
       await this.layer6_dynamicReminders(turnCount), // 动态提醒 (进度/约束)
     ];
@@ -720,8 +720,8 @@ interface Provider {
 
 | 数据类型 | 脱敏方式 | 示例 |
 |----------|----------|------|
-| API Key | 环境变量引用 | `process.env.CCLAW_API_KEY` |
-| 用户路径 | 相对路径 | `~/.cclaw/` 而非绝对路径 |
+| API Key | 环境变量引用 | `process.env.SYNAPSE_API_KEY` |
+| 用户路径 | 相对路径 | `~/.synapse/` 而非绝对路径 |
 | 邮箱 | 移除 | 不出现在代码/配置中 |
 | 个人 ID | 移除 | 不出现在代码/配置中 |
 | Token/Secret | Keychain/环境变量 | 永不硬编码 |
@@ -764,9 +764,9 @@ interface Provider {
 - [ ] Agent 隔离模型 (InProcess/LocalAgent)
 
 ### Phase 5: 发布 (Week 5-6)
-- [ ] npm 包发布 (@cclaw/cli)
+- [ ] npm 包发布 (@synapse/cli)
 - [ ] README + 文档
-- [ ] 安装器 (npm i -g @cclaw/cli)
+- [ ] 安装器 (npm i -g @synapse/cli)
 - [ ] CI/CD (GitHub Actions)
 
 ---
@@ -774,7 +774,7 @@ interface Provider {
 ## 16. 与 Claude Code / OpenClaw 的关系
 
 ```
-Claude Code (泄露源码)          OpenClaw/Bronya
+Claude Code          OpenClaw/Bronya
        ↓                              ↓
   工程化架构借鉴                  人格/记忆系统借鉴
   - AsyncGenerator 循环          - SOUL.md 人格
@@ -788,6 +788,6 @@ Claude Code (泄露源码)          OpenClaw/Bronya
        ↓                              ↓
        └──────────┬──────────────────┘
                   ↓
-              C.C.Claw
+              Synapse
          (融合 + 脱敏 + 开源)
 ```

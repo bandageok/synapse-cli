@@ -1,4 +1,4 @@
-# C.C.Claw P3 — 最终差距修复
+# Synapse P3 — 最终差距修复
 
 ## 进度追踪
 - [x] P3-1: REPL UI 精细度（spinner 动画、多行编辑、语法高亮）

@@ -2,25 +2,36 @@
 // Provider factory: all provider types
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { createProvider } from '../src/providers/factory.js';
+import {
+  listProviders,
+  PROVIDER_PRESETS,
+  setProvider,
+  testProvider,
+} from '../src/providers/management.js';
 import { homedir } from 'os';
 import { join } from 'path';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
 
 describe('Provider Factory', () => {
   const origEnv = { ...process.env };
-  const origDataDir = process.env.CCLAW_DATA_DIR;
-  const testDir = join(homedir(), '.cclaw-test-factory');
+  const origDataDir = process.env.SYNAPSE_DATA_DIR;
+  const testDir = join(homedir(), '.synapse-test-factory');
 
   beforeEach(() => {
     rmSync(testDir, { recursive: true, force: true });
     mkdirSync(testDir, { recursive: true });
-    process.env.CCLAW_DATA_DIR = testDir;
+    process.env.SYNAPSE_DATA_DIR = testDir;
+    for (const key of new Set(PROVIDER_PRESETS.flatMap(provider => provider.envKeys))) {
+      delete process.env[key];
+    }
+    delete process.env.SYNAPSE_API_KEY;
+    delete process.env.API_BASE_URL;
   });
 
   afterEach(() => {
     process.env = { ...origEnv };
-    if (origDataDir) process.env.CCLAW_DATA_DIR = origDataDir;
-    else delete process.env.CCLAW_DATA_DIR;
+    if (origDataDir) process.env.SYNAPSE_DATA_DIR = origDataDir;
+    else delete process.env.SYNAPSE_DATA_DIR;
     rmSync(testDir, { recursive: true, force: true });
   });
 
@@ -61,12 +72,59 @@ describe('Provider Factory', () => {
     delete process.env.OPENROUTER_API_KEY;
     delete process.env.CUSTOM_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'test-key';
-    writeFileSync(join(testDir, '.cclaw.json'), JSON.stringify({
+    writeFileSync(join(testDir, '.synapse.json'), JSON.stringify({
       provider: 'custom',
       baseUrl: 'https://api.minimaxi.com/anthropic',
       model: 'MiniMax-M2.7',
     }));
     const p = createProvider('MiniMax-M2.7');
     expect(p?.name).toBe('minimax');
+  });
+
+  it('supports an arbitrary OpenAI-compatible provider and BaseURL', () => {
+    const runtime = setProvider('company-gateway', {
+      dataDir: testDir,
+      baseUrl: 'https://llm.example.com/v1/',
+      protocol: 'openai',
+      model: 'company-model',
+      apiKey: 'private-key',
+    });
+
+    expect(runtime.id).toBe('company-gateway');
+    expect(runtime.baseUrl).toBe('https://llm.example.com/v1');
+    expect(runtime.keyName).toBe('SYNAPSE_API_KEY');
+    expect(createProvider()?.name).toBe('company-gateway');
+  });
+
+  it('honors an explicit preset when other provider keys exist', () => {
+    process.env.ANTHROPIC_API_KEY = 'anthropic-key';
+    setProvider('openrouter', { dataDir: testDir, apiKey: 'router-key' });
+
+    expect(createProvider()?.name).toBe('openrouter');
+    expect(listProviders(testDir).find(provider => provider.id === 'openrouter')?.active).toBe(true);
+  });
+
+  it('tests a custom endpoint using its configured protocol and auth', async () => {
+    setProvider('local-gateway', {
+      dataDir: testDir,
+      baseUrl: 'http://127.0.0.1:8080/v1',
+      protocol: 'openai',
+      model: 'local-model',
+      apiKey: 'local-key',
+    });
+    const originalFetch = globalThis.fetch;
+    let request: { input?: string | URL | Request; init?: RequestInit } = {};
+    globalThis.fetch = async (input, init) => {
+      request = { input, init };
+      return new Response(JSON.stringify({ choices: [] }), { status: 200 });
+    };
+    try {
+      const result = await testProvider({ dataDir: testDir, timeoutMs: 1000 });
+      expect(result.provider).toBe('local-gateway');
+      expect(String(request.input)).toBe('http://127.0.0.1:8080/v1/chat/completions');
+      expect((request.init?.headers as Record<string, string>).authorization).toBe('Bearer local-key');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

@@ -1,14 +1,14 @@
-# C.C.Claw 配置文档
+# Synapse 配置文档
 
-> C.C.Claw 通过 Markdown 文件定义人格、记忆、用户信息和行为规则。
-> 所有文件位于 `~/.cclaw/` 目录。
+> Synapse 通过 Markdown 文件定义人格、记忆、用户信息和行为规则。
+> 所有文件位于 `~/.synapse/` 目录。
 
 ---
 
 ## 目录结构
 
 ```
-~/.cclaw/
+~/.synapse/
 ├── SOUL.md          # 人格定义（必须）
 ├── USER.md          # 用户画像（推荐）
 ├── IDENTITY.md      # Agent 身份（可选）
@@ -24,7 +24,7 @@
 └── projects/        # 项目级配置索引
 ```
 
-项目级配置：在项目根目录放 `.cclaw.md`，自动加载。
+项目级配置：在项目根目录放 `.synapse.md`，自动加载。
 
 ---
 
@@ -195,12 +195,12 @@ exec 失败时追加"分析根因，不要重试"。
 
 ---
 
-## .cclaw.md — 项目级配置
+## .synapse.md — 项目级配置
 
 **作用：** 项目特定的指令和上下文。放在项目根目录。
 
 ```markdown
-# .cclaw.md
+# .synapse.md
 
 ## 项目概述
 这是一个 React + TypeScript 的 Web 应用。
@@ -225,10 +225,10 @@ exec 失败时追加"分析根因，不要重试"。
 ## 配置优先级
 
 ```
-SOUL.md (人格) > USER.md (用户) > .cclaw.md (项目) > MEMORY.md (记忆)
+SOUL.md (人格) > USER.md (用户) > .synapse.md (项目) > MEMORY.md (记忆)
 ```
 
-高层级可覆盖低层级。例如 SOUL.md 的行为铁律优先于 .cclaw.md 的项目规范。
+高层级可覆盖低层级。例如 SOUL.md 的行为铁律优先于 .synapse.md 的项目规范。
 
 ---
 
@@ -236,7 +236,7 @@ SOUL.md (人格) > USER.md (用户) > .cclaw.md (项目) > MEMORY.md (记忆)
 
 ```bash
 # 1. 安装
-npm i -g cclaw
+npm i -g synapse-cli
 
 # 2. 设置 API Key
 export ANTHROPIC_API_KEY=sk-ant-xxx
@@ -244,8 +244,8 @@ export ANTHROPIC_API_KEY=sk-ant-xxx
 export OPENROUTER_API_KEY=sk-or-xxx
 
 # 3. 初始化配置（可选，不配置也有默认行为）
-mkdir -p ~/.cclaw
-cat > ~/.cclaw/SOUL.md << 'EOF'
+mkdir -p ~/.synapse
+cat > ~/.synapse/SOUL.md << 'EOF'
 # SOUL.md
 
 高效、直接的编程助手。
@@ -255,17 +255,17 @@ cat > ~/.cclaw/SOUL.md << 'EOF'
 EOF
 
 # 4. 启动
-cclaw chat
+synapse chat
 
 # 5. 诊断
-cclaw doctor
+synapse doctor
 ```
 
 ---
 
 ## 与 OpenClaw / Claude Code 的对应关系
 
-| C.C.Claw | OpenClaw | Claude Code | 作用 |
+| Synapse | OpenClaw | Claude Code | 作用 |
 |----------|----------|-------------|------|
 | SOUL.md | SOUL.md | — | 人格定义 |
 | USER.md | USER.md | — | 用户画像 |
@@ -273,5 +273,9 @@ cclaw doctor
 | MEMORY.md | MEMORY.md | MEMORY.md | 长期记忆 |
 | HEARTBEAT.md | HEARTBEAT.md | — | 定时任务 |
 | TOOLS.md | TOOLS.md | — | 工具笔记 |
-| .cclaw.md | .bronya.md | CLAUDE.md | 项目级配置 |
+| .synapse.md | .bronya.md | CLAUDE.md | 项目级配置 |
+
+## Provider 和 审计
+
+Synapse 会把 `SOUL.md`、`MEMORY.md`、项目/用户指令、技能上下文和当前对话组装成系统提示词发送给 provider。工具调用先经过权限判断，再进入执行层；所有工具决策会写入 `logs/audit.jsonl`，便于回溯。
 | — | AGENTS.md | — | 行为规则（内置到 SOUL.md） |

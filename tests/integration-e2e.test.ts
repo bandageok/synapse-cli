@@ -30,7 +30,7 @@ describe('E2E: Full Engine + MiMo V2 Pro', () => {
   let tempDir: string;
 
   beforeAll(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'cclaw-e2e-'));
+    tempDir = mkdtempSync(join(tmpdir(), 'synapse-e2e-'));
     context = new ContextBuilder({ dataDir: tempDir, cwd: tempDir });
     if (!API_KEY) return;
     provider = new OpenRouterProvider({ apiKey: API_KEY, model: 'xiaomi/mimo-v2-pro' });

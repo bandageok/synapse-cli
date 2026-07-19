@@ -48,7 +48,7 @@ export const FileEditTool: ToolDef<{
     }
 
     // 执行替换前创建备份
-    const bakPath = input.file_path + '.cclaw-bak';
+    const bakPath = input.file_path + '.synapse-bak';
     writeFileSync(bakPath, content);
 
     let newContent: string;

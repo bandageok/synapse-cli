@@ -28,7 +28,7 @@ describe('BashTool', () => {
 
 describe('FileReadTool', () => {
   it('reads a file', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     writeFileSync(join(dir, 'test.txt'), 'hello world');
     const result = await FileReadTool.execute({ file_path: join(dir, 'test.txt') }, { ...ctx, cwd: dir });
     expect(result.output).toContain('hello world');
@@ -41,7 +41,7 @@ describe('FileReadTool', () => {
   });
 
   it('reads with offset and limit', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     writeFileSync(join(dir, 'lines.txt'), 'line1\nline2\nline3\nline4\nline5');
     const result = await FileReadTool.execute({ file_path: join(dir, 'lines.txt'), offset: 2, limit: 2 }, { ...ctx, cwd: dir });
     expect(result.output).toContain('line2');
@@ -53,7 +53,7 @@ describe('FileReadTool', () => {
 
 describe('FileWriteTool', () => {
   it('writes a file', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     const result = await FileWriteTool.execute(
       { file_path: join(dir, 'out.txt'), content: 'test content' },
       { ...ctx, cwd: dir }
@@ -66,7 +66,7 @@ describe('FileWriteTool', () => {
 
 describe('FileEditTool', () => {
   it('edits a file', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     writeFileSync(join(dir, 'edit.txt'), 'hello world');
     const result = await FileEditTool.execute(
       { file_path: join(dir, 'edit.txt'), old_string: 'hello', new_string: 'goodbye' },
@@ -77,7 +77,7 @@ describe('FileEditTool', () => {
   });
 
   it('returns error when old_string not found', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     writeFileSync(join(dir, 'edit.txt'), 'hello world');
     const result = await FileEditTool.execute(
       { file_path: join(dir, 'edit.txt'), old_string: 'notfound', new_string: 'x' },
@@ -90,7 +90,7 @@ describe('FileEditTool', () => {
 
 describe('GlobTool', () => {
   it('finds files by pattern', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-'));
     writeFileSync(join(dir, 'a.ts'), '');
     writeFileSync(join(dir, 'b.js'), '');
     const result = await GlobTool.execute({ pattern: '*.ts' }, { ...ctx, cwd: dir });

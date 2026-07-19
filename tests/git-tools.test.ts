@@ -25,7 +25,7 @@ describe('GitDiffTool', () => {
 
 describe('NotebookReadTool', () => {
   it('reads a notebook', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'cclaw-nb-'));
+    const dir = mkdtempSync(join(tmpdir(), 'synapse-nb-'));
     const nb = { cells: [{ cell_type: 'code', source: ['print("hello")'] }] };
     writeFileSync(join(dir, 'test.ipynb'), JSON.stringify(nb));
     const result = await NotebookReadTool.execute({ notebook_path: join(dir, 'test.ipynb') }, { ...ctx, cwd: dir });

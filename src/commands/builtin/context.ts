@@ -27,21 +27,21 @@ export const contextCommand: SlashCommand = {
 
     // Layer 4: User context (详细)
     lines.push('📦 Layer 4: User context');
-    const userConfig = join(deps.dataDir, '.cclaw.md');
-    const projectConfig = join(cwd, '.cclaw.md');
+    const userConfig = join(deps.dataDir, '.synapse.md');
+    const projectConfig = join(cwd, '.synapse.md');
     const memoryPath = join(deps.dataDir, 'MEMORY.md');
 
     if (existsSync(userConfig)) {
       const size = readFileSync(userConfig, 'utf-8').length;
-      lines.push(`    ├── ~/.cclaw.md ✅ (${size} chars)`);
+      lines.push(`    ├── ~/.synapse.md ✅ (${size} chars)`);
     } else {
-      lines.push('    ├── ~/.cclaw.md ❌');
+      lines.push('    ├── ~/.synapse.md ❌');
     }
     if (existsSync(projectConfig)) {
       const size = readFileSync(projectConfig, 'utf-8').length;
-      lines.push(`    ├── ./.cclaw.md ✅ (${size} chars)`);
+      lines.push(`    ├── ./.synapse.md ✅ (${size} chars)`);
     } else {
-      lines.push('    ├── ./.cclaw.md ❌');
+      lines.push('    ├── ./.synapse.md ❌');
     }
     if (existsSync(memoryPath)) {
       const content = readFileSync(memoryPath, 'utf-8');
@@ -52,7 +52,7 @@ export const contextCommand: SlashCommand = {
     }
 
     // CLAUDE.md 文件发现
-    const claudeFiles = ['CLAUDE.md', '.cclaw/CLAUDE.md', 'CLAUDE.local.md'];
+    const claudeFiles = ['CLAUDE.md', '.synapse/CLAUDE.md', 'CLAUDE.local.md'];
     for (const f of claudeFiles) {
       const p = join(cwd, f);
       if (existsSync(p)) {
@@ -61,12 +61,12 @@ export const contextCommand: SlashCommand = {
       }
     }
 
-    // .cclaw/rules/*.md
-    const rulesDir = join(cwd, '.cclaw', 'rules');
+    // .synapse/rules/*.md
+    const rulesDir = join(cwd, '.synapse', 'rules');
     if (existsSync(rulesDir)) {
       const rules = readdirSync(rulesDir).filter((f: string) => f.endsWith('.md'));
       if (rules.length > 0) {
-        lines.push(`    └── .cclaw/rules/ ✅ (${rules.length} rules: ${rules.join(', ')})`);
+        lines.push(`    └── .synapse/rules/ ✅ (${rules.length} rules: ${rules.join(', ')})`);
       }
     }
 

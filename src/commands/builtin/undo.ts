@@ -24,7 +24,7 @@ export const undoCommand: SlashCommand = {
         if (!filePath) continue;
 
         // 检查 .bak 文件
-        const bakPath = filePath + '.cclaw-bak';
+        const bakPath = filePath + '.synapse-bak';
         if (existsSync(bakPath)) {
           const backup = readFileSync(bakPath, 'utf-8');
           writeFileSync(filePath, backup);

@@ -8,11 +8,11 @@
 </p>
 
 <p align="center">
-  <strong>Claude Code experience — on any LLM, any provider.</strong>
+  <strong>Agentic coding in the terminal — on any LLM, any provider.</strong>
 </p>
 
 <p align="center">
-  Synapse brings Claude Code's interactive terminal workflow to Anthropic, OpenRouter, MiniMax, or any custom endpoint. Vim mode, persistent agent soul, context compression, and 19 built-in tools — in one TypeScript CLI.
+  Synapse is a TypeScript CLI for multi-provider coding agents. It combines an interactive terminal workflow with Vim mode, persistent agent soul, context compression, MCP, plugins, and 19 built-in tools.
 </p>
 
 ---
@@ -35,7 +35,7 @@
 ## Features
 
 ### 🧠 Any LLM, Any Provider
-Works with Anthropic (Claude), OpenRouter (any model), MiniMax, or any custom Anthropic-compatible endpoint. Switch providers in one command.
+Choose a mainstream provider preset or connect any OpenAI-compatible or Anthropic-compatible BaseURL. Provider behavior is driven by configuration rather than hard-coded factory branches.
 
 ### ⚡ 19 Built-in Tools
 File editing, shell execution, web search, Git operations, sub-agent spawning, image generation, TTS, and more — all permission-controlled.
@@ -61,7 +61,7 @@ Connect any MCP-compatible server. Built-in plugin registry for extending functi
 
 ```bash
 # Install
-npm install -g synapse
+npm install -g @bandageok/synapse-cli
 
 # Launch (auto-configures on first run)
 synapse chat
@@ -73,13 +73,55 @@ synapse chat -m deepseek-chat
 echo "Explain this code" | synapse chat -p
 ```
 
+### Provider Setup
+
+```bash
+# Browse presets and see which credentials are available
+synapse provider list
+
+# Select a mainstream preset and store its API key locally
+synapse provider set deepseek --api-key "$DEEPSEEK_API_KEY"
+
+# Connect any OpenAI-compatible gateway or local server
+synapse provider set company-gateway \
+  --base-url https://llm.example.com/v1 \
+  --protocol openai \
+  --model company-model \
+  --api-key "$COMPANY_API_KEY"
+
+# Anthropic-compatible endpoints are also supported
+synapse provider set private-anthropic \
+  --base-url https://anthropic.example.com \
+  --protocol anthropic \
+  --auth x-api-key \
+  --model private-model \
+  --api-key-env PRIVATE_LLM_API_KEY
+
+# Validate key, endpoint, protocol, and model with a one-token request
+synapse provider test
+```
+
+`--api-key` writes the credential to `~/.synapse/.env` and never prints it. To keep secrets out of shell history, set the environment variable named by `--api-key-env` instead.
+
+### Memory Operations
+
+```bash
+synapse memory inspect
+synapse memory search "project convention"
+synapse memory prune --older-than 90          # preview only
+synapse memory prune --older-than 90 --yes    # apply deletion
+synapse memory export memories.json
+```
+
+Search and export exclude session transcripts by default. Add `--include-sessions` only when the transcript content is intentionally needed. All read-oriented commands support structured output through `--json` where applicable.
+
 ---
 
 ## Demo
 
 ```
 $ synapse chat
-🤖 Synapse v0.2.0 — Claude Code × OpenClaw
+🤖 Synapse v0.2.0 — multi-provider coding agent
 
 [Provider] Select provider: (anthropic/openrouter/minimax/custom)
 > anthropic
@@ -160,6 +202,10 @@ Config stored in `~/.synapse/`:
 | `sessions/` | Session snapshots |
 | `.learnings/` | Self-improvement records |
 
+## Provider Payloads
+
+Synapse sends each provider a system prompt assembled from `SOUL.md`, `MEMORY.md`, project instructions, active skills, and the current turn context. Tool use is gated by the permission model before execution, and every tool decision is written to `logs/audit.jsonl`.
+
 ---
 
 ## Requirements
@@ -173,6 +219,10 @@ Config stored in `~/.synapse/`:
 ## Roadmap
 
 See [docs/ROADMAP-v0.3.0.md](./docs/ROADMAP-v0.3.0.md) for upcoming features.
+
+For positioning, competitor comparison, and release-readiness recommendations, see [docs/SYNAPSE-AUDIT-2026-07-19.md](./docs/SYNAPSE-AUDIT-2026-07-19.md).
+
+For the complete provider configuration schema and memory command safety rules, see [docs/PROVIDER-MEMORY-CLI.md](./docs/PROVIDER-MEMORY-CLI.md).
 
 ---
 

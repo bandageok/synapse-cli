@@ -1,11 +1,11 @@
-# C.C.Claw P2 修复计划
+# Synapse P2 修复计划
 
 ## 进度追踪
 - [x] P2-1: `--add-dir` 多目录 CLAUDE.md 加载
 - [x] P2-2: `/context` 可视化增强（显示文件路径 + 内容摘要）
 - [x] P2-3: Compressor LLM 摘要（用 Provider 生成摘要而非截断）
-- [x] P2-4: `cclaw update` 自动更新
-- [x] P2-5: `cclaw logs` 日志系统
+- [x] P2-4: `synapse update` 自动更新
+- [x] P2-5: `synapse logs` 日志系统
 - [x] P2-6: FakeExecutionWatchdog 接入 Engine
 - [x] P2-7: SelfImprovement 接入 Engine
 - [x] P2-8: MemoryExtractor 接入 Heartbeat
@@ -27,22 +27,22 @@
 ### P2-2: `/context` 可视化增强 ✅
 - 树形结构显示 6 层上下文
 - 显示文件大小和行数
-- 显示 .cclaw/rules/ 规则文件
+- 显示 .synapse/rules/ 规则文件
 
 ### P2-3: Compressor LLM 摘要 ✅
 - CompressorConfig 添加 provider 可选字段
 - autoCompact 优先使用 LLM 生成摘要
 - 无 Provider 时回退到截断模式
 
-### P2-4: `cclaw update` ✅
+### P2-4: `synapse update` ✅
 - 查询 npm registry 最新版本
 - 比较本地版本号
 - `--check` 只检查不更新
-- 自动执行 `npm update -g cclaw`
+- 自动执行 `npm update -g synapse`
 
-### P2-5: `cclaw logs` ✅
+### P2-5: `synapse logs` ✅
 - Logger 类：debug/info/warn/error 级别
-- 日志文件：~/.cclaw/logs/cclaw.log
+- 日志文件：~/.synapse/logs/synapse.log
 - `--follow` 实时跟踪
 - `--lines <n>` 显示行数
 - Engine 注入 logger 记录 turn 和 error
