@@ -61,7 +61,7 @@ describe('BashTool', () => {
   }
 });
 
-describe('PowerShellTool', () => {
+describe.skipIf(process.platform !== 'win32')('PowerShellTool', () => {
   it('executes Write-Output', async () => {
     const result = await PowerShellTool.execute({ command: 'Write-Output "hello"' }, { cwd: process.cwd(), abortSignal: new AbortController().signal });
     expect(result.isError).toBe(false);
