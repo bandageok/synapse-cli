@@ -2,7 +2,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
-import type { ToolDef } from '../core/types.js';
+import type { PermissionModeInput, ToolDef } from '../core/types.js';
 import { createProviderFromRuntime } from '../providers/factory.js';
 import { resolveProviderRuntime } from '../providers/management.js';
 import { ToolRegistry } from '../core/ToolRegistry.js';
@@ -21,6 +21,7 @@ import { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
 import { SelfImprovement } from '../soul/SelfImprovement.js';
 import { Logger } from '../core/Logger.js';
 import { ensureIdentityFile } from '../core/ProductIdentity.js';
+import { PermissionManager } from '../core/PermissionManager.js';
 import { createBashTool } from '../tools/BashTool.js';
 import { FileReadTool } from '../tools/FileReadTool.js';
 import { FileEditTool } from '../tools/FileEditTool.js';
@@ -44,15 +45,15 @@ import { createTaskTool } from '../tools/TaskTool.js';
 import { MCPClient } from '../services/mcp/client.js';
 import { PluginRegistry } from '../plugins/registry.js';
 
-export async function init(opts: { model?: string; addDir?: string[]; permissionMode?: 'ask' | 'workspace-auto'; sandboxBackend?: 'auto' | 'bubblewrap' | 'docker' }) {
+export async function init(opts: { model?: string; addDir?: string[]; permissionMode?: PermissionModeInput; sandboxBackend?: 'auto' | 'bubblewrap' | 'docker' }) {
   const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
   ensureIdentityFile(dataDir);
   const providerRuntime = resolveProviderRuntime(opts.model, dataDir);
   const provider = createProviderFromRuntime(providerRuntime);
-  const permissionMode = opts.permissionMode ?? 'ask';
-  const tools = new ToolRegistry({ permissionMode });
+  const permissionManager = new PermissionManager(opts.permissionMode ?? 'ask');
+  const tools = new ToolRegistry({ permissionManager });
   tools.initPermissions(dataDir);
   tools.setWorkspaceRoots([process.cwd(), ...(opts.addDir ?? [])]);
   const logger = new Logger({ dataDir });
@@ -63,7 +64,7 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
 
   // 基础工具（无依赖）
   const basicTools = [
-    createBashTool({ sandbox: permissionMode === 'workspace-auto', sandboxBackend: opts.sandboxBackend }),
+    createBashTool({ permissionManager, sandboxBackend: opts.sandboxBackend }),
     FileReadTool, FileEditTool, FileWriteTool,
     GlobTool, GrepTool, WebSearchTool, createWebFetchTool(dataDir),
     TodoWriteTool, AskUserQuestionTool, SkillTool,
@@ -126,5 +127,5 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
   const watchdog = new FakeExecutionWatchdog();
   const selfImprovement = new SelfImprovement(dataDir);
 
-  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, heartbeat, memoryMaintenance, watchdog, selfImprovement, mcpClient, pluginRegistry, logger, dataDir, skillLoader };
+  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, heartbeat, memoryMaintenance, watchdog, selfImprovement, mcpClient, pluginRegistry, logger, dataDir, skillLoader, permissionManager };
 }

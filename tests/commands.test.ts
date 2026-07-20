@@ -3,6 +3,8 @@ import { CommandRegistry } from '../src/commands/registry.js';
 import { helpCommand } from '../src/commands/builtin/help.js';
 import { clearCommand } from '../src/commands/builtin/clear.js';
 import { modelCommand } from '../src/commands/builtin/model.js';
+import { permissionsCommand } from '../src/commands/builtin/permissions.js';
+import type { PermissionMode } from '../src/core/types.js';
 
 const mockDeps = {
   dataDir: '/tmp',
@@ -66,5 +68,25 @@ describe('CommandRegistry', () => {
     reg.register(helpCommand);
     const result = await reg.execute('/h', mockDeps);
     expect(result.handled).toBe(true);
+  });
+
+  it('switches the current session permission profile', async () => {
+    const reg = new CommandRegistry();
+    reg.register(permissionsCommand);
+    let mode: PermissionMode = 'ask';
+    const deps = {
+      ...mockDeps,
+      permissionMode: mode,
+      setPermissionMode: (next: PermissionMode) => {
+        mode = next;
+        return next;
+      },
+    };
+
+    const result = await reg.execute('/permissions yolo', deps);
+
+    expect(mode).toBe('full-access');
+    expect(result.output).toContain('Approval policy: never');
+    expect(result.output).toContain('Full access runs host commands without approval prompts');
   });
 });

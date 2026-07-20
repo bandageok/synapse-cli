@@ -66,6 +66,7 @@ describe('CLI integration', () => {
 
     expect(output).toContain('Recent sessions');
     expect(output).toContain('session-one');
+    expect(runCli(['resume', '--help'], dataDir)).toContain('--yolo');
   });
 
   it('adds and lists MCP servers', () => {
@@ -144,6 +145,19 @@ describe('CLI integration', () => {
     expect(config.baseUrl).toBe('https://llm.example.com/v1');
     expect(config.protocol).toBe('openai');
     expect(readFileSync(join(dataDir, '.env'), 'utf-8')).toContain('SYNAPSE_API_KEY=private-key');
+  });
+
+  it('shows and persists permission profiles with compatibility aliases', () => {
+    const dataDir = tempDir('synapse-cli-permissions-');
+
+    expect(runCli(['permissions'], dataDir)).toContain('Default permission mode: ask');
+    const fullAccess = runCli(['permissions', 'set', 'full-access'], dataDir);
+    expect(fullAccess).toContain('Default permission mode: full-access');
+    expect(fullAccess).toContain('Warning:');
+    expect(JSON.parse(readFileSync(join(dataDir, '.synapse.json'), 'utf-8')).permissionMode).toBe('full-access');
+
+    runCli(['permissions', 'workspace-auto'], dataDir);
+    expect(JSON.parse(readFileSync(join(dataDir, '.synapse.json'), 'utf-8')).permissionMode).toBe('auto');
   });
 
   it('inspects, searches, exports, and safely prunes memory', () => {

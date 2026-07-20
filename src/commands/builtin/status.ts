@@ -23,6 +23,7 @@ export const statusCommand: SlashCommand = {
       '  SOUL.md:     ' + (existsSync(join(dataDir, 'SOUL.md')) ? 'yes' : 'no'),
       '  MEMORY.md:   ' + (existsSync(join(dataDir, 'MEMORY.md')) ? 'yes' : 'no'),
       '  permissions: ' + (existsSync(join(dataDir, 'permissions.json')) ? 'yes' : 'no'),
+      '  permission mode: ' + (deps.permissionMode ?? 'ask'),
     ];
 
     // Session count

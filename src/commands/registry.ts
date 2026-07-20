@@ -1,5 +1,5 @@
 // src/commands/registry.ts
-import type { Message } from '../core/types.js';
+import type { Message, PermissionMode, PermissionModeInput } from '../core/types.js';
 
 export interface SlashCommand {
   name: string;
@@ -20,6 +20,8 @@ export interface CommandDeps {
   setMessages?: (msgs: Message[]) => void;
   clearMemoryCache?: () => void;
   turnCount: number;
+  permissionMode?: PermissionMode;
+  setPermissionMode?: (mode: PermissionModeInput) => PermissionMode;
 }
 
 export class CommandRegistry {

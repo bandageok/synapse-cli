@@ -32,6 +32,7 @@ export interface SynapseConfig extends Record<string, unknown> {
   baseUrl?: string;
   fallbackModels?: string[];
   hasCompletedOnboarding?: boolean;
+  permissionMode?: 'ask' | 'auto' | 'full-access' | 'workspace-auto' | 'yolo';
 }
 
 export interface ProviderRuntime {
@@ -332,6 +333,15 @@ function atomicWrite(path: string, content: string): void {
   } finally {
     if (existsSync(temporary)) unlinkSync(temporary);
   }
+}
+
+export function updateSynapseConfig(
+  updates: Partial<SynapseConfig>,
+  dataDir = getSynapseDataDir(),
+): SynapseConfig {
+  const next: SynapseConfig = { ...readSynapseConfig(dataDir), ...updates };
+  atomicWrite(join(dataDir, '.synapse.json'), JSON.stringify(next, null, 2) + '\n');
+  return next;
 }
 
 function updateEnvValue(path: string, key: string, value: string): void {

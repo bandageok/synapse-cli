@@ -11,7 +11,7 @@ import {
   memoryCommand, soulCommand, doctorCommand, configCommand,
   sessionCommand, costCommand, compactCommand, initCommand,
   resumeCommand, historyCommand, soulEditCommand, vimCommand,
-  diffCommand, undoCommand, contextCommand,
+  diffCommand, undoCommand, contextCommand, permissionsCommand,
 } from '../commands/builtin/index.js';
 import { statusCommand } from '../commands/builtin/status.js';
 import { skillsCommand } from '../commands/builtin/skills.js';
@@ -20,7 +20,7 @@ import { SkillAutoLoader } from '../skills/AutoLoader.js';
 import { VERSION } from '../version.js';
 import { TokenRenderBuffer, virtualizeText } from './streaming.js';
 
-import type { Message } from '../core/types.js';
+import type { Message, PermissionMode, PermissionModeInput } from '../core/types.js';
 import type { Provider } from '../providers/base.js';
 import type { ToolRegistry } from '../core/ToolRegistry.js';
 import type { ContextBuilder } from '../core/Context.js';
@@ -34,6 +34,7 @@ import type { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
 import type { SelfImprovement } from '../soul/SelfImprovement.js';
 import type { Logger } from '../core/Logger.js';
 import type { SessionStore } from '../core/SessionStore.js';
+import type { PermissionManager } from '../core/PermissionManager.js';
 
 // ============================================================
 // Constants
@@ -65,6 +66,7 @@ interface REPLDeps {
   skillLoader?: SkillAutoLoader;
   initialMessages?: Message[];
   initialSessionId?: string;
+  permissionManager: PermissionManager;
 }
 
 interface DisplayMsg {
@@ -113,9 +115,9 @@ function WelcomeBanner({ providerName, model }: { providerName: string; model: s
   );
 }
 
-function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, activeSkills, turnCount }: {
+function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, activeSkills, turnCount, permissionMode }: {
   providerName: string; model: string; tokens: number; msgs: number;
-  vimMode: boolean; sessionTitle?: string; activeSkills: string[]; turnCount: number;
+  vimMode: boolean; sessionTitle?: string; activeSkills: string[]; turnCount: number; permissionMode: PermissionMode;
 }) {
   const pct = Math.min(100, Math.round((tokens / CONTEXT_WINDOW) * 100));
   const filled = Math.round((pct / 100) * 20);
@@ -130,7 +132,7 @@ function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, a
       ' \u2014 ' + sessionTitle
     ) : null,
     React.createElement(Text, { color: 'gray' as const },
-      ' \u00B7 ' + msgs + ' msgs \u00B7 turn ' + turnCount + skillBadge
+      ' \u00B7 ' + msgs + ' msgs \u00B7 turn ' + turnCount + ' \u00B7 ' + permissionMode + skillBadge
     ),
     React.createElement(Text, { color },
       ' | ' + bar + ' ' + pct + '%'
@@ -197,7 +199,7 @@ function Footer({ vimMode, scrollPos, maxScroll }: { vimMode: boolean; scrollPos
 export function launchREPL(deps: REPLDeps) {
   const {
     provider, tools, context, compressor, hooks, errorRecovery, dataDir,
-    sessionStore, heartbeat, watchdog, selfImprovement, logger,
+    sessionStore, heartbeat, watchdog, selfImprovement, logger, permissionManager,
     skillLoader: skillLoaderFromDeps, initialMessages, initialSessionId,
   } = deps;
   const sessionId = initialSessionId ?? 'session-' + Date.now();
@@ -210,7 +212,7 @@ export function launchREPL(deps: REPLDeps) {
     helpCommand, exitCommand, clearCommand, modelCommand, memoryCommand,
     soulCommand, doctorCommand, configCommand, sessionCommand, costCommand,
     compactCommand, initCommand, resumeCommand, historyCommand, soulEditCommand,
-    vimCommand, diffCommand, undoCommand, contextCommand,
+    vimCommand, diffCommand, undoCommand, contextCommand, permissionsCommand,
     statusCommand, skillsCommand,
   ]) {
     registry.register(cmd);
@@ -222,6 +224,7 @@ export function launchREPL(deps: REPLDeps) {
   function REPL() {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
+    const [permissionMode, setPermissionModeState] = useState<PermissionMode>(permissionManager.getMode());
     const [displayMessages, setDisplayMessages] = useState<DisplayMsg[]>(() =>
       initialMessages && initialMessages.length > 0
         ? [{
@@ -466,6 +469,12 @@ export function launchREPL(deps: REPLDeps) {
             setMessages: (msgs: Message[]) => { allMessagesRef.current = msgs; setMessages(msgs); },
             clearMemoryCache: () => context.clearMemoryCache(),
             turnCount: messages.filter(m => m.role === 'user').length,
+            permissionMode,
+            setPermissionMode: (mode: PermissionModeInput) => {
+              const next = tools.setPermissionMode(mode);
+              setPermissionModeState(next);
+              return next;
+            },
           };
           const result = await registry.execute(trimmed, commandDeps);
           if (result.output) {
@@ -556,6 +565,7 @@ export function launchREPL(deps: REPLDeps) {
         sessionTitle: sessionTitleRef.current,
         activeSkills: activeSkillsRef.current,
         turnCount,
+        permissionMode,
       }),
       React.createElement(Divider),
       scrollHint,
