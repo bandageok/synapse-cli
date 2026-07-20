@@ -2,6 +2,14 @@
 
 This roadmap records intended direction, not a release promise. Work moves into a version only after its behavior and validation plan are clear.
 
+## Shipped in v0.3.2
+
+- Replaced provenance-unclear memory and Vim modules with documented local contracts
+- Removed unused memory prompt and session-index code
+- Made memory maintenance target the actual root index with atomic state and lease handling
+- Removed executable `HEARTBEAT.md` tasks so background work cannot bypass tool authorization
+- Added a provenance ADR, project case study, and interview preparation guide
+
 ## Shipped in v0.3.0
 
 - Provider routing for OpenAI-compatible and Anthropic-compatible endpoints

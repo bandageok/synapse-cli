@@ -12,7 +12,7 @@ Short version:
 
 ## Proof points
 
-- 269 tests in the v0.3.1 suite
+- 260 passing tests in the v0.3.2 suite, plus two environment-gated skips locally
 - Node.js 18 and 22 CI on Windows and Linux
 - A Linux job that runs the strict sandbox and checks filesystem, network, and PID isolation
 - A deterministic offline demo that verifies local memory reaches the provider request
@@ -42,7 +42,7 @@ Body:
 >
 > The part I spent the most time on is the tool boundary. Writes, commands, network access, sensitive reads, and sub-agents require permission. Explicit workspace automation only runs shell commands through a working Bubblewrap or Docker backend and fails closed otherwise.
 >
-> v0.3.1 is on npm. The repository includes 269 tests, Windows/Linux CI, adversarial security tests, and a deterministic offline demo that checks whether project memory reaches the provider request.
+> v0.3.2 is on npm. The repository includes 260 passing tests, Windows/Linux CI, adversarial security tests, and a deterministic offline demo that checks whether project memory reaches the provider request.
 >
 > I would value feedback on provider compatibility, onboarding friction, and whether the memory model is useful in real repositories.
 
@@ -72,7 +72,7 @@ Body:
 >
 > Synapse 把项目上下文保存在本地文件中，Provider 则通过协议、BaseURL、模型和密钥环境变量独立配置。写文件、Shell、网络、敏感读取和子 Agent 都经过权限层；明确开启工作区自动执行后，如果 Bubblewrap 或 Docker 隔离不可用，命令会被拒绝，不会静默回退到宿主 Shell。
 >
-> README 中的离线演示运行真实 CLI，并验证本地记忆确实进入 Provider 请求。v0.3.1 目前有 269 项测试和 Windows/Linux CI。我更需要真实的安装失败、Provider 兼容性问题和工作流反馈，而不是单纯的 star。
+> README 中的离线演示运行真实 CLI，并验证本地记忆确实进入 Provider 请求。v0.3.2 目前有 260 项测试通过和 Windows/Linux CI。我更需要真实的安装失败、Provider 兼容性问题和工作流反馈，而不是单纯的 star。
 
 ## Launch sequence
 
@@ -90,9 +90,9 @@ Do not publish every draft at once. Each community should get a native post and 
 Use a different `utm_source` value for every post:
 
 ```text
-https://github.com/bandageok/synapse-cli?utm_source=hackernews&utm_medium=community&utm_campaign=v0_3_1_launch
-https://github.com/bandageok/synapse-cli?utm_source=reddit&utm_medium=community&utm_campaign=v0_3_1_launch
-https://github.com/bandageok/synapse-cli?utm_source=v2ex&utm_medium=community&utm_campaign=v0_3_1_launch
+https://github.com/bandageok/synapse-cli?utm_source=hackernews&utm_medium=community&utm_campaign=v0_3_2_launch
+https://github.com/bandageok/synapse-cli?utm_source=reddit&utm_medium=community&utm_campaign=v0_3_2_launch
+https://github.com/bandageok/synapse-cli?utm_source=v2ex&utm_medium=community&utm_campaign=v0_3_2_launch
 ```
 
 GitHub may not expose full UTM reporting in repository traffic. Keep the tags anyway so external analytics and copied links stay distinguishable.

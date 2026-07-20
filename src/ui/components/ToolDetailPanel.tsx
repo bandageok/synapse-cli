@@ -1,5 +1,5 @@
 // src/ui/components/ToolDetailPanel.tsx
-// 工具展开/折叠面板 -- 对标 Claude Code 的工具调用详情
+// Expandable tool-call details for the Synapse terminal timeline.
 import React, { useState } from 'react';
 import { Text, Box } from 'ink';
 

@@ -1,19 +1,6 @@
-/**
- * Vim Mode State Machine Types (Synapse MVP)
- *
- * Simplified from Claude Code's vim system.
- * Core: INSERT/NORMAL mode, basic motions, operators, dot-repeat.
- */
-
-// ============================================================================
-// Core Types
-// ============================================================================
+/** State and command vocabulary for Synapse's prompt-line Vim mode. */
 
 export type Operator = 'delete' | 'change' | 'yank';
-
-// ============================================================================
-// State Machine Types
-// ============================================================================
 
 export type VimState =
   | { mode: 'INSERT'; insertedText: string }
@@ -37,10 +24,6 @@ export type RecordedChange =
   | { type: 'x'; count: number }
   | { type: 'openLine'; direction: 'above' | 'below' };
 
-// ============================================================================
-// Key Groups
-// ============================================================================
-
 export const OPERATORS = {
   d: 'delete',
   c: 'change',
@@ -48,7 +31,7 @@ export const OPERATORS = {
 } as const satisfies Record<string, Operator>;
 
 export function isOperatorKey(key: string): key is keyof typeof OPERATORS {
-  return key in OPERATORS;
+  return Object.prototype.hasOwnProperty.call(OPERATORS, key);
 }
 
 export const SIMPLE_MOTIONS = new Set([
@@ -57,11 +40,7 @@ export const SIMPLE_MOTIONS = new Set([
   '0', '^', '$',
 ]);
 
-export const MAX_VIM_COUNT = 10000;
-
-// ============================================================================
-// State Factories
-// ============================================================================
+export const MAX_VIM_COUNT = 10_000;
 
 export function createInitialVimState(): VimState {
   return { mode: 'INSERT', insertedText: '' };

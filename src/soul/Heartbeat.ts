@@ -1,168 +1,129 @@
 // src/soul/Heartbeat.ts
-// 定时任务引擎 — 借鉴 OpenClaw HEARTBEAT.md 驱动模式
+// In-process maintenance scheduler. It never executes commands from user files.
+
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { execSync } from 'child_process';
-import type { Dream, DreamResult } from './Dream.js';
+import type {
+  MemoryMaintenance,
+  MemoryMaintenanceResult,
+} from './MemoryMaintenance.js';
 import { Logger } from '../core/Logger.js';
 
 export interface HeartbeatTask {
   name: string;
-  command: string;
-  condition: (output: string) => boolean;
-  action: (output: string) => void;
   intervalMs: number;
   lastRun: number;
 }
 
+interface ScheduledTask extends HeartbeatTask {
+  run: () => void;
+}
+
 export class Heartbeat {
-  private tasks: HeartbeatTask[] = [];
+  private tasks: ScheduledTask[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
-  private readonly defaultInterval = 5 * 60 * 1000; // 5 minutes
-  private dream: Dream | null = null;
-  private memoryExtractor: { extract: () => Promise<void> } | null = null;
+  private memoryMaintenance: MemoryMaintenance | null = null;
   private logger: Logger;
 
   constructor(private dataDir: string) {
     this.logger = new Logger({ dataDir, level: 'info' });
     this.loadBuiltinTasks();
-    this.loadHeartbeatMd();
   }
 
-  /** 设置 Dream 实例（可选） */
-  setDream(dream: Dream): void {
-    this.dream = dream;
-  }
-
-  /** 设置 MemoryExtractor 实例（可选） */
-  setMemoryExtractor(extractor: { extract: () => Promise<void> }): void {
-    this.memoryExtractor = extractor;
+  setMemoryMaintenance(memoryMaintenance: MemoryMaintenance): void {
+    this.memoryMaintenance = memoryMaintenance;
   }
 
   private loadBuiltinTasks(): void {
-    // 内置任务1: MEMORY.md 归档检查
     this.tasks.push({
-      name: 'memory-archive',
-      command: `wc -l < "${join(this.dataDir, 'MEMORY.md')}"`,
-      condition: (output) => {
-        const lines = parseInt(output.trim(), 10);
-        return !isNaN(lines) && lines > 200;
-      },
-      action: () => {
-        // Archive overflow — delegated to MemoryManager
-        this.logger.info('[Heartbeat] MEMORY.md exceeds 200 lines, archiving...');
-      },
-      intervalMs: 24 * 60 * 60 * 1000, // daily
+      name: 'memory-limit-observer',
+      intervalMs: 24 * 60 * 60 * 1000,
       lastRun: 0,
+      run: () => {
+        const memoryPath = join(this.dataDir, 'MEMORY.md');
+        if (!existsSync(memoryPath)) return;
+        const lineCount = readFileSync(memoryPath, 'utf-8').split('\n').length;
+        if (lineCount > 200) {
+          this.logger.warn(
+            `[Heartbeat] MEMORY.md has ${lineCount} lines; run synapse memory prune before adding more entries`,
+          );
+        }
+      },
     });
 
-    // 内置任务2: 会话日志清理 (30天以上)
     this.tasks.push({
-      name: 'session-cleanup',
-      command: process.platform === 'win32'
-        ? `powershell -Command "Get-ChildItem '${join(this.dataDir, 'sessions')}' -Filter *.json | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } | Measure-Object | Select-Object -ExpandProperty Count"`
-        : `find "${join(this.dataDir, 'sessions')}" -name "*.json" -mtime +30 | wc -l`,
-      condition: (output) => parseInt(output.trim(), 10) > 0,
-      action: (output) => {
-        this.logger.info(`[Heartbeat] ${output.trim()} old sessions found for cleanup`);
-      },
-      intervalMs: 7 * 24 * 60 * 60 * 1000, // weekly
+      name: 'session-retention-observer',
+      intervalMs: 7 * 24 * 60 * 60 * 1000,
       lastRun: 0,
+      run: () => {
+        const sessionsDir = join(this.dataDir, 'sessions');
+        if (!existsSync(sessionsDir)) return;
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const oldSessionCount = readdirSync(sessionsDir)
+          .filter(file => file.endsWith('.json'))
+          .filter(file => {
+            try {
+              return statSync(join(sessionsDir, file)).mtimeMs < cutoff;
+            } catch {
+              return false;
+            }
+          }).length;
+        if (oldSessionCount > 0) {
+          this.logger.info(
+            `[Heartbeat] ${oldSessionCount} session files are older than 30 days; review them before manual removal`,
+          );
+        }
+      },
     });
-  }
-
-  private loadHeartbeatMd(): void {
-    const heartbeatPath = join(this.dataDir, 'HEARTBEAT.md');
-    if (!existsSync(heartbeatPath)) return;
-
-    const content = readFileSync(heartbeatPath, 'utf-8');
-    // Parse tasks from markdown sections
-    const sections = content.split(/^## /m).filter(Boolean);
-
-    for (const section of sections) {
-      const lines = section.trim().split('\n');
-      const name = lines[0].trim();
-      const body = lines.slice(1).join('\n');
-
-      // Extract command from code block
-      const cmdMatch = body.match(/```(?:bash|powershell|sh)?\n([\s\S]*?)```/);
-      if (cmdMatch) {
-        this.tasks.push({
-          name,
-          command: cmdMatch[1].trim(),
-          condition: (output) => output.trim().length > 0,
-          action: (output) => {
-            this.logger.info(`[Heartbeat:${name}] ${output.trim()}`);
-          },
-          intervalMs: this.defaultInterval,
-          lastRun: 0,
-        });
-      }
-    }
   }
 
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => this.tick(), 60_000); // check every minute
-    this.logger.info(`[Heartbeat] Started with ${this.tasks.length} tasks`);
+    this.timer = setInterval(() => {
+      void this.runOnce();
+    }, 60_000);
+    this.logger.info(`[Heartbeat] Started with ${this.tasks.length} in-process tasks`);
   }
 
   stop(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
+    if (!this.timer) return;
+    clearInterval(this.timer);
+    this.timer = null;
   }
 
-  private tick(): void {
-    const now = Date.now();
+  /** Run due maintenance checks without invoking a host shell. */
+  async runOnce(now = Date.now()): Promise<void> {
     for (const task of this.tasks) {
       if (now - task.lastRun < task.intervalMs) continue;
       task.lastRun = now;
       try {
-        const output = execSync(task.command, {
-          encoding: 'utf-8',
-          timeout: 10_000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        });
-        if (task.condition(output)) {
-          task.action(output);
-        }
-      } catch {
-        // silently skip failed tasks
+        task.run();
+      } catch (error: unknown) {
+        this.logger.warn(`[Heartbeat] ${task.name} failed: ${toErrorMessage(error)}`);
       }
     }
 
-    // Dream 整合检查
-    if (this.dream && this.dream.shouldTrigger()) {
-      this.logger.info('[Heartbeat] Dream consolidation triggered');
-      this.dream.run().then((result: DreamResult) => {
+    if (this.memoryMaintenance && this.memoryMaintenance.shouldTrigger()) {
+      this.logger.info('[Heartbeat] Memory maintenance triggered');
+      try {
+        const result: MemoryMaintenanceResult = await this.memoryMaintenance.run();
         if (result.success) {
-          this.logger.info(`[Heartbeat] Dream completed: ${result.summary}`);
+          this.logger.info(`[Heartbeat] Memory maintenance completed: ${result.summary}`);
+        } else {
+          this.logger.warn(`[Heartbeat] Memory maintenance skipped: ${result.error ?? 'unknown error'}`);
         }
-      }).catch(() => {});
-    }
-
-    // MemoryExtractor 检查（每天一次）
-    if (this.memoryExtractor) {
-      const sessionsDir = join(this.dataDir, 'sessions');
-      if (existsSync(sessionsDir)) {
-        const files = readdirSync(sessionsDir).filter((f: string) => f.endsWith('.json'));
-        if (files.length > 0) {
-          // 检查最近的会话是否已提取记忆
-          const latestFile = files.sort().pop();
-          const latestPath = join(sessionsDir, latestFile!);
-          const stats = statSync(latestPath);
-          const hoursSince = (Date.now() - stats.mtimeMs) / 3_600_000;
-          if (hoursSince < 24) {
-            this.logger.info(`[Heartbeat] Recent session found (${latestFile}), memory extraction available`);
-          }
-        }
+      } catch (error: unknown) {
+        this.logger.warn(`[Heartbeat] Memory maintenance failed: ${toErrorMessage(error)}`);
       }
     }
   }
 
-  getTasks(): { name: string; intervalMs: number; lastRun: number }[] {
-    return this.tasks.map(t => ({ name: t.name, intervalMs: t.intervalMs, lastRun: t.lastRun }));
+  getTasks(): HeartbeatTask[] {
+    return this.tasks.map(({ name, intervalMs, lastRun }) => ({ name, intervalMs, lastRun }));
   }
+
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

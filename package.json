@@ -1,6 +1,6 @@
 {
   "name": "@bandageok/synapse-cli",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Local-first coding agent CLI with persistent project memory, multi-provider LLM support, and fail-closed tool isolation",
   "type": "module",
   "main": "./dist/cli.mjs",
@@ -76,7 +76,11 @@
     "docs/CONFIG.md",
     "docs/PROVIDER-MEMORY-CLI.md",
     "docs/ROADMAP.md",
-    "docs/SYNAPSE-AUDIT-2026-07-19.md"
+    "docs/SYNAPSE-AUDIT-2026-07-19.md",
+    "docs/CASE-STUDY.zh-CN.md",
+    "docs/INTERVIEW-GUIDE.zh-CN.md",
+    "docs/assets/demo.gif",
+    "examples/demo"
   ],
   "engines": {
     "node": ">=18"

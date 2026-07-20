@@ -1,5 +1,5 @@
 // src/ui/Onboarding.tsx
-// Synapse Onboarding v3 — 对标 Claude Code 首次启动流程
+// Synapse onboarding for provider, model, and credential setup.
 // 步骤: Welcome → Provider/Key → Theme → Security → Terminal
 // 特点: 自动检测已有配置, 多步对话框, 安全提示, 主题选择
 import React, { useState, useCallback, useEffect } from 'react';
