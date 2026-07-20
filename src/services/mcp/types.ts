@@ -4,6 +4,7 @@ export interface MCPServerConfig {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  cwd?: string;
 }
 
 export interface MCPTool {
@@ -46,4 +47,13 @@ export interface MCPServerCapabilities {
   prompts?: Record<string, unknown>;
   sampling?: Record<string, unknown>;
   logging?: Record<string, unknown>;
+}
+
+export interface MCPCapabilityManifest {
+  capabilities: string[];
+  capabilityDetails?: Record<string, unknown>;
+  tools: string[];
+  toolSchemas?: Record<string, string>;
+  resources: string[];
+  prompts: string[];
 }

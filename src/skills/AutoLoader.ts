@@ -33,6 +33,8 @@ export class SkillAutoLoader {
   }
 
   discover(cwd?: string): LoadedSkill[] {
+    this.skills.clear();
+    this.activeSkills.clear();
     const searchDirs: string[] = [
       join(this.dataDir, 'skills'),
     ];
@@ -68,7 +70,7 @@ export class SkillAutoLoader {
         if (existsSync(manifestPath)) {
           try {
             const parsed = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-            manifest = { ...manifest, ...parsed };
+            manifest = { ...manifest, ...parsed, name: entry.name };
           } catch {
             // use defaults
           }
@@ -106,7 +108,7 @@ export class SkillAutoLoader {
 
     if (cwd) {
       for (const [name, skill] of this.skills) {
-        if (skill.manifest.paths) {
+      if (skill.manifest.paths) {
           for (const p of skill.manifest.paths) {
             const resolved = resolve(cwd, p);
             if (this.pathStartsWith(cwd, resolved)) {
@@ -164,6 +166,6 @@ export class SkillAutoLoader {
   private pathStartsWith(dir: string, prefix: string): boolean {
     const n1 = dir.replace(/\\/g, '/').toLowerCase();
     const n2 = prefix.replace(/\\/g, '/').toLowerCase();
-    return n1.startsWith(n2);
+    return n1 === n2 || n1.startsWith(n2.endsWith('/') ? n2 : `${n2}/`);
   }
 }

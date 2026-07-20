@@ -11,7 +11,9 @@ describe('ToolRegistry', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    registry = new ToolRegistry();
+    registry = new ToolRegistry({
+      permissions: { allowedTools: [], deniedTools: [], askForTools: [] },
+    });
     tmpDir = mkdtempSync(join(tmpdir(), 'synapse-perm-'));
   });
 

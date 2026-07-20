@@ -21,10 +21,20 @@ export function loadPermissions(dataDir: string): PermissionConfig {
     return DEFAULT_CONFIG;
   }
   try {
-    return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(path, 'utf-8')) };
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<PermissionConfig>;
+    return {
+      allowedTools: stringArray(parsed.allowedTools, DEFAULT_CONFIG.allowedTools),
+      deniedTools: stringArray(parsed.deniedTools, DEFAULT_CONFIG.deniedTools),
+      askForTools: stringArray(parsed.askForTools, DEFAULT_CONFIG.askForTools),
+    };
   } catch {
     return DEFAULT_CONFIG;
   }
+}
+
+function stringArray(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) return [...fallback];
+  return [...new Set(value)];
 }
 
 export function savePermissions(dataDir: string, config: PermissionConfig): void {

@@ -1,190 +1,113 @@
-// src/tools/BashTool.ts
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import { isAbsolute, relative, resolve } from 'path';
 import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
-
-// ============================================================================
-// 危险命令黑名单
-// ============================================================================
+import { createSandboxProcess, type SandboxBackend } from '../security/Sandbox.js';
 
 const DANGEROUS_PATTERNS = [
-  /\brm\s+.*-rf?\s+[\/\\]/,           // rm -rf /
-  /\bdd\s+.*of=\/dev\//,              // dd of=/dev/...
-  /\bmkfs\b/,                         // mkfs
-  /\bfdisk\b/,                        // fdisk
-  /\bformat\b/,                       // format
-  /\bshutdown\b/,                     // shutdown
-  /\breboot\b/,                       // reboot
-  /\bhalt\b/,                         // halt
-  /\binit\s+0\b/,                     // init 0
-  /\binit\s+6\b/,                     // init 6
-  /\bkill\s+-9\s+1\b/,               // kill -9 1
-  /\bkillall\b/,                      // killall
-  /\bpkill\b/,                        // pkill
-  /\bchmod\s+.*777\b/,               // chmod 777
-  /\bchown\s+.*root\b/,              // chown root
-  /\bcurl\s+.*\|\s*bash/,            // curl | bash
-  /\bwget\s+.*\|\s*bash/,            // wget | bash
-  /\bnc\s+-l\b/,                      // nc -l (netcat listener)
-  /\bncat\s+-l\b/,                    // ncat -l
-  /\bsocat\b/,                        // socat
-  /\biptables\b/,                     // iptables
-  /\bufw\b/,                          // ufw
-  /\bfirewall-cmd\b/,                 // firewall-cmd
-  /\bsystemctl\s+(stop|disable)\b/,   // systemctl stop/disable
-  /\bservice\s+\w+\s+stop\b/,         // service stop
+  /\brm\s+.*-rf?\s+[\/\\]/, /\bdd\s+.*of=\/dev\//, /\bmkfs\b/, /\bfdisk\b/, /\bformat\b/,
+  /\bshutdown\b/, /\breboot\b/, /\bhalt\b/, /\binit\s+[06]\b/, /\bkill\s+-9\s+1\b/,
+  /\bkillall\b/, /\bpkill\b/, /\bchmod\s+.*777\b/, /\bchown\s+.*root\b/,
+  /\b(?:curl|wget)\s+.*\|\s*bash/, /\b(?:nc|ncat)\s+-l\b/, /\bsocat\b/,
+  /\biptables\b/, /\bufw\b/, /\bfirewall-cmd\b/, /\bsystemctl\s+(?:stop|disable)\b/,
+  /\bservice\s+\w+\s+stop\b/,
 ];
 
-// ============================================================================
-// 工作目录白名单（可配置）
-// ============================================================================
-
 export interface BashToolConfig {
-  /** 最大执行时间（毫秒） */
   timeout?: number;
-  /** 工作目录白名单（空 = 不限制） */
   allowedDirs?: string[];
-  /** 是否启用沙箱 */
   sandbox?: boolean;
-  /** 最大输出缓冲（字节） */
+  sandboxBackend?: 'auto' | SandboxBackend;
+  allowNetworkInSandbox?: boolean;
   maxBuffer?: number;
 }
 
-const DEFAULT_CONFIG: BashToolConfig = {
+const DEFAULT_CONFIG: Required<BashToolConfig> = {
   timeout: 30_000,
   allowedDirs: [],
   sandbox: false,
+  sandboxBackend: 'auto',
+  allowNetworkInSandbox: false,
   maxBuffer: 1024 * 1024,
 };
 
-// ============================================================================
-// 沙箱执行（macOS sandbox-exec / Linux seccomp）
-// ============================================================================
-
-function buildSandboxPolicy(cwd: string): string {
-  // macOS sandbox-exec policy
-  return `(version 1)
-(deny default)
-(allow file-read* (subpath "/"))
-(allow file-write* (subpath "${cwd}"))
-(allow file-write* (subpath "/tmp"))
-(allow process-exec)
-(allow process-fork)
-(allow network-outbound)
-(deny network*)`;
-}
-
-function executeSandboxed(command: string, cwd: string, timeout: number, maxBuffer: number): string {
-  if (process.platform === 'darwin') {
-    const policy = buildSandboxPolicy(cwd);
-    return execFileSync('sandbox-exec', ['-p', policy, 'sh', '-c', command], {
-      cwd,
-      timeout,
-      encoding: 'utf-8',
-      maxBuffer,
-    });
-  }
-  // Linux: fallback to normal exec (seccomp requires container)
-  return runShellCommand(command, cwd, timeout, maxBuffer);
-}
-
-function runShellCommand(command: string, cwd: string, timeout: number, maxBuffer: number): string {
-  const file = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh';
-  const args = process.platform === 'win32'
-    ? ['/d', '/s', '/c', command]
-    : ['-c', command];
-  return execFileSync(file, args, {
-    cwd,
-    timeout,
-    encoding: 'utf-8',
-    maxBuffer,
-  });
-}
-
-// ============================================================================
-// 危险命令检测
-// ============================================================================
-
-function isDangerous(command: string): { dangerous: boolean; reason?: string } {
-  for (const pattern of DANGEROUS_PATTERNS) {
-    if (pattern.test(command)) {
-      return { dangerous: true, reason: `Command matches dangerous pattern: ${pattern.source}` };
-    }
-  }
-  return { dangerous: false };
-}
-
-// ============================================================================
-// 工作目录检查
-// ============================================================================
-
-function isDirAllowed(cwd: string, allowedDirs: string[]): boolean {
-  if (allowedDirs.length === 0) return true;
-  const normalizedCwd = resolve(cwd);
-  return allowedDirs.some(dir => {
-    const normalizedDir = resolve(dir);
-    const rel = relative(normalizedDir, normalizedCwd);
-    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-  });
-}
-
-// ============================================================================
-// BashTool
-// ============================================================================
-
 export function createBashTool(userConfig: BashToolConfig = {}): ToolDef<{ command: string; timeout?: number }> {
   const config = { ...DEFAULT_CONFIG, ...userConfig };
-
   return {
     name: 'Bash',
-    description: 'Execute a shell command with safety checks',
+    description: config.sandbox
+      ? 'Execute a shell command in a strict workspace sandbox'
+      : 'Execute a shell command with safety checks and human approval',
     schema: {
       type: 'object',
       properties: {
-        command: { type: 'string', description: 'The command to execute' },
-        timeout: { type: 'number', description: 'Timeout in ms (default: 30000)' },
+        command: { type: 'string', minLength: 1, description: 'The command to execute' },
+        timeout: { type: 'integer', minimum: 100, maximum: 120_000, description: 'Timeout in milliseconds' },
       },
       required: ['command'],
     },
     permissions: 'execute',
+    autoApproveInWorkspace: config.sandbox,
     isEnabled: () => true,
-    execute: async (input, ctx: ToolContext): Promise<ToolResult> => {
-      // 1. 危险命令检查
-      const danger = isDangerous(input.command);
-      if (danger.dangerous) {
-        return {
-          output: `🚫 Blocked: ${danger.reason}\nThis command is blocked for safety. If you really need to run it, use a different approach.`,
-          isError: true,
-        };
-      }
+    execute: async (input, ctx): Promise<ToolResult> => {
+      const dangerous = DANGEROUS_PATTERNS.find(pattern => pattern.test(input.command));
+      if (dangerous) return { output: `Blocked: command matches dangerous pattern ${dangerous.source}`, isError: true };
 
-      // 2. 工作目录检查
-      if (!isDirAllowed(ctx.cwd, config.allowedDirs!)) {
-        return {
-          output: `🚫 Blocked: Working directory ${ctx.cwd} is not in the allowed list.`,
-          isError: true,
-        };
+      const allowedDirs = config.allowedDirs.length > 0 ? config.allowedDirs : (ctx.workspaceRoots ?? [ctx.cwd]);
+      if (!isDirAllowed(ctx.cwd, allowedDirs)) {
+        return { output: `Blocked: working directory ${ctx.cwd} is not in the allowed list.`, isError: true };
       }
-
-      // 3. 执行
-      const timeout = input.timeout ?? config.timeout!;
-      const maxBuffer = config.maxBuffer!;
+      const timeout = input.timeout ?? config.timeout;
+      if (!Number.isInteger(timeout) || timeout < 100 || timeout > 120_000) {
+        return { output: 'Error: timeout must be an integer between 100 and 120000 ms.', isError: true };
+      }
 
       try {
-        let output: string;
-        if (config.sandbox) {
-          output = executeSandboxed(input.command, ctx.cwd, timeout, maxBuffer);
-        } else {
-          output = runShellCommand(input.command, ctx.cwd, timeout, maxBuffer);
-        }
+        const spec = config.sandbox
+          ? createSandboxProcess(input.command, {
+              cwd: ctx.cwd,
+              workspaceRoots: allowedDirs,
+              network: config.allowNetworkInSandbox,
+              backend: config.sandboxBackend,
+            })
+          : hostShell(input.command);
+        const output = await runProcess(spec.file, spec.args, ctx, timeout, config.maxBuffer);
         return { output, isError: false };
-      } catch (err: unknown) {
-        const e = err as { stderr?: string; message?: string };
-        return { output: e.stderr || e.message || String(err), isError: true };
+      } catch (error) {
+        const detail = error as { stderr?: string; message?: string };
+        return { output: detail.stderr || detail.message || String(error), isError: true };
       }
     },
   };
 }
 
-// 默认实例（向后兼容）
+function hostShell(command: string): { file: string; args: string[] } {
+  return process.platform === 'win32'
+    ? { file: 'cmd.exe', args: ['/d', '/s', '/c', command] }
+    : { file: '/bin/sh', args: ['-c', command] };
+}
+
+function runProcess(file: string, args: string[], ctx: ToolContext, timeout: number, maxBuffer: number): Promise<string> {
+  return new Promise((resolvePromise, reject) => {
+    let child: ReturnType<typeof execFile>;
+    const onAbort = () => child.kill();
+    child = execFile(file, args, {
+      cwd: ctx.cwd, timeout, encoding: 'utf-8', maxBuffer, windowsHide: true,
+    }, (error, stdout, stderr) => {
+      ctx.abortSignal.removeEventListener('abort', onAbort);
+      if (error) reject(Object.assign(error, { stderr }));
+      else resolvePromise(stdout);
+    });
+    if (ctx.abortSignal.aborted) onAbort();
+    else ctx.abortSignal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function isDirAllowed(cwd: string, allowedDirs: string[]): boolean {
+  const normalizedCwd = resolve(cwd);
+  return allowedDirs.some(dir => {
+    const rel = relative(resolve(dir), normalizedCwd);
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+  });
+}
+
 export const BashTool = createBashTool();

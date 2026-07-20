@@ -19,14 +19,14 @@ import { Dream } from '../soul/Dream.js';
 import { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
 import { SelfImprovement } from '../soul/SelfImprovement.js';
 import { Logger } from '../core/Logger.js';
-import { BashTool } from '../tools/BashTool.js';
+import { createBashTool } from '../tools/BashTool.js';
 import { FileReadTool } from '../tools/FileReadTool.js';
 import { FileEditTool } from '../tools/FileEditTool.js';
 import { FileWriteTool } from '../tools/FileWriteTool.js';
 import { GlobTool } from '../tools/GlobTool.js';
 import { GrepTool } from '../tools/GrepTool.js';
 import { WebSearchTool } from '../tools/WebSearchTool.js';
-import { WebFetchTool } from '../tools/WebFetchTool.js';
+import { createWebFetchTool } from '../tools/WebFetchTool.js';
 import { TodoWriteTool } from '../tools/TodoWriteTool.js';
 import { AskUserQuestionTool } from '../tools/AskUserQuestionTool.js';
 import { SkillTool } from '../tools/SkillTool.js';
@@ -42,13 +42,15 @@ import { createTaskTool } from '../tools/TaskTool.js';
 import { MCPClient } from '../services/mcp/client.js';
 import { PluginRegistry } from '../plugins/registry.js';
 
-export async function init(opts: { model?: string; addDir?: string[] }) {
+export async function init(opts: { model?: string; addDir?: string[]; permissionMode?: 'ask' | 'workspace-auto'; sandboxBackend?: 'auto' | 'bubblewrap' | 'docker' }) {
   const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
   const provider = createProvider(opts.model);
-  const tools = new ToolRegistry();
+  const permissionMode = opts.permissionMode ?? 'ask';
+  const tools = new ToolRegistry({ permissionMode });
   tools.initPermissions(dataDir);
+  tools.setWorkspaceRoots([process.cwd(), ...(opts.addDir ?? [])]);
   const logger = new Logger({ dataDir });
   const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider: provider ?? undefined });
   const hooks = new HookSystem();
@@ -57,8 +59,9 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
 
   // 基础工具（无依赖）
   const basicTools = [
-    BashTool, FileReadTool, FileEditTool, FileWriteTool,
-    GlobTool, GrepTool, WebSearchTool, WebFetchTool,
+    createBashTool({ sandbox: permissionMode === 'workspace-auto', sandboxBackend: opts.sandboxBackend }),
+    FileReadTool, FileEditTool, FileWriteTool,
+    GlobTool, GrepTool, WebSearchTool, createWebFetchTool(dataDir),
     TodoWriteTool, AskUserQuestionTool, SkillTool,
     NotebookReadTool, NotebookEditTool,
     GitStatusTool, GitDiffTool, GitCommitTool,
@@ -74,7 +77,7 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
 
   const skillLoader = new SkillAutoLoader(dataDir);
   // Auto-discover skills in workspace
-  skillLoader.rebuild();
+  skillLoader.rebuild(process.cwd());
   // Auto-match based on current working directory
   skillLoader.autoMatch('', process.cwd());
 
@@ -85,7 +88,7 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
   tools.register(taskTool as ToolDef);
 
   // MCP 集成（并行连接）
-  const mcpClient = new MCPClient();
+  const mcpClient = new MCPClient(dataDir);
   const mcpServers = mcpClient.loadConfig(dataDir);
   await Promise.allSettled(mcpServers.map(async (serverConfig) => {
     const mcpTools = await mcpClient.connect(serverConfig);
@@ -93,6 +96,7 @@ export async function init(opts: { model?: string; addDir?: string[] }) {
       tools.register(mcpClient.wrapAsToolDef(mcpTool, serverConfig.name));
     }
   }));
+  for (const diagnostic of mcpClient.getDiagnostics()) logger.warn(diagnostic);
 
   // Plugin 集成
   const pluginRegistry = new PluginRegistry();

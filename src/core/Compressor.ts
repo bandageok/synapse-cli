@@ -1,42 +1,37 @@
-// src/core/Compressor.ts
-// 4级压缩策略 → 7级压缩策略（对标 Claude Code）
-import type { Message, CompressionResult, Provider } from './types.js';
-import { isTextBlock, isStreamChunkDelta, isTextDelta } from './types.js';
+import type { CompressionQuality, CompressionResult, Message, Provider } from './types.js';
+import { isStreamChunkDelta, isTextBlock, isTextDelta } from './types.js';
+import { messageText, TokenCounter, type TokenCount } from './TokenCounter.js';
 
 export interface CompressorConfig {
   contextWindow: number;
   model: string;
   provider?: Provider;
+  qualityFloor?: number;
 }
 
-/**
- * 7级压缩策略（对标 Claude Code）：
- * 0. idle — 无压力
- * 1. warning — 接近阈值，提示用户
- * 2. apiMicrocompact — LLM API 微压缩
- * 3. reactiveCompact — 工具调用后压缩
- * 4. autoCompact — 自动压缩
- * 5. aggressiveCompact — 激进压缩
- * 6. snip — 最后手段：截断旧消息
- *
- * v3 之前只有 4 级（warning, microcompact, autoCompact, reactiveCompact）
- * 新增：aggressiveCompact + snip（对标 Claude Code 的 7 级防御）
- */
+export interface CompressionAccounting {
+  system?: string[];
+  tools?: Record<string, unknown>[];
+}
+
 export class Compressor {
   private autoCompactThreshold: number;
   private aggressiveCompactThreshold: number;
   private snipThreshold: number;
   private consecutiveFailures = 0;
-  private readonly MAX_CONSECUTIVE_FAILURES = 3;
-  private provider?: Provider;
+  private readonly maxConsecutiveFailures = 3;
+  private readonly provider?: Provider;
+  private readonly tokenCounter: TokenCounter;
+  private readonly qualityFloor: number;
 
   constructor(config: CompressorConfig) {
-    // Claude Code: contextWindow - 20_000 (reserved for summary output)
     const effectiveWindow = config.contextWindow - 20_000;
     this.autoCompactThreshold = effectiveWindow - 13_000;
     this.aggressiveCompactThreshold = effectiveWindow - 5_000;
     this.snipThreshold = effectiveWindow - 1_000;
     this.provider = config.provider;
+    this.tokenCounter = new TokenCounter(config.model, config.provider);
+    this.qualityFloor = config.qualityFloor ?? 0.72;
   }
 
   getThresholds() {
@@ -47,201 +42,198 @@ export class Compressor {
     };
   }
 
-  async checkAndCompress(messages: Message[]): Promise<CompressionResult> {
-    const tokenUsage = this.estimateTokens(messages);
-
-    if (tokenUsage >= this.snipThreshold) {
-      // Level 6: SNIP — 最后手段：截断旧消息
-      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
-        return { compressed: false };
-      }
-      return this.snipOldMessages(messages);
-    }
-
-    if (tokenUsage >= this.aggressiveCompactThreshold) {
-      // Level 5: AGGRESSIVE — 激进压缩：保留最近 10 轮对话
-      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
-        return { compressed: false };
-      }
-      return this.aggressiveCompact(messages);
-    }
-
-    if (tokenUsage >= this.autoCompactThreshold) {
-      // Level 4: AUTO — 自动压缩
-      if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
-        return { compressed: false };
-      }
-      return this.autoCompact(messages);
-    }
-
+  async checkAndCompress(messages: Message[], signal?: AbortSignal, accounting: CompressionAccounting = {}): Promise<CompressionResult> {
+    const approximate = this.tokenCounter.estimate(messages, accounting.system ?? [], accounting.tools ?? []);
+    const firstThreshold = Math.min(this.autoCompactThreshold, this.aggressiveCompactThreshold, this.snipThreshold);
+    if (approximate < firstThreshold * 0.75) return { compressed: false };
+    const count = await this.tokenCounter.count(messages, accounting.system ?? [], accounting.tools ?? [], signal);
+    if (this.consecutiveFailures >= this.maxConsecutiveFailures) return { compressed: false };
+    if (count.tokens >= this.snipThreshold) return this.snipOldMessages(messages, count, signal, accounting);
+    if (count.tokens >= this.aggressiveCompactThreshold) return this.aggressiveCompact(messages, count, signal, accounting);
+    if (count.tokens >= this.autoCompactThreshold) return this.autoCompact(messages, count, signal, accounting);
     return { compressed: false };
-  }
-
-  private async autoCompact(messages: Message[]): Promise<CompressionResult> {
-    try {
-      const stripped = Compressor.stripImages(messages);
-      const tokensBefore = this.estimateTokens(stripped);
-
-      let summary: string;
-      if (this.provider) {
-        summary = await this.buildLlmSummary(stripped);
-      } else {
-        summary = this.buildSummary(stripped);
-      }
-
-      messages.length = 0;
-      messages.push(
-        { role: 'user', content: `[Conversation summary]\n${summary}` },
-        { role: 'assistant', content: 'Understood, continuing from summary.' },
-      );
-
-      const tokensAfter = this.estimateTokens(messages);
-      this.consecutiveFailures = 0;
-      return { compressed: true, stats: { tokensBefore, tokensAfter } };
-    } catch {
-      this.consecutiveFailures++;
-      return { compressed: false };
-    }
-  }
-
-  private async aggressiveCompact(messages: Message[]): Promise<CompressionResult> {
-    try {
-      const stripped = Compressor.stripImages(messages);
-      const tokensBefore = this.estimateTokens(stripped);
-
-      // 保留最近 20 条消息
-      const recent = stripped.slice(-20);
-      let summary: string;
-      const older = stripped.slice(0, -20);
-      if (older.length > 0 && this.provider) {
-        summary = await this.buildLlmSummary(older);
-      } else {
-        summary = this.buildSummary(older);
-      }
-
-      messages.length = 0;
-      messages.push(
-        { role: 'user', content: `[Conversation history summary]\n${summary}` },
-        { role: 'assistant', content: 'Understood, continuing from the summary.' },
-        ...recent,
-      );
-
-      const tokensAfter = this.estimateTokens(messages);
-      this.consecutiveFailures = 0;
-      return { compressed: true, stats: { tokensBefore, tokensAfter } };
-    } catch {
-      this.consecutiveFailures++;
-      return { compressed: false };
-    }
-  }
-
-  private snipOldMessages(messages: Message[]): Promise<CompressionResult> {
-    try {
-      const tokensBefore = this.estimateTokens(messages);
-      const stripped = Compressor.stripImages(messages);
-
-      // 保留最近 5 条消息
-      const recent = stripped.slice(-5);
-
-      messages.length = 0;
-      messages.push(...recent);
-
-      const tokensAfter = this.estimateTokens(messages);
-      this.consecutiveFailures = 0;
-      return Promise.resolve({ compressed: true, stats: { tokensBefore, tokensAfter } });
-    } catch {
-      this.consecutiveFailures++;
-      return Promise.resolve({ compressed: false });
-    }
-  }
-
-  static stripImages(messages: Message[]): Message[] {
-    return messages.map(msg => {
-      if (typeof msg.content === 'string') return msg;
-      const filtered = msg.content.filter(
-        block => block.type !== 'image'
-      );
-      return { ...msg, content: filtered };
-    });
   }
 
   estimateTokens(messages: Message[]): number {
     let total = 0;
-    for (const msg of messages) {
-      if (typeof msg.content === 'string') {
-        total += this.estimateTextTokens(msg.content);
-      } else {
-        for (const block of msg.content) {
-          if (block.type === 'text') total += this.estimateTextTokens(block.text);
-          else if (block.type === 'tool_use') total += this.estimateTextTokens(JSON.stringify(block.input));
-          else if (block.type === 'tool_result') total += this.estimateTextTokens(block.content);
-        }
+    for (const message of messages) {
+      if (typeof message.content === 'string') total += this.estimateTextTokens(message.content);
+      else for (const block of message.content) {
+        if (block.type === 'text') total += this.estimateTextTokens(block.text);
+        else if (block.type === 'tool_use') total += this.estimateTextTokens(`${block.id}${block.name}${JSON.stringify(block.input)}`);
+        else if (block.type === 'tool_result') total += this.estimateTextTokens(`${block.tool_use_id}${block.content}`);
       }
     }
     return Math.round(total);
   }
 
-  private estimateTextTokens(text: string): number {
-    let cjkCount = 0;
-    let otherCount = 0;
-    for (const char of text) {
-      const code = char.charCodeAt(0);
-      if (
-        (code >= 0x4E00 && code <= 0x9FFF) ||
-        (code >= 0x3400 && code <= 0x4DBF) ||
-        (code >= 0x3040 && code <= 0x309F) ||
-        (code >= 0x30A0 && code <= 0x30FF) ||
-        (code >= 0xAC00 && code <= 0xD7AF)
-      ) {
-        cjkCount++;
-      } else {
-        otherCount++;
-      }
+  static stripImages(messages: Message[]): Message[] {
+    return messages.map(message => typeof message.content === 'string'
+      ? { ...message }
+      : { ...message, content: message.content.filter(block => block.type !== 'image') });
+  }
+
+  private async autoCompact(messages: Message[], before: TokenCount, signal?: AbortSignal, accounting: CompressionAccounting = {}): Promise<CompressionResult> {
+    try {
+      const source = Compressor.stripImages(messages);
+      const summary = this.provider ? await this.buildLlmSummary(source, signal) : this.buildSummary(source);
+      const candidate: Message[] = [
+        { role: 'user', content: `[Conversation summary]\n${summary}` },
+        { role: 'assistant', content: 'Understood, continuing from summary.' },
+      ];
+      return this.commitCandidate(messages, source, candidate, before, signal, accounting);
+    } catch {
+      this.consecutiveFailures++;
+      return { compressed: false };
     }
-    return cjkCount / 1.5 + otherCount / 4;
+  }
+
+  private async aggressiveCompact(messages: Message[], before: TokenCount, signal?: AbortSignal, accounting: CompressionAccounting = {}): Promise<CompressionResult> {
+    try {
+      const source = Compressor.stripImages(messages);
+      const recent = coherentTail(source, 20);
+      const older = source.slice(0, source.length - recent.length);
+      const summary = older.length > 0 && this.provider ? await this.buildLlmSummary(older, signal) : this.buildSummary(older);
+      const candidate: Message[] = [
+        { role: 'user', content: `[Conversation history summary]\n${summary}` },
+        { role: 'assistant', content: 'Understood, continuing from the summary.' },
+        ...recent,
+      ];
+      return this.commitCandidate(messages, source, candidate, before, signal, accounting);
+    } catch {
+      this.consecutiveFailures++;
+      return { compressed: false };
+    }
+  }
+
+  private async snipOldMessages(messages: Message[], before: TokenCount, signal?: AbortSignal, accounting: CompressionAccounting = {}): Promise<CompressionResult> {
+    try {
+      const source = Compressor.stripImages(messages);
+      const candidate = coherentTail(source, 5);
+      return this.commitCandidate(messages, source, candidate, before, signal, accounting);
+    } catch {
+      this.consecutiveFailures++;
+      return { compressed: false };
+    }
+  }
+
+  private async commitCandidate(messages: Message[], source: Message[], candidate: Message[], before: TokenCount, signal?: AbortSignal, accounting: CompressionAccounting = {}): Promise<CompressionResult> {
+    const quality = evaluateCompressionQuality(source, candidate);
+    if (quality.score < this.qualityFloor || quality.toolCallIntegrity < 1) {
+      this.consecutiveFailures++;
+      return { compressed: false };
+    }
+    const after = await this.tokenCounter.count(candidate, accounting.system ?? [], accounting.tools ?? [], signal);
+    if (after.tokens >= before.tokens) {
+      this.consecutiveFailures++;
+      return { compressed: false };
+    }
+    messages.splice(0, messages.length, ...candidate);
+    this.consecutiveFailures = 0;
+    return {
+      compressed: true,
+      stats: {
+        tokensBefore: before.tokens,
+        tokensAfter: after.tokens,
+        tokenMethod: before.method,
+        reductionRatio: 1 - after.tokens / Math.max(1, before.tokens),
+        quality,
+      },
+    };
+  }
+
+  private estimateTextTokens(text: string): number {
+    let cjk = 0;
+    let other = 0;
+    for (const char of text) {
+      const code = char.codePointAt(0) ?? 0;
+      if ((code >= 0x3400 && code <= 0x9fff) || (code >= 0x3040 && code <= 0x30ff) || (code >= 0xac00 && code <= 0xd7af)) cjk++;
+      else other++;
+    }
+    return cjk / 1.5 + other / 4;
   }
 
   private buildSummary(messages: Message[]): string {
-    const recent = messages.slice(-10);
-    return recent.map(m => {
-      const content = typeof m.content === 'string'
-        ? m.content.slice(0, 200)
-        : m.content
-            .filter(block => isTextBlock(block))
-            .map(b => b.text)
-            .join(' ')
-            .slice(0, 200);
-      return `${m.role}: ${content}`;
-    }).join('\n');
+    return messages.slice(-10).map(message => `${message.role}: ${messageText(message).slice(0, 500)}`).join('\n');
   }
 
-  private async buildLlmSummary(messages: Message[]): Promise<string> {
-    const transcript = messages.map(m => {
-      const content = typeof m.content === 'string'
-        ? m.content.slice(0, 500)
-        : m.content
-            .filter(block => isTextBlock(block))
-            .map(b => b.text)
-            .join(' ')
-            .slice(0, 500);
-      return `${m.role}: ${content}`;
-    }).join('\n');
-
+  private async buildLlmSummary(messages: Message[], signal?: AbortSignal): Promise<string> {
+    const transcript = messages.map(message => messageText(message).slice(0, 2_000)).join('\n');
+    const chunks: string[] = [];
     try {
-      const chunks: string[] = [];
       for await (const chunk of this.provider!.stream({
-        system: ['Summarize this conversation in under 300 words. Focus on: topics discussed, decisions made, tasks completed, and remaining work.'],
-        messages: [{ role: 'user', content: `Summarize:\n\n${transcript}` }],
+        system: ['Produce a factual continuation summary. Preserve exact paths, URLs, identifiers, decisions, constraints, failures, and remaining work.'],
+        messages: [{ role: 'user', content: `Summarize this transcript:\n\n${transcript}` }],
         tools: [],
+        signal,
       })) {
-        if (isStreamChunkDelta(chunk) && isTextDelta(chunk.delta)) {
-          chunks.push(chunk.delta.text);
-        }
+        if (isStreamChunkDelta(chunk) && isTextDelta(chunk.delta)) chunks.push(chunk.delta.text);
       }
-      const summary = chunks.join('').trim();
-      return summary || this.buildSummary(messages);
+      return chunks.join('').trim() || this.buildSummary(messages);
     } catch {
       return this.buildSummary(messages);
     }
   }
+}
+
+export function evaluateCompressionQuality(before: Message[], after: Message[]): CompressionQuality {
+  const beforeText = before.map(messageText).join('\n');
+  const afterText = after.map(messageText).join('\n');
+  const facts = extractProtectedFacts(beforeText);
+  const retainedFacts = facts.filter(fact => afterText.includes(fact)).length;
+  const protectedFactRetention = facts.length === 0 ? 1 : retainedFacts / facts.length;
+  const recent = before.slice(-Math.min(5, before.length)).map(message => signature(messageText(message)));
+  const recentMessageRetention = recent.length === 0 ? 1 : recent.filter(item => afterText.includes(item)).length / recent.length;
+  const toolCallIntegrity = calculateToolIntegrity(after);
+  const score = protectedFactRetention * 0.55 + recentMessageRetention * 0.25 + toolCallIntegrity * 0.2;
+  return { score, protectedFactRetention, recentMessageRetention, toolCallIntegrity };
+}
+
+function extractProtectedFacts(text: string): string[] {
+  const patterns = [
+    /https?:\/\/[^\s"'<>]+/g,
+    /(?:[A-Za-z]:\\|\/)[^\s"'<>]{2,}/g,
+    /\b(?:[A-Fa-f0-9]{12,}|[A-Za-z_][A-Za-z0-9_.-]*\d[A-Za-z0-9_.-]{5,})\b/g,
+  ];
+  const constraints = text.split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length >= 8 && line.length <= 500)
+    .filter(line => /\b(?:must|never|required|forbid(?:den)?|approval|do not|cannot)\b|必须|禁止|不得|不能|审批/i.test(line))
+    .slice(0, 100);
+  return [...new Set([...patterns.flatMap(pattern => text.match(pattern) ?? []), ...constraints])];
+}
+
+function calculateToolIntegrity(messages: Message[]): number {
+  const uses = new Set<string>();
+  let results = 0;
+  let valid = 0;
+  for (const message of messages) {
+    if (typeof message.content === 'string') continue;
+    for (const block of message.content) {
+      if (block.type === 'tool_use') uses.add(block.id);
+      if (block.type === 'tool_result') {
+        results++;
+        if (uses.has(block.tool_use_id)) valid++;
+      }
+    }
+  }
+  return results === 0 ? 1 : valid / results;
+}
+
+function coherentTail(messages: Message[], minimum: number): Message[] {
+  let start = Math.max(0, messages.length - minimum);
+  const first = messages[start];
+  if (first && typeof first.content !== 'string' && first.content.some(block => block.type === 'tool_result')) {
+    const ids = new Set(first.content.filter(block => block.type === 'tool_result').map(block => block.tool_use_id));
+    while (start > 0) {
+      start--;
+      const candidate = messages[start];
+      if (typeof candidate.content !== 'string' && candidate.content.some(block => block.type === 'tool_use' && ids.has(block.id))) break;
+    }
+  }
+  return messages.slice(start);
+}
+
+function signature(value: string): string {
+  return value.replace(/\s+/g, ' ').slice(0, 120);
 }

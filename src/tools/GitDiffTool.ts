@@ -1,5 +1,7 @@
-import { execSync } from 'child_process';
+import { relative } from 'path';
 import type { ToolDef, ToolResult } from '../core/types.js';
+import { runProcess } from '../utils/process.js';
+import { resolveWorkspacePath } from '../utils/workspacePaths.js';
 
 export const GitDiffTool: ToolDef<{ staged?: boolean; path?: string }> = {
   name: 'GitDiff',
@@ -15,13 +17,16 @@ export const GitDiffTool: ToolDef<{ staged?: boolean; path?: string }> = {
   isEnabled: () => true,
   execute: async (input, ctx): Promise<ToolResult> => {
     try {
-      const flags = input.staged ? '--staged' : '';
-      const path = input.path ?? '';
-      const cmd = `git diff ${flags} ${path}`.trim();
-      const diff = execSync(cmd, { cwd: ctx.cwd, encoding: 'utf-8', timeout: 10000, maxBuffer: 1024 * 1024 });
+      const args = ['diff'];
+      if (input.staged) args.push('--staged');
+      if (input.path) {
+        const filePath = resolveWorkspacePath(input.path, ctx, 'read');
+        args.push('--', relative(ctx.cwd, filePath));
+      }
+      const diff = await runProcess('git', args, ctx, { timeout: 10_000 });
       return { output: diff || 'No changes', isError: false };
-    } catch (err: unknown) {
-      return { output: (err instanceof Error ? err.message : String(err)), isError: true };
+    } catch (error) {
+      return { output: error instanceof Error ? error.message : String(error), isError: true };
     }
   },
 };

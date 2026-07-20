@@ -18,6 +18,7 @@ import { skillsCommand } from '../commands/builtin/skills.js';
 import { useVimInput } from '../vim/index.js';
 import { SkillAutoLoader } from '../skills/AutoLoader.js';
 import { VERSION } from '../version.js';
+import { TokenRenderBuffer, virtualizeText } from './streaming.js';
 
 import type { Message } from '../core/types.js';
 import type { Provider } from '../providers/base.js';
@@ -163,7 +164,11 @@ function ThinkingSpinner({ label }: { label: string }) {
 }
 
 function PermissionDialog({ tool, input }: { tool: string; input: unknown }) {
-  const inputStr = typeof input === 'string' ? input.slice(0, 100) : JSON.stringify(input).slice(0, 100);
+  const serialized = typeof input === 'string' ? input : JSON.stringify(input, null, 2);
+  const maxLength = 4_000;
+  const inputStr = (serialized ?? String(input)).length > maxLength
+    ? (serialized ?? String(input)).slice(0, maxLength) + '\n... [truncated; deny and narrow the request]'
+    : (serialized ?? String(input));
   return React.createElement(Box, {
     flexDirection: 'column' as const,
     paddingX: 1,
@@ -180,8 +185,8 @@ function Footer({ vimMode, scrollPos, maxScroll }: { vimMode: boolean; scrollPos
   const scrollInfo = maxScroll > 0 ? ' PgUp/Dn:scroll ' + (scrollPos + 1) + '/' + (maxScroll + 1) : ' ';
   return React.createElement(Text, { color: 'gray' as const, dimColor: true },
     vimMode
-      ? ' i:insert  esc:normal  h/j/k/l:move PgUp/Dn:scroll ctrl+c:exit'
-      : ' Enter:send  Ctrl+C:exit  Ctrl+L:clear  Ctrl+U:clear  PgUp/Dn:scroll  /help:cmds'
+      ? ' i:insert  esc:normal  h/j/k/l:move PgUp/Dn:scroll ctrl+c:cancel/exit'
+      : ' Enter:send  Ctrl+C:cancel/exit  Ctrl+L:clear  Ctrl+U:clear  PgUp/Dn:scroll  /help:cmds'
   );
 }
 
@@ -242,6 +247,7 @@ export function launchREPL(deps: REPLDeps) {
     const vim = useVimInput(input, setInput);
 
     const allMessagesRef = useRef<Message[]>(initialMessages ? [...initialMessages] : []);
+    const activeRunRef = useRef<AbortController | null>(null);
     const sessionTitleRef = useRef<string>('');
     const activeSkillsRef = useRef<string[]>([]);
 
@@ -259,27 +265,28 @@ export function launchREPL(deps: REPLDeps) {
     }, []);
 
     function autoActivateSkills(cwd: string) {
-      const skills = skillLoader.list();
-      for (const s of skills) {
-        skillLoader.autoMatch(s.manifest.name, cwd);
-      }
       activeSkillsRef.current = skillLoader.getActiveNames();
     }
 
     const addDisplay = useCallback((msg: DisplayMsg) => {
-      setDisplayMessages(prev => {
-        const next = [...prev, msg];
-        const visibleLimit = Math.max(20, terminalRows - 4);
-        if (next.length > visibleLimit * 2) {
-          return next.slice(-visibleLimit * 2);
-        }
-        return next;
-      });
-    }, [terminalRows]);
+      setDisplayMessages(prev => [...prev, msg]);
+    }, []);
 
     const runEngine = useCallback(async (allMessages: Message[]) => {
       let responseText = '';
       let currentToolName = '';
+      const controller = new AbortController();
+      activeRunRef.current = controller;
+      const renderBuffer = new TokenRenderBuffer(batch => {
+        responseText += batch;
+        setDisplayMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.role === 'assistant' && last.id.startsWith('stream-')) {
+            return [...prev.slice(0, -1), { ...last, content: responseText }];
+          }
+          return [...prev, { id: `stream-${Date.now()}`, role: 'assistant', content: responseText, timestamp: Date.now() }];
+        });
+      });
 
       try {
         const engineOptions: Record<string, unknown> = {
@@ -291,6 +298,7 @@ export function launchREPL(deps: REPLDeps) {
         if (watchdog) engineOptions.watchdog = watchdog;
         if (selfImprovement) engineOptions.selfImprovement = selfImprovement;
         if (logger) engineOptions.logger = logger;
+        engineOptions.signal = controller.signal;
 
         for await (const event of createEngine(
           allMessages, provider, tools, context, hooks, compressor, errorRecovery,
@@ -298,22 +306,11 @@ export function launchREPL(deps: REPLDeps) {
         )) {
           switch (event.type) {
             case 'token':
-              responseText += event.text;
-              setDisplayMessages(prev => {
-                const last = prev[prev.length - 1];
-                if (last && last.role === 'assistant') {
-                  return [...prev.slice(0, -1), { ...last, content: responseText }];
-                }
-                return [...prev, {
-                  id: 'msg-' + Date.now(),
-                  role: 'assistant' as const,
-                  content: responseText,
-                  timestamp: Date.now(),
-                }];
-              });
+              await renderBuffer.push(event.text);
               break;
 
             case 'tool_use':
+              renderBuffer.flush();
               currentToolName = event.tool;
               setThinkingLabel(event.tool);
               addDisplay({
@@ -352,6 +349,7 @@ export function launchREPL(deps: REPLDeps) {
               break;
 
             case 'end_turn': {
+              renderBuffer.flush();
               const lastMsg = allMessages[allMessages.length - 1];
               const lastText = lastMsg && typeof lastMsg.content === 'string' ? lastMsg.content : '';
               skillLoader.autoMatch(lastText, process.cwd());
@@ -372,6 +370,7 @@ export function launchREPL(deps: REPLDeps) {
             }
 
             case 'error':
+              renderBuffer.flush();
               addDisplay({
                 id: 'err-' + Date.now(),
                 role: 'system' as const,
@@ -388,12 +387,25 @@ export function launchREPL(deps: REPLDeps) {
         addDisplay({ id: 'err-' + Date.now(), role: 'system' as const, content: 'X ' + msg, timestamp: Date.now() });
         setIsThinking(false);
         setThinkingLabel('');
+      } finally {
+        renderBuffer.close();
+        if (activeRunRef.current === controller) activeRunRef.current = null;
+        setIsThinking(false);
       }
     }, [addDisplay]);
 
     useInput(async (char, key) => {
       // Ctrl+C must remain available while a provider request is in flight.
       if (key.ctrl && char === 'c') {
+        if (isThinking && activeRunRef.current) {
+          activeRunRef.current.abort(new Error('Cancelled by user'));
+          if (pendingPermission) {
+            pendingPermission.resolve(false);
+            setPendingPermission(null);
+          }
+          setThinkingLabel('cancelling');
+          return;
+        }
         exit();
         return;
       }
@@ -498,6 +510,7 @@ export function launchREPL(deps: REPLDeps) {
     const visibleStart = Math.max(0, displayMessages.length - terminalRows + 4 - scrollPos);
     const visibleEnd = displayMessages.length - scrollPos;
     const visibleMessages = displayMessages.slice(visibleStart, visibleEnd);
+    const terminalColumns = Math.max(40, Number((stdout as any).columns) || 100);
 
     const tokens = estTokens(allMessagesRef.current);
     const msgCount = allMessagesRef.current.length;
@@ -506,21 +519,22 @@ export function launchREPL(deps: REPLDeps) {
     // Render
     const msgElements: React.ReactElement[] = [];
     for (const msg of visibleMessages) {
+      const renderedContent = virtualizeText(msg.content, Math.max(6, Math.floor(terminalRows / 2)), terminalColumns - 4);
       if (msg.role === 'user') {
-        msgElements.push(React.createElement(Text, { key: msg.id }, msg.content));
+        msgElements.push(React.createElement(Text, { key: msg.id }, renderedContent));
       } else if (msg.role === 'system') {
-        msgElements.push(React.createElement(Text, { key: msg.id, color: 'gray' as const, dimColor: true }, msg.content));
+        msgElements.push(React.createElement(Text, { key: msg.id, color: 'gray' as const, dimColor: true }, renderedContent));
       } else if (msg.content) {
         if (msg.content.startsWith('  [\u25B2 ')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'yellow' as const, bold: true }, msg.content));
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'yellow' as const, bold: true }, renderedContent));
         } else if (msg.content.startsWith('  [\u00D7]')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'red' as const }, msg.content));
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'red' as const }, renderedContent));
         } else if (msg.content.startsWith('  [\u2713]')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'green' as const }, msg.content));
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'green' as const }, renderedContent));
         } else if (msg.content.startsWith('  [\u{1F4C6}]')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'blue' as const }, msg.content));
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'blue' as const }, renderedContent));
         } else {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'white' as const }, msg.content));
+          msgElements.push(React.createElement(Text, { key: msg.id, color: 'white' as const }, renderedContent));
         }
       }
     }

@@ -20,6 +20,33 @@ registerMemoryCli(program);
 registerDoctorCli(program, VERSION);
 
 program
+  .command('network')
+  .description('Manage outbound domain allowlist')
+  .argument('[action]', 'list | allow | remove')
+  .argument('[domain]', 'Exact domain or wildcard such as *.example.com')
+  .action(async (action, domain) => {
+    const { homedir } = await import('os');
+    const { join } = await import('path');
+    const { NetworkPolicy } = await import('../security/NetworkPolicy.js');
+    const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
+    const policy = new NetworkPolicy(dataDir);
+    if (action === 'allow' && domain) {
+      policy.allowDomain(domain);
+      console.log(`Allowed outbound domain: ${domain}`);
+    } else if (action === 'remove' && domain) {
+      policy.removeDomain(domain);
+      console.log(`Removed outbound domain: ${domain}`);
+    } else if (action === 'list' || !action) {
+      const config = policy.load();
+      console.log(`HTTP: ${config.allowHttp ? 'allowed' : 'blocked'}`);
+      for (const item of config.allowedDomains) console.log(`  ${item}`);
+      if (config.allowedDomains.length === 0) console.log('  (no domains allowed)');
+    } else {
+      console.log('Usage: synapse network [list|allow <domain>|remove <domain>]');
+    }
+  });
+
+program
   .command('onboard')
   .description('Interactive setup wizard for first-time configuration')
   .action(async () => {
@@ -33,7 +60,9 @@ program
   .option('-m, --model <model>', 'Model to use')
   .option('-p, --pipe', 'Pipe mode: read from stdin, output to stdout')
   .option('-v, --verbose', 'Verbose mode: show full API requests')
-  .option('--add-dir <dirs...>', 'Additional directories to load CLAUDE.md from')
+  .option('--add-dir <dirs...>', 'Additional trusted roots for AGENTS.md, CLAUDE.md, and .synapse/rules')
+  .option('--permission-mode <mode>', 'Permission mode: ask | workspace-auto', 'ask')
+  .option('--sandbox-backend <backend>', 'Strict sandbox backend: auto | bubblewrap | docker', 'auto')
   .action(async (opts) => {
     const { join } = await import('path');
     const { homedir } = await import('os');
@@ -63,6 +92,14 @@ program
         console.log('  Configuration cancelled. Run `synapse onboard` to retry.');
         process.exit(0);
       }
+    }
+    if (!['ask', 'workspace-auto'].includes(opts.permissionMode)) {
+      console.error('Error: --permission-mode must be ask or workspace-auto.');
+      process.exit(2);
+    }
+    if (!['auto', 'bubblewrap', 'docker'].includes(opts.sandboxBackend)) {
+      console.error('Error: --sandbox-backend must be auto, bubblewrap, or docker.');
+      process.exit(2);
     }
     const { init } = await import('./init.js');
     const deps = await init(opts);
@@ -245,7 +282,7 @@ program
 program
   .command('mcp')
   .description('Manage MCP servers')
-  .argument('[action]', 'add | list | remove')
+  .argument('[action]', 'add | list | remove | trust | untrust')
   .argument('[name]', 'Server name')
   .argument('[command]', 'Server command')
   .argument('[args...]', 'Server arguments')
@@ -253,8 +290,13 @@ program
     const { homedir } = await import('os');
     const { join } = await import('path');
     const { readFileSync, writeFileSync, existsSync } = await import('fs');
+    const { MCPClient } = await import('../services/mcp/client.js');
+    const { MCPTrustStore } = await import('../services/mcp/trust.js');
     const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
     const mcpPath = join(dataDir, '.mcp.json');
+    const client = new MCPClient(dataDir);
+    const trustStore = new MCPTrustStore(dataDir);
+    const configured = () => client.loadConfig(dataDir);
 
     if (action === 'list' || !action) {
       if (!existsSync(mcpPath)) { console.log('No MCP servers configured.'); return; }
@@ -264,22 +306,40 @@ program
       for (const [n, v] of Object.entries(servers)) {
         const cfg = v as Record<string, unknown>;
         const cmd = cfg.command as string | undefined;
-        const args = cfg.args as string[] | undefined;
-        console.log(`  ${n}: ${cmd ?? ''} ${args?.join(' ') ?? ''}`);
+        const serverArgs = cfg.args as string[] | undefined;
+        const server = configured().find(item => item.name === n);
+        const trusted = server ? trustStore.status(server).trusted : false;
+        console.log(`  ${n}: ${cmd ?? ''} ${serverArgs?.join(' ') ?? ''} [${trusted ? 'trusted' : 'UNTRUSTED'}]`);
       }
     } else if (action === 'add' && name && command) {
       const config = existsSync(mcpPath) ? JSON.parse(readFileSync(mcpPath, 'utf-8')) : { mcpServers: {} };
       config.mcpServers[name] = { command, args };
       writeFileSync(mcpPath, JSON.stringify(config, null, 2));
+      trustStore.revoke(name);
       console.log(`✅ MCP server "${name}" added`);
     } else if (action === 'remove' && name) {
       if (!existsSync(mcpPath)) { console.log('No MCP servers configured.'); return; }
       const config = JSON.parse(readFileSync(mcpPath, 'utf-8'));
       delete config.mcpServers[name];
       writeFileSync(mcpPath, JSON.stringify(config, null, 2));
+      trustStore.revoke(name);
       console.log(`✅ MCP server "${name}" removed`);
+    } else if (action === 'trust' && name) {
+      const server = configured().find(item => item.name === name);
+      if (!server) { console.error(`MCP server not found or invalid: ${name}`); process.exitCode = 1; return; }
+      console.log(`Inspecting MCP command fingerprint ${trustStore.commandFingerprint(server)} ...`);
+      const result = await client.inspectAndTrust(server, dataDir);
+      console.log(`Trusted ${name}`);
+      console.log(`  capabilities: ${result.manifest.capabilities.join(', ') || '(none)'}`);
+      console.log(`  tools: ${result.manifest.tools.join(', ') || '(none)'}`);
+      console.log(`  resources: ${result.manifest.resources.join(', ') || '(none)'}`);
+      console.log(`  prompts: ${result.manifest.prompts.join(', ') || '(none)'}`);
+      console.log(`  capability fingerprint: ${result.capabilityFingerprint}`);
+    } else if (action === 'untrust' && name) {
+      trustStore.revoke(name);
+      console.log(`MCP server "${name}" trust revoked`);
     } else {
-      console.log('Usage: synapse mcp [list|add <name> <command>|remove <name>]');
+      console.log('Usage: synapse mcp [list|add <name> <command>|remove <name>|trust <name>|untrust <name>]');
     }
   });
 

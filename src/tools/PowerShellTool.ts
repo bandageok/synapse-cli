@@ -1,5 +1,5 @@
 // src/tools/PowerShellTool.ts
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
 
 export const PowerShellTool: ToolDef<{ command: string; timeout?: number }> = {
@@ -18,13 +18,13 @@ export const PowerShellTool: ToolDef<{ command: string; timeout?: number }> = {
   execute: async (input, ctx: ToolContext): Promise<ToolResult> => {
     // 危险命令检查
     const dangerousPatterns = [
-      /Remove-Item\s+.*-Recurse\s+-Force\s+[\/\\]/,
-      /Stop-Computer/,
-      /Restart-Computer/,
-      /Set-ExecutionPolicy\s+Unrestricted/,
+      /Remove-Item\s+.*-Recurse\s+-Force\s+[\/\\]/i,
+      /Stop-Computer/i,
+      /Restart-Computer/i,
+      /Set-ExecutionPolicy\s+Unrestricted/i,
       /Invoke-Expression.*\(New-Object\s+Net\.WebClient\)/,
       /Invoke-WebRequest.*\|\s*(Invoke-Expression|iex)/i,
-      /Start-Process.*-Verb\s+RunAs/,
+      /Start-Process.*-Verb\s+RunAs/i,
     ];
 
     for (const pattern of dangerousPatterns) {
@@ -37,20 +37,11 @@ export const PowerShellTool: ToolDef<{ command: string; timeout?: number }> = {
     }
 
     try {
-      const output = execFileSync('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        input.command,
-      ], {
-        cwd: ctx.cwd,
-        timeout: input.timeout ?? 30_000,
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-        env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
-      });
+      const timeout = input.timeout ?? 30_000;
+      if (!Number.isInteger(timeout) || timeout < 100 || timeout > 120_000) {
+        return { output: 'Error: timeout must be an integer between 100 and 120000 ms.', isError: true };
+      }
+      const output = await runPowerShell(input.command, ctx, timeout);
       return { output, isError: false };
     } catch (err: unknown) {
       const e = err as { stderr?: string; message?: string };
@@ -58,3 +49,22 @@ export const PowerShellTool: ToolDef<{ command: string; timeout?: number }> = {
     }
   },
 };
+
+function runPowerShell(command: string, ctx: ToolContext, timeout: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => child.kill();
+    const child = execFile('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], {
+      cwd: ctx.cwd,
+      timeout,
+      encoding: 'utf-8',
+      maxBuffer: 1024 * 1024,
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+    }, (error, stdout, stderr) => {
+      ctx.abortSignal.removeEventListener('abort', onAbort);
+      if (error) reject(Object.assign(error, { stderr }));
+      else resolve(stdout);
+    });
+    if (ctx.abortSignal.aborted) child.kill();
+    ctx.abortSignal.addEventListener('abort', onAbort, { once: true });
+  });
+}

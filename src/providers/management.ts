@@ -30,6 +30,7 @@ export interface SynapseConfig extends Record<string, unknown> {
   apiKeyEnv?: string;
   model?: string;
   baseUrl?: string;
+  fallbackModels?: string[];
   hasCompletedOnboarding?: boolean;
 }
 
@@ -44,6 +45,7 @@ export interface ProviderRuntime {
   model: string;
   baseUrl: string;
   preset: boolean;
+  fallbackModels?: string[];
 }
 
 export interface ProviderListEntry extends Omit<ProviderRuntime, 'apiKey'> {
@@ -177,6 +179,16 @@ function validAuth(value: unknown): value is ProviderAuth {
   return value === 'bearer' || value === 'x-api-key';
 }
 
+function normalizeFallbackModels(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some(model => typeof model !== 'string' || !model.trim())) {
+    throw new Error('fallbackModels must be an array of non-empty model ids');
+  }
+  const models = [...new Set(value.map(model => model.trim()))];
+  if (models.length > 8) throw new Error('fallbackModels supports at most 8 model ids');
+  return models;
+}
+
 function normalizeUrl(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
@@ -248,6 +260,7 @@ function runtimeFromConfig(config: SynapseConfig, dataDir: string): ProviderRunt
     model,
     baseUrl,
     preset: Boolean(preset),
+    fallbackModels: normalizeFallbackModels(config.fallbackModels).filter(candidate => candidate !== model),
   };
 }
 
@@ -348,6 +361,7 @@ export function setProvider(
     apiKeyEnv?: string;
     protocol?: string;
     auth?: string;
+    fallbackModels?: string[];
     dataDir?: string;
   } = {},
 ): ProviderRuntime {
@@ -390,6 +404,9 @@ export function setProvider(
     apiKeyEnv,
     model,
     baseUrl,
+    fallbackModels: options.fallbackModels === undefined
+      ? (sameProvider ? normalizeFallbackModels(current.fallbackModels) : []).filter(candidate => candidate !== model)
+      : normalizeFallbackModels(options.fallbackModels).filter(candidate => candidate !== model),
     hasCompletedOnboarding: true,
   };
   atomicWrite(join(dataDir, '.synapse.json'), JSON.stringify(next, null, 2) + '\n');

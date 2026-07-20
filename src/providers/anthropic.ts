@@ -9,7 +9,7 @@ export class AnthropicProvider implements Provider {
   private model: string;
 
   constructor(config: ProviderConfig) {
-    const opts: ConstructorParameters<typeof Anthropic>[0] = { apiKey: config.apiKey };
+    const opts: ConstructorParameters<typeof Anthropic>[0] = { apiKey: config.apiKey, timeout: config.timeoutMs ?? 120_000 };
     if (config.baseUrl) opts.baseURL = config.baseUrl;
     this.client = new Anthropic(opts);
     this.model = config.model ?? 'claude-sonnet-4-20250514';
@@ -18,6 +18,7 @@ export class AnthropicProvider implements Provider {
       this.client = new Anthropic({
         apiKey: config.apiKey,
         baseURL: config.baseUrl,
+        timeout: config.timeoutMs ?? 120_000,
         defaultHeaders: { 'Authorization': `Bearer ${config.apiKey}` },
       });
     }
@@ -30,11 +31,21 @@ export class AnthropicProvider implements Provider {
       system: params.system.join('\n'),
       messages: this.toAnthropicMessages(params.messages),
       tools: this.toAnthropicTools(params.tools),
-    });
+    }, params.signal ? { signal: params.signal } : undefined);
 
     for await (const event of stream) {
       yield event as unknown as StreamChunk;
     }
+  }
+
+  async countTokens(params: StreamParams): Promise<number> {
+    const result = await this.client.messages.countTokens({
+      model: this.model,
+      system: params.system.join('\n'),
+      messages: this.toAnthropicMessages(params.messages),
+      tools: this.toAnthropicTools(params.tools),
+    }, params.signal ? { signal: params.signal } : undefined);
+    return result.input_tokens;
   }
 
   private toAnthropicMessages(messages: Message[]): Anthropic.MessageParam[] {

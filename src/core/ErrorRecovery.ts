@@ -115,6 +115,17 @@ export class ErrorRecovery {
   }
 
   async handleApiError(err: Error, _messages: Message[]): Promise<boolean> {
+    this.consecutiveFailures++;
+    if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) return false;
+
+    const normalized = err.message.toLowerCase();
+    if (/\b(400|401|403)\b/.test(normalized)
+      || normalized.includes('unauthorized')
+      || normalized.includes('forbidden')
+      || normalized.includes('invalid_request')) {
+      return false;
+    }
+
     // rate_limit: 等待后重试
     if (err.message.includes('rate_limit') || err.message.includes('429')) {
       const retryAfter = this.extractRetryAfter(err.message);
@@ -138,9 +149,7 @@ export class ErrorRecovery {
       return true;
     }
 
-    // 熔断器
-    this.consecutiveFailures++;
-    if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) return false;
+    await new Promise(r => setTimeout(r, 1000));
     return true;
   }
 

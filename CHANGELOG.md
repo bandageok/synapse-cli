@@ -2,6 +2,31 @@
 
 All notable changes to Synapse are documented in this file.
 
+## Unreleased
+
+## 0.3.0 - 2026-07-20
+
+- Added a fail-closed tool registry with runtime JSON Schema validation and detailed self-correction errors.
+- Restricted file tools to explicit workspace roots, including traversal and symlink/junction escape checks.
+- Made write, execute, network, sub-agent, and sensitive-read capabilities require explicit approval.
+- Fixed child-agent permission inheritance and removed shell-string construction from Git and Grep tools.
+- Preserved OpenAI-compatible `tool_calls` and `tool_call_id` messages across multi-turn conversations.
+- Added provider request timeouts and explicit same-endpoint fallback models that only switch before partial output.
+- Added adversarial security, provider protocol, fallback, and agent turn-limit regression tests.
+- Added strict Bubblewrap/Docker shell isolation and session-scoped `workspace-auto` permission mode; strict mode fails closed when no backend is available.
+- Added MCP first-use trust with command/environment fingerprints, capability manifests, schema drift detection, and trust revocation.
+- Added an outbound domain allowlist with per-hop DNS resolution, private-range rejection, and IP-pinned HTTP/TLS connections.
+- Added provider/model-aware token accounting plus compression reduction and retention quality metrics.
+- Added end-to-end request cancellation, coalesced streaming updates, and bounded long-output rendering in the TUI.
+- Added an immutable safety kernel and lower-trust boundaries for repository instructions, skills, memory, tool output, and fetched content.
+- Added `AGENTS.md` discovery, root-confined `@include` resolution, symlink/junction escape rejection, aggregate instruction budgets, and per-turn instruction refresh.
+- Bound MCP trust to resolved executable and referenced local script content so same-path code replacement invalidates trust before spawn.
+- Fixed unintended activation of every installed skill and propagated cancellation into in-process and spawned Task agents.
+- Added adversarial regression tests for context exfiltration, MCP code replacement, skill activation, and nested-agent cancellation.
+- Added a Linux CI job that executes commands inside Bubblewrap and proves workspace, host filesystem, network, and PID isolation at runtime.
+- Made compression reject summaries that drop explicit approval or prohibition constraints.
+- Added cooperative streaming backpressure and bounded scanning for million-character TUI output.
+
 ## 0.2.3 - 2026-07-19
 
 - Updated configuration documentation to use the scoped npm package and arbitrary compatible BaseURL workflow.

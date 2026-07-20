@@ -1,6 +1,7 @@
 // src/tools/FileEditTool.ts
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import type { ToolDef, ToolResult } from '../core/types.js';
+import { resolveWorkspacePath } from '../utils/workspacePaths.js';
 
 export const FileEditTool: ToolDef<{
   file_path: string;
@@ -24,12 +25,16 @@ export const FileEditTool: ToolDef<{
   },
   permissions: 'write',
   isEnabled: () => true,
-  execute: async (input): Promise<ToolResult> => {
-    if (!existsSync(input.file_path)) {
-      return { output: `Error: File not found: ${input.file_path}`, isError: true };
+  execute: async (input, ctx): Promise<ToolResult> => {
+    let filePath: string;
+    try {
+      filePath = resolveWorkspacePath(input.file_path, ctx, 'write');
+    } catch (error) {
+      return { output: `Error: ${error instanceof Error ? error.message : String(error)}`, isError: true };
     }
+    if (!existsSync(filePath)) return { output: `Error: File not found: ${input.file_path}`, isError: true };
 
-    const content = readFileSync(input.file_path, 'utf-8');
+    const content = readFileSync(filePath, 'utf-8');
 
     // 检查 old_string 是否存在
     if (!content.includes(input.old_string)) {
@@ -48,7 +53,7 @@ export const FileEditTool: ToolDef<{
     }
 
     // 执行替换前创建备份
-    const bakPath = input.file_path + '.synapse-bak';
+    const bakPath = filePath + '.synapse-bak';
     writeFileSync(bakPath, content);
 
     let newContent: string;
@@ -58,7 +63,7 @@ export const FileEditTool: ToolDef<{
       newContent = content.replace(input.old_string, input.new_string);
     }
 
-    writeFileSync(input.file_path, newContent);
+    writeFileSync(filePath, newContent);
 
     const replacedCount = input.replace_all ? count : 1;
     return {

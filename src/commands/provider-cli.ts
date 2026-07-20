@@ -64,6 +64,7 @@ export function registerProviderCli(program: Command): void {
     .option('--base-url <url>', 'Provider API base URL')
     .option('--protocol <protocol>', 'openai | anthropic')
     .option('--auth <auth>', 'bearer | x-api-key')
+    .option('--fallback-model <models...>', 'Fallback model ids on the same endpoint')
     .option('--api-key-env <name>', 'Environment variable used for the API key')
     .option('--api-key <key>', 'Store the provider API key in ~/.synapse/.env')
     .option('--json', 'Output machine-readable JSON')
@@ -72,6 +73,7 @@ export function registerProviderCli(program: Command): void {
       baseUrl?: string;
       protocol?: string;
       auth?: string;
+      fallbackModel?: string[];
       apiKeyEnv?: string;
       apiKey?: string;
       json?: boolean;
@@ -82,6 +84,7 @@ export function registerProviderCli(program: Command): void {
           baseUrl: options.baseUrl,
           protocol: options.protocol,
           auth: options.auth,
+          fallbackModels: options.fallbackModel,
           apiKeyEnv: options.apiKeyEnv,
           apiKey: options.apiKey,
           dataDir: getSynapseDataDir(),
@@ -95,12 +98,14 @@ export function registerProviderCli(program: Command): void {
           configured: Boolean(runtime.apiKey),
           keySource: runtime.keySource,
           keyName: runtime.keyName,
+          fallbackModels: runtime.fallbackModels ?? [],
         };
         if (options.json) console.log(JSON.stringify(output, null, 2));
         else {
           console.log(`Active provider: ${runtime.id}`);
           console.log(`Model: ${runtime.model}`);
           console.log(`Protocol: ${runtime.protocol} (${runtime.auth})`);
+          if (runtime.fallbackModels?.length) console.log(`Fallback models: ${runtime.fallbackModels.join(', ')}`);
           if (runtime.baseUrl) console.log(`Base URL: ${runtime.baseUrl}`);
           console.log(runtime.apiKey
             ? `API key: configured via ${runtime.keySource} (${runtime.keyName})`

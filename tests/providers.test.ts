@@ -97,6 +97,18 @@ describe('Provider Factory', () => {
     expect(createProvider()?.name).toBe('company-gateway');
   });
 
+  it('stores an explicit ordered fallback model chain', () => {
+    const runtime = setProvider('company-gateway', {
+      dataDir: testDir,
+      baseUrl: 'https://llm.example.com/v1',
+      protocol: 'openai',
+      model: 'primary-model',
+      fallbackModels: ['small-model', 'local-model', 'small-model'],
+      apiKey: 'private-key',
+    });
+    expect(runtime.fallbackModels).toEqual(['small-model', 'local-model']);
+  });
+
   it('honors an explicit preset when other provider keys exist', () => {
     process.env.ANTHROPIC_API_KEY = 'anthropic-key';
     setProvider('openrouter', { dataDir: testDir, apiKey: 'router-key' });

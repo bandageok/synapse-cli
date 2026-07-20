@@ -1,6 +1,7 @@
-import { execSync } from 'child_process';
+import { readFileSync } from 'fs';
 import type { ToolDef, ToolResult } from '../core/types.js';
-import { platform } from 'os';
+import fg from 'fast-glob';
+import { resolveWorkspacePath } from '../utils/workspacePaths.js';
 
 export const GrepTool: ToolDef<{ pattern: string; path?: string; include?: string; case_insensitive?: boolean }> = {
   name: 'Grep',
@@ -19,19 +20,30 @@ export const GrepTool: ToolDef<{ pattern: string; path?: string; include?: strin
   isEnabled: () => true,
   execute: async (input, ctx): Promise<ToolResult> => {
     try {
-      const searchPath = input.path || ctx.cwd;
-      const includeFlag = input.include ? `--include="${input.include}"` : '';
-      const caseFlag = input.case_insensitive ? '-i' : '';
-      const isWin = platform() === 'win32';
-      const cmd = isWin
-        ? `findstr /s /r /n ${input.case_insensitive ? '/i ' : ''}/c:"${input.pattern}" "${searchPath}\\*"`
-        : `grep -rn ${caseFlag} ${includeFlag} "${input.pattern}" "${searchPath}"`;
-      const output = execSync(cmd, { encoding: 'utf-8', timeout: 10_000, maxBuffer: 1024 * 1024 });
-      return { output: output.slice(0, 10_000), isError: false };
+      const searchPath = resolveWorkspacePath(input.path || ctx.cwd, ctx, 'read');
+      const regex = new RegExp(input.pattern, input.case_insensitive ? 'i' : undefined);
+      const files = fg.sync(input.include || '**/*', {
+        cwd: searchPath,
+        absolute: true,
+        onlyFiles: true,
+        followSymbolicLinks: false,
+      }).slice(0, 5_000);
+      const matches: string[] = [];
+      for (const file of files) {
+        const safeFile = resolveWorkspacePath(file, ctx, 'read');
+        let content: string;
+        try { content = readFileSync(safeFile, 'utf-8'); } catch { continue; }
+        if (content.includes('\0')) continue;
+        for (const [index, line] of content.split(/\r?\n/).entries()) {
+          if (regex.test(line)) matches.push(`${safeFile}:${index + 1}:${line}`);
+          regex.lastIndex = 0;
+          if (matches.join('\n').length >= 10_000) break;
+        }
+        if (matches.join('\n').length >= 10_000) break;
+      }
+      return { output: matches.join('\n').slice(0, 10_000) || 'No matches found', isError: false };
     } catch (err: unknown) {
-      const e = err as { status?: number };
-      if (e.status === 1) return { output: 'No matches found', isError: false };
-      return { output: err instanceof Error ? err.message : String(err), isError: true };
+      return { output: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
     }
   },
 };

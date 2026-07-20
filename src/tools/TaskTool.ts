@@ -28,9 +28,9 @@ export function createTaskTool(deps: TaskToolDeps, isolation: IsolationMode = 'i
     schema: {
       type: 'object',
       properties: {
-        task: { type: 'string', description: 'The task for the sub-agent to complete' },
-        tools: { type: 'array', items: { type: 'string' }, description: 'Allowed tool names (default: all)' },
-        max_turns: { type: 'number', description: 'Maximum turns (default: 20)', default: 20 },
+        task: { type: 'string', minLength: 1, description: 'The task for the sub-agent to complete' },
+        tools: { type: 'array', items: { type: 'string' }, uniqueItems: true, description: 'Allowed tool names (default: all)' },
+        max_turns: { type: 'integer', minimum: 1, maximum: 200, description: 'Maximum turns (default: 20)', default: 20 },
       },
       required: ['task'],
     },
@@ -40,7 +40,7 @@ export function createTaskTool(deps: TaskToolDeps, isolation: IsolationMode = 'i
       if (isolation === 'spawn') {
         return executeSpawned(input, ctx);
       }
-      return executeInProcess(input, deps);
+      return executeInProcess(input, deps, ctx);
     },
   };
 }
@@ -49,6 +49,7 @@ export function createTaskTool(deps: TaskToolDeps, isolation: IsolationMode = 'i
 async function executeInProcess(
   input: { task: string; tools?: string[]; max_turns?: number },
   deps: TaskToolDeps,
+  ctx: ToolContext,
 ): Promise<ToolResult> {
   const maxTurns = input.max_turns ?? 20;
   let turnCount = 0;
@@ -58,18 +59,14 @@ async function executeInProcess(
 
   let subTools = deps.tools;
   if (input.tools && input.tools.length > 0) {
-    const { ToolRegistry } = await import('../core/ToolRegistry.js');
-    subTools = new ToolRegistry();
-    for (const toolName of input.tools) {
-      const tool = deps.tools.get(toolName);
-      if (tool) subTools.register(tool);
-    }
+    subTools = deps.tools.cloneRestricted(input.tools);
   }
 
   try {
     for await (const event of createEngine(
       messages, deps.provider, subTools, deps.context,
       deps.hooks, deps.compressor, deps.errorRecovery,
+      { maxTurns, signal: ctx.abortSignal },
     )) {
       switch (event.type) {
         case 'token':
@@ -107,7 +104,15 @@ async function executeSpawned(
   input: { task: string; tools?: string[]; max_turns?: number },
   ctx: ToolContext,
 ): Promise<ToolResult> {
+  if (ctx.abortSignal.aborted) return { output: '[Spawned SubAgent] Request cancelled.', isError: true };
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result: ToolResult) => {
+      if (settled) return;
+      settled = true;
+      ctx.abortSignal.removeEventListener('abort', onAbort);
+      resolve(result);
+    };
     const child = spawn(process.execPath, [
       '-e',
       `
@@ -128,16 +133,23 @@ async function executeSpawned(
 
     let stdout = '';
     let stderr = '';
+    const maxCapturedCharacters = 1_000_000;
+    const appendBounded = (current: string, chunk: unknown) => (current + String(chunk)).slice(-maxCapturedCharacters);
+    const onAbort = () => {
+      child.kill();
+      finish({ output: '[Spawned SubAgent] Request cancelled.', isError: true });
+    };
+    ctx.abortSignal.addEventListener('abort', onAbort, { once: true });
 
-    child.stdout?.on('data', (data) => { stdout += data.toString(); });
-    child.stderr?.on('data', (data) => { stderr += data.toString(); });
+    child.stdout?.on('data', (data) => { stdout = appendBounded(stdout, data); });
+    child.stderr?.on('data', (data) => { stderr = appendBounded(stderr, data); });
 
     child.on('close', (code) => {
       try {
         const result = JSON.parse(stdout.trim());
-        resolve(result);
+        finish(result);
       } catch {
-        resolve({
+        finish({
           output: `[Spawned SubAgent] Exit code: ${code}\nStdout: ${stdout}\nStderr: ${stderr}`,
           isError: code !== 0,
         });
@@ -145,7 +157,7 @@ async function executeSpawned(
     });
 
     child.on('error', (err) => {
-      resolve({ output: `[Spawned SubAgent] Failed to spawn: ${err.message}`, isError: true });
+      finish({ output: `[Spawned SubAgent] Failed to spawn: ${err.message}`, isError: true });
     });
   });
 }

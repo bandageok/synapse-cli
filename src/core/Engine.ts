@@ -10,10 +10,17 @@ export interface HookSystem {
   preToolUse(toolUse: { id: string; name: string; input: Record<string, unknown> }): Promise<{ blocked: boolean; reason?: string }>;
   postToolUse(toolUse: { id: string; name: string; input: Record<string, unknown> }, result: ToolResult): Promise<void>;
 }
-export interface Compressor { checkAndCompress(messages: Message[]): Promise<{ compressed: boolean; stats?: { tokensBefore: number; tokensAfter: number } }> }
+export interface Compressor {
+  checkAndCompress(
+    messages: Message[],
+    signal?: AbortSignal,
+    accounting?: { system?: string[]; tools?: Record<string, unknown>[] },
+  ): Promise<{ compressed: boolean; stats?: { tokensBefore: number; tokensAfter: number } }>;
+}
 export interface ErrorRecovery {
   executeWithRetry<T>(fn: () => Promise<T>, opts: { tool: string; maxRetries: number }): Promise<T>;
   handleApiError(err: Error, messages: Message[]): Promise<boolean>;
+  resetFailures?: () => void;
 }
 
 export interface EngineOptions {
@@ -26,6 +33,8 @@ export interface EngineOptions {
     warn: (msg: string, meta?: Record<string, unknown>) => void;
     audit?: (action: string, meta?: Record<string, unknown>) => void;
   };
+  maxTurns?: number;
+  signal?: AbortSignal;
 }
 
 export async function* createEngine(
@@ -39,19 +48,32 @@ export async function* createEngine(
   options?: EngineOptions,
 ): AsyncGenerator<EngineEvent> {
   let turnCount = 0;
+  const maxTurns = options?.maxTurns ?? 40;
+  if (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 200) {
+    yield { type: 'error', error: 'maxTurns must be an integer between 1 and 200.' };
+    return;
+  }
 
-  while (true) {
+  while (turnCount < maxTurns) {
+    if (options?.signal?.aborted) {
+      yield { type: 'error', error: 'Request cancelled.' };
+      return;
+    }
     turnCount++;
     options?.logger?.info(`Turn ${turnCount} started`);
 
+    // Build the complete request envelope before accounting so memory and tool schemas are included.
+    const systemPrompt = await context.build(turnCount);
+    const toolSchemas = tools.schemas();
+
     // 1. Compression check
-    const compressionResult = await compressor.checkAndCompress(messages);
+    const compressionResult = await compressor.checkAndCompress(messages, options?.signal, {
+      system: systemPrompt,
+      tools: toolSchemas,
+    });
     if (compressionResult.compressed) {
       yield { type: 'compressed', ...compressionResult.stats! };
     }
-
-    // 2. Build context
-    const systemPrompt = await context.build(turnCount);
 
     // 3. Stream API
     try {
@@ -61,8 +83,10 @@ export async function* createEngine(
       for await (const chunk of provider.stream({
         system: systemPrompt,
         messages,
-        tools: tools.schemas(),
+        tools: toolSchemas,
+        signal: options?.signal,
       })) {
+        if (options?.signal?.aborted) throw abortError();
         switch (chunk.type) {
           case 'content_block_start': {
             const block = chunk.content_block;
@@ -97,6 +121,7 @@ export async function* createEngine(
           }
         }
       }
+      errorRecovery.resetFailures?.();
 
       // 4. Push assistant message
       messages.push({ role: 'assistant', content: contentBlocks });
@@ -132,7 +157,21 @@ export async function* createEngine(
           });
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Error: Invalid JSON in tool input' }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Error: Invalid JSON in tool input', is_error: true }],
+          });
+          continue;
+        }
+
+        const validationError = tools.validateInput(toolUse);
+        if (validationError) {
+          options?.logger?.audit?.('tool.input.schema_validation_failed', {
+            toolUseId: toolUse.id,
+            tool: toolUse.name,
+            error: validationError,
+          });
+          messages.push({
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: `Error: ${validationError}`, is_error: true }],
           });
           continue;
         }
@@ -147,12 +186,13 @@ export async function* createEngine(
           });
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: hookResult.reason ?? 'Blocked by hook' }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: hookResult.reason ?? 'Blocked by hook', is_error: true }],
           });
           continue;
         }
 
         const permission = tools.checkPermission(toolUse);
+        let humanApproved = false;
         options?.logger?.audit?.('tool.permission_decision', {
           toolUseId: toolUse.id,
           tool: toolUse.name,
@@ -162,7 +202,7 @@ export async function* createEngine(
         if (permission === 'deny') {
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied' }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied', is_error: true }],
           });
           continue;
         }
@@ -182,10 +222,11 @@ export async function* createEngine(
             if (!allowed) {
               messages.push({
                 role: 'user',
-                content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied by user' }],
+                content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied by user', is_error: true }],
               });
               continue;
             }
+            humanApproved = true;
           } else {
             // 无回调时默认拒绝（安全优先）
             options?.logger?.audit?.('tool.user_permission_response', {
@@ -196,7 +237,7 @@ export async function* createEngine(
             });
             messages.push({
               role: 'user',
-              content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied (no handler)' }],
+              content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied (no handler)', is_error: true }],
             });
             continue;
           }
@@ -212,7 +253,10 @@ export async function* createEngine(
         let result: ToolResult;
         try {
           result = await errorRecovery.executeWithRetry(
-            () => tools.execute(toolUse),
+            () => tools.execute(toolUse, {
+              cwd: process.cwd(),
+              abortSignal: options?.signal ?? new AbortController().signal,
+            }, { humanApproved }),
             { tool: toolUse.name, maxRetries: 1 },
           );
         } catch (err: unknown) {
@@ -243,6 +287,10 @@ export async function* createEngine(
         yield { type: 'tool_result', tool: toolUse.name, output: result.output };
       }
     } catch (err: unknown) {
+      if (options?.signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {
+        yield { type: 'error', error: 'Request cancelled.' };
+        return;
+      }
       const errMsg = err instanceof Error ? err.message : String(err);
       const recovered = await errorRecovery.handleApiError(err instanceof Error ? err : new Error(errMsg), messages);
       if (!recovered) {
@@ -252,4 +300,13 @@ export async function* createEngine(
       }
     }
   }
+  const error = `Agent stopped after reaching the ${maxTurns}-turn safety limit.`;
+  options?.logger?.warn(error, { maxTurns });
+  yield { type: 'error', error };
+}
+
+function abortError(): Error {
+  const error = new Error('Request cancelled.');
+  error.name = 'AbortError';
+  return error;
 }

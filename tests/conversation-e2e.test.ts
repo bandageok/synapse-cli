@@ -80,4 +80,73 @@ describe('real CLI conversation path', () => {
     expect(Buffer.concat(stdout).toString('utf-8')).toContain('READY');
     expect(JSON.parse(requestBody).model).toBe('test-model');
   });
+
+  it('completes a real CLI tool round-trip with preserved tool_call_id', async () => {
+    const requestBodies: any[] = [];
+    server = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      request.on('end', () => {
+        requestBodies.push(JSON.parse(Buffer.concat(chunks).toString('utf-8')));
+        response.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        });
+        if (requestBodies.length === 1) {
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: { tool_calls: [{
+            index: 0,
+            id: 'call_read_package',
+            function: { name: 'FileRead', arguments: JSON.stringify({ file_path: join(root, 'package.json') }) },
+          }] } }] }) + '\n\n');
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }) + '\n\n');
+        } else {
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: { content: 'TOOL_ROUNDTRIP_OK' } }] }) + '\n\n');
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\n');
+        }
+        response.end();
+      });
+    });
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Test server did not expose a port');
+
+    const dataDir = mkdtempSync(join(tmpdir(), 'synapse-tool-roundtrip-'));
+    cleanup.push(dataDir);
+    setProvider('local-tool-sse', {
+      dataDir,
+      baseUrl: 'http://127.0.0.1:' + address.port + '/v1',
+      protocol: 'openai',
+      model: 'test-model',
+      apiKey: 'test-key',
+    });
+
+    const child = spawn(process.execPath, [tsxCli, entry, 'chat', '--pipe'], {
+      cwd: root,
+      env: { ...process.env, SYNAPSE_DATA_DIR: dataDir },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)));
+    child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)));
+    child.stdin.end('Read package.json with FileRead and report success\n');
+
+    const code = await new Promise<number | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new Error('CLI tool round-trip timed out. stderr=' + Buffer.concat(stderr).toString('utf-8')));
+      }, 15_000);
+      child.on('error', reject);
+      child.on('close', result => { clearTimeout(timeout); resolve(result); });
+    });
+
+    expect(code).toBe(0);
+    expect(Buffer.concat(stdout).toString('utf-8')).toContain('TOOL_ROUNDTRIP_OK');
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[1].messages).toContainEqual(expect.objectContaining({
+      role: 'tool',
+      tool_call_id: 'call_read_package',
+    }));
+  });
 });

@@ -34,8 +34,8 @@
 
 ## Features
 
-### 🧠 Any LLM, Any Provider
-Choose a mainstream provider preset or connect any OpenAI-compatible or Anthropic-compatible BaseURL. Provider behavior is driven by configuration rather than hard-coded factory branches.
+### 🧠 Compatible Providers, Explicit Protocols
+Choose a mainstream preset or connect an OpenAI-compatible or Anthropic-compatible BaseURL. Provider-specific codecs preserve native tool-call identifiers instead of flattening tool messages into text.
 
 ### ⚡ 19 Built-in Tools
 File editing, shell execution, web search, Git operations, sub-agent spawning, image generation, TTS, and more — all permission-controlled.
@@ -50,10 +50,34 @@ Daily notes, curated long-term memory, session snapshots, and a self-improvement
 Full NORMAL/INSERT mode switching, `hjkl` navigation, `d/y/p` operators — built into the REPL.
 
 ### 🛡️ Permission System
-Three-tier tool permissions: `allow` / `ask` / `deny`. Dangerous operations always prompt. Customize per-tool in `permissions.json`.
+Three-tier tool permissions: `allow` / `ask` / `deny`, backed by runtime JSON Schema validation and workspace path isolation. Writes, command execution, network access, sensitive-file reads, and sub-agent execution require a fresh approval.
+
+For an explicitly authorized, prompt-free workspace session, use:
+
+```bash
+synapse chat --permission-mode workspace-auto --sandbox-backend auto
+```
+
+Shell commands in this mode run only through Bubblewrap (Linux) or Docker (Windows/Linux). If neither strict backend is available, command execution is denied rather than falling back to the host shell. PowerShell host commands continue to require approval because constrained language mode is not an OS sandbox.
 
 ### 🔌 MCP + Plugin Architecture
 Connect any MCP-compatible server. Built-in plugin registry for extending functionality.
+
+MCP servers are inert until their command and advertised capability manifest are explicitly trusted:
+
+```bash
+synapse mcp add local node ./server.mjs
+synapse mcp trust local
+synapse mcp list
+```
+
+Agent-selected web destinations also require a domain allowlist entry. Every redirect is revalidated and DNS is pinned to the checked public address:
+
+```bash
+synapse network allow docs.example.com
+synapse network allow '*.example.org'
+synapse network list
+```
 
 ---
 
@@ -88,6 +112,12 @@ synapse provider set company-gateway \
   --protocol openai \
   --model company-model \
   --api-key "$COMPANY_API_KEY"
+
+# Add ordered fallback models on the same endpoint. Fallback occurs only before
+# any streamed output, so partial responses are never silently mixed.
+synapse provider set company-gateway \
+  --model company-model \
+  --fallback-model company-model-small local-model
 
 # Anthropic-compatible endpoints are also supported
 synapse provider set private-anthropic \
@@ -127,7 +157,7 @@ Search and export exclude session transcripts by default. Add `--include-session
 
 ```text
 $ synapse doctor
-Synapse Doctor v0.2.2
+Synapse Doctor v0.3.0
   [PASS] Node.js: 22.x
   [PASS] Data directory: ~/.synapse is readable and writable
   [PASS] Provider config: ~/.synapse/.synapse.json is valid
@@ -136,7 +166,7 @@ Synapse Doctor v0.2.2
 Result: ready (8 passed, 0 warnings, 0 failed)
 
 $ synapse chat
-  Synapse v0.2.2
+  Synapse v0.3.0
   ● company-gateway / company-model
 
 You> Explain what the Soul system does
@@ -164,7 +194,7 @@ synapse-cli/
 │   ├── ui/             # REPL (Ink + Vim mode), Onboarding
 │   └── services/       # MCP Client, Plugin Registry
 ├── dist/               # Built output (~287 KB)
-└── tests/              # 34 test files, 227 tests
+└── tests/              # Unit, integration, protocol, and adversarial security tests
 ```
 
 ---
@@ -173,15 +203,16 @@ synapse-cli/
 
 ```
 ✅ Allow (no confirm):
-  FileRead · Glob · Grep · WebSearch · WebFetch
-  Task · TodoWrite · GitStatus · GitDiff · Notebook
-  Skill · TTS · Image · AskUserQuestion
+  Workspace-scoped non-sensitive reads
+  TodoWrite · GitStatus · GitDiff · Skill · AskUserQuestion
 
 ⚠️  Ask (confirm before):
-  Bash · PowerShell · FileEdit · FileWrite · GitCommit
+  Bash · PowerShell · Task · FileEdit · FileWrite · NotebookEdit · GitCommit
+  WebSearch · WebFetch · TTS · ImageGenerate · sensitive-file reads
 
 🚫 Deny (always blocked):
-  (user configurable)
+  Workspace escapes · symlink/junction escapes · uninitialized policies
+  malformed tool inputs · user-configured denied tools
 ```
 
 ---
@@ -195,6 +226,7 @@ Config stored in `~/.synapse/`:
 | `.synapse.json` | Provider, model, endpoint |
 | `.env` | API keys |
 | `SOUL.md` | Agent personality |
+| `AGENTS.md` / `CLAUDE.md` | Project instructions discovered from root to working directory |
 | `permissions.json` | Tool permissions |
 | `memory/` | Daily notes |
 | `sessions/` | Session snapshots |
@@ -202,7 +234,11 @@ Config stored in `~/.synapse/`:
 
 ## Provider Payloads
 
-Synapse sends each provider a system prompt assembled from `SOUL.md`, `MEMORY.md`, project instructions, active skills, and the current turn context. Tool use is gated by the permission model before execution, and every tool decision is written to `logs/audit.jsonl`.
+Synapse sends each provider a system prompt assembled from an immutable safety kernel, `SOUL.md`, `MEMORY.md`, `AGENTS.md`/`CLAUDE.md`, active skills, and current runtime context. Repository instructions, skills, memory, tool output, and fetched content are explicitly lower priority than approval and isolation policy.
+
+File tools are restricted to the startup directory and explicit `--add-dir` roots. Paths are checked lexically and through their real existing ancestors to block traversal and link escapes. Instruction-file `@include` directives are also confined to their owning root, including real-path checks for symlinks and junctions. Network tools require approval and reject loopback, private, and link-local destinations.
+
+Strict shell auto-approval requires Bubblewrap or Docker and fails closed when neither backend is usable. CI runs a real Bubblewrap process to verify writable workspace mounts, read-only host paths, isolated networking, and a private PID namespace.
 
 ---
 

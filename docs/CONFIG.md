@@ -225,10 +225,10 @@ exec 失败时追加"分析根因，不要重试"。
 ## 配置优先级
 
 ```
-SOUL.md (人格) > USER.md (用户) > .synapse.md (项目) > MEMORY.md (记忆)
+内置安全内核 > 当前用户请求与人工授权 > SOUL.md/.synapse.md > AGENTS.md/CLAUDE.md/.synapse/rules > MEMORY.md/工具输出/网络内容
 ```
 
-高层级可覆盖低层级。例如 SOUL.md 的行为铁律优先于 .synapse.md 的项目规范。
+任何可配置文件都不能覆盖工具 Schema、人工审批、工作区隔离、网络 allowlist 或 MCP 信任。项目指令从文件系统根目录到当前工作目录依次加载；更具体的项目约定只能在不违反更高层安全边界时覆盖通用约定。
 
 ---
 
@@ -268,6 +268,16 @@ synapse doctor
 
 Provider 预设只是快捷配置，运行时不会把厂商写死。任何 OpenAI-compatible 或 Anthropic-compatible BaseURL 都可以通过 `provider set` 接入；API key 建议放在环境变量或 `~/.synapse/.env`，不要提交到仓库。
 
+可通过 `--fallback-model <models...>` 配置同一端点上的有序降级模型。只有主模型在输出任何流式内容之前失败时才会切换；一旦已有部分输出，Synapse 会保留原错误并停止，避免拼接不同模型的响应。
+
+## 工具安全边界
+
+- 所有模型生成的工具参数在执行前经过 JSON Schema 校验。
+- 文件读写仅限启动工作区和显式 `--add-dir` 目录，并检查真实路径以阻止链接逃逸。
+- `ask` 模式下，写入、执行、网络、子代理和敏感文件读取要求当前会话人工确认；`workspace-auto` 仅自动允许受工作区或严格沙箱约束的能力。
+- 未初始化权限的 Registry 默认拒绝；子代理只能继承或收紧父 Registry 权限。
+- 非交互模式没有人工审批处理器，因此高风险操作默认拒绝。
+
 ---
 
 ## 与 OpenClaw / Claude Code 的对应关系
@@ -281,8 +291,8 @@ Provider 预设只是快捷配置，运行时不会把厂商写死。任何 Open
 | HEARTBEAT.md | HEARTBEAT.md | — | 定时任务 |
 | TOOLS.md | TOOLS.md | — | 工具笔记 |
 | .synapse.md | .bronya.md | CLAUDE.md | 项目级配置 |
+| AGENTS.md / CLAUDE.md | — | AGENTS.md / CLAUDE.md | 分层项目指令 |
 
 ## Provider 和 审计
 
-Synapse 会把 `SOUL.md`、`MEMORY.md`、项目/用户指令、技能上下文和当前对话组装成系统提示词发送给 provider。工具调用先经过权限判断，再进入执行层；所有工具决策会写入 `logs/audit.jsonl`，便于回溯。
-| — | AGENTS.md | — | 行为规则（内置到 SOUL.md） |
+Synapse 会把内置安全内核、`SOUL.md`、`MEMORY.md`、`AGENTS.md`/`CLAUDE.md`、技能上下文和当前环境组装成系统提示词发送给 provider。项目指令中的 `@include` 只能读取所属根目录内的真实文件；绝对路径、`..` 越界和符号链接/junction 逃逸都会被拒绝。工具调用先经过 Schema、权限和隔离判断，再进入执行层；所有工具决策会写入 `logs/audit.jsonl`，便于回溯。

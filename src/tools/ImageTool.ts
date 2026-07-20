@@ -2,6 +2,8 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import type { ToolDef, ToolResult } from '../core/types.js';
+import { resolveWorkspacePath } from '../utils/workspacePaths.js';
+import { linkAbortSignal } from '../utils/abort.js';
 
 export const ImageReadTool: ToolDef<{ file_path: string }> = {
   name: 'ImageRead',
@@ -15,15 +17,13 @@ export const ImageReadTool: ToolDef<{ file_path: string }> = {
   },
   permissions: 'read',
   isEnabled: () => true,
-  execute: async (input): Promise<ToolResult> => {
-    if (!existsSync(input.file_path)) {
-      return { output: `Error: File not found: ${input.file_path}`, isError: true };
-    }
-
+  execute: async (input, ctx): Promise<ToolResult> => {
     try {
-      const buffer = readFileSync(input.file_path);
+      const filePath = resolveWorkspacePath(input.file_path, ctx, 'read');
+      if (!existsSync(filePath)) return { output: `Error: File not found: ${input.file_path}`, isError: true };
+      const buffer = readFileSync(filePath);
       const size = buffer.length;
-      const ext = input.file_path.split('.').pop()?.toLowerCase() ?? 'unknown';
+      const ext = filePath.split('.').pop()?.toLowerCase() ?? 'unknown';
 
       // 检测 PNG
       if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) {
@@ -98,18 +98,19 @@ export const ImageGenerateTool: ToolDef<{ prompt: string; output_path?: string; 
     properties: {
       prompt: { type: 'string', description: 'Image generation prompt' },
       output_path: { type: 'string', description: 'Output file path (default: ./generated.png)' },
-      size: { type: 'string', description: 'Image size: 256x256, 512x512, 1024x1024', default: '1024x1024' },
+      size: { type: 'string', enum: ['256x256', '512x512', '1024x1024'], default: '1024x1024' },
     },
     required: ['prompt'],
   },
   permissions: 'network',
   isEnabled: () => !!process.env.OPENAI_API_KEY,
-  execute: async (input): Promise<ToolResult> => {
+  execute: async (input, ctx): Promise<ToolResult> => {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return { output: 'Error: OPENAI_API_KEY not set', isError: true };
     }
 
+    const requestAbort = linkAbortSignal(ctx.abortSignal, 60_000);
     try {
       const resp = await fetch('https://api.openai.com/v1/images/generations', {
         method: 'POST',
@@ -123,6 +124,7 @@ export const ImageGenerateTool: ToolDef<{ prompt: string; output_path?: string; 
           size: input.size ?? '1024x1024',
           response_format: 'b64_json',
         }),
+        signal: requestAbort.signal,
       });
 
       if (!resp.ok) {
@@ -136,7 +138,7 @@ export const ImageGenerateTool: ToolDef<{ prompt: string; output_path?: string; 
         return { output: 'Error: No image data in response', isError: true };
       }
 
-      const outputPath = input.output_path ?? './generated.png';
+      const outputPath = resolveWorkspacePath(input.output_path ?? './generated.png', ctx, 'write');
       mkdirSync(dirname(outputPath), { recursive: true });
       writeFileSync(outputPath, Buffer.from(b64, 'base64'));
 
@@ -146,6 +148,8 @@ export const ImageGenerateTool: ToolDef<{ prompt: string; output_path?: string; 
       };
     } catch (err: unknown) {
       return { output: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
+    } finally {
+      requestAbort.dispose();
     }
   },
 };

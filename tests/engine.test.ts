@@ -58,11 +58,17 @@ const noopContext = {
   build: async () => ['You are helpful'],
 };
 
+function explicitRegistry(): ToolRegistry {
+  return new ToolRegistry({
+    permissions: { allowedTools: [], deniedTools: [], askForTools: [] },
+  });
+}
+
 describe('Engine', () => {
   it('yields tokens and ends turn for text-only response', async () => {
     const messages: Message[] = [{ role: 'user', content: 'hello' }];
     const provider = mockTextProvider('Hi there!');
-    const tools = new ToolRegistry();
+    const tools = explicitRegistry();
 
     const events: any[] = [];
     for await (const event of createEngine(messages, provider, tools, noopContext, noopHooks, noopCompressor, noopErrorRecovery)) {
@@ -88,7 +94,7 @@ describe('Engine', () => {
       execute: async (input: any) => ({ output: `Echoed: ${input.text}`, isError: false }),
     };
 
-    const tools = new ToolRegistry();
+    const tools = explicitRegistry();
     tools.register(echoTool);
 
     const events: any[] = [];
@@ -121,7 +127,7 @@ describe('Engine', () => {
       execute: async () => ({ output: 'executed', isError: false }),
     };
 
-    const tools = new ToolRegistry();
+    const tools = explicitRegistry();
     tools.register(bashTool);
 
     const blockingHooks = {
@@ -143,7 +149,7 @@ describe('Engine', () => {
     const messages: Message[] = [{ role: 'user', content: 'do something' }];
     const provider = mockToolProvider('Secret', {}, 'Done!');
 
-    const tools = new ToolRegistry();
+    const tools = explicitRegistry();
     // Don't register the tool → checkPermission returns 'deny'
 
     const events: any[] = [];
@@ -163,12 +169,12 @@ describe('Engine', () => {
       name: 'FailTool',
       description: 'Always fails',
       schema: {},
-      permissions: 'execute',
+      permissions: 'read',
       isEnabled: () => true,
       execute: async () => { throw new Error('Tool exploded'); },
     };
 
-    const tools = new ToolRegistry();
+    const tools = explicitRegistry();
     tools.register(failTool);
 
     const events: any[] = [];
@@ -195,7 +201,7 @@ describe('Engine', () => {
       execute: async (input: any) => ({ output: `Echoed: ${input.text}`, isError: false }),
     };
 
-    const tools = new ToolRegistry();
+    const tools = explicitRegistry();
     tools.register(echoTool);
 
     for await (const _event of createEngine(
@@ -220,5 +226,49 @@ describe('Engine', () => {
     expect(auditEvents.map(e => e.action)).toContain('tool.execution_started');
     expect(auditEvents.map(e => e.action)).toContain('tool.execution_finished');
     expect(auditEvents.find(e => e.action === 'tool.permission_decision')?.meta?.decision).toBe('allow');
+  });
+
+  it('returns schema errors to the model for self-correction without executing the tool', async () => {
+    let executions = 0;
+    const messages: Message[] = [{ role: 'user', content: 'echo' }];
+    const provider = mockToolProvider('Echo', { text: 42 }, 'Corrected');
+    const tools = explicitRegistry();
+    tools.register({
+      name: 'Echo',
+      description: 'Echo',
+      schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+      permissions: 'read',
+      isEnabled: () => true,
+      execute: async () => { executions++; return { output: 'unexpected', isError: false }; },
+    });
+    const events: any[] = [];
+    for await (const event of createEngine(messages, provider, tools, noopContext, noopHooks, noopCompressor, noopErrorRecovery)) {
+      events.push(event);
+    }
+    expect(executions).toBe(0);
+    expect(JSON.stringify(messages)).toContain('Invalid tool input for Echo');
+    expect(events.filter(event => event.type === 'token').map(event => event.text).join('')).toBe('Corrected');
+  });
+
+  it('stops an unbounded tool loop at the configured safety limit', async () => {
+    const provider: Provider = {
+      name: 'loop',
+      async *stream() {
+        yield { type: 'content_block_start', content_block: { type: 'tool_use', id: `tool-${Date.now()}`, name: 'Echo', input: {} } } as StreamChunk;
+        yield { type: 'content_block_delta', delta: { type: 'input_json_delta', partial_json: '{}' } } as StreamChunk;
+        yield { type: 'content_block_stop' } as StreamChunk;
+      },
+    };
+    const tools = explicitRegistry();
+    tools.register({
+      name: 'Echo', description: 'Echo', schema: { type: 'object', properties: {} }, permissions: 'read',
+      isEnabled: () => true, execute: async () => ({ output: 'ok', isError: false }),
+    });
+    const events: any[] = [];
+    for await (const event of createEngine(
+      [{ role: 'user', content: 'loop' }], provider, tools, noopContext, noopHooks, noopCompressor, noopErrorRecovery,
+      { maxTurns: 2 },
+    )) events.push(event);
+    expect(events.at(-1)).toEqual({ type: 'error', error: 'Agent stopped after reaching the 2-turn safety limit.' });
   });
 });

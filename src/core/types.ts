@@ -77,6 +77,8 @@ export interface ToolDef<T = Record<string, unknown>> {
   description: string;
   schema: Record<string, unknown>;
   permissions: 'read' | 'write' | 'execute' | 'network';
+  /** Safe for session-scoped workspace-auto after enforcing its own boundary. */
+  autoApproveInWorkspace?: boolean;
   isEnabled: () => boolean;
   execute: (input: T, ctx: ToolContext) => Promise<ToolResult>;
 }
@@ -84,6 +86,7 @@ export interface ToolDef<T = Record<string, unknown>> {
 export interface ToolContext {
   cwd: string;
   abortSignal: AbortSignal;
+  workspaceRoots?: string[];
 }
 
 export type EngineEvent =
@@ -136,14 +139,16 @@ export interface StreamParams {
   system: string[];
   messages: Message[];
   tools: Record<string, unknown>[];
+  signal?: AbortSignal;
 }
 
 export interface Provider {
   name: string;
   stream(params: StreamParams): AsyncIterable<StreamChunk>;
+  countTokens?(params: StreamParams): Promise<number>;
 }
 
-export type PermissionMode = 'ask' | 'bubble' | 'allow';
+export type PermissionMode = 'ask' | 'workspace-auto';
 
 export interface HookResult {
   blocked: boolean;
@@ -152,7 +157,22 @@ export interface HookResult {
 
 export interface CompressionResult {
   compressed: boolean;
-  stats?: { tokensBefore: number; tokensAfter: number };
+  stats?: CompressionStats;
+}
+
+export interface CompressionQuality {
+  score: number;
+  protectedFactRetention: number;
+  recentMessageRetention: number;
+  toolCallIntegrity: number;
+}
+
+export interface CompressionStats {
+  tokensBefore: number;
+  tokensAfter: number;
+  tokenMethod: 'provider' | 'exact' | 'estimated';
+  reductionRatio: number;
+  quality: CompressionQuality;
 }
 
 export interface SessionMeta {

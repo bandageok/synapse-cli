@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import type { ToolDef, ToolResult } from '../core/types.js';
+import { resolveWorkspacePath } from '../utils/workspacePaths.js';
 
 export const NotebookReadTool: ToolDef<{ notebook_path: string }> = {
   name: 'NotebookRead',
@@ -13,12 +14,11 @@ export const NotebookReadTool: ToolDef<{ notebook_path: string }> = {
   },
   permissions: 'read',
   isEnabled: () => true,
-  execute: async (input): Promise<ToolResult> => {
-    if (!existsSync(input.notebook_path)) {
-      return { output: `Error: File not found: ${input.notebook_path}`, isError: true };
-    }
+  execute: async (input, ctx): Promise<ToolResult> => {
     try {
-      const nb = JSON.parse(readFileSync(input.notebook_path, 'utf-8'));
+      const notebookPath = resolveWorkspacePath(input.notebook_path, ctx, 'read');
+      if (!existsSync(notebookPath)) return { output: `Error: File not found: ${input.notebook_path}`, isError: true };
+      const nb = JSON.parse(readFileSync(notebookPath, 'utf-8'));
       const cells = (nb.cells ?? []).map((cell: { cell_type: string; source: string[] }, i: number) => {
         const type = cell.cell_type;
         const source = Array.isArray(cell.source) ? cell.source.join('') : cell.source;
