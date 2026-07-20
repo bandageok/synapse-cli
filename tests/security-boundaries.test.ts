@@ -63,16 +63,14 @@ describe('security boundaries', () => {
     expect(result.output).toContain('escapes the workspace');
   });
 
-  it('requires human approval for writes even when allowlisted', async () => {
+  it('honors an explicit write allowlist without bypassing workspace checks', async () => {
     const registry = new ToolRegistry({ permissions: explicitPermissions, workspaceRoots: [workspace] });
     registry.register(FileWriteTool);
     const target = join(workspace, 'approved.txt');
     const use = { id: '1', name: 'FileWrite', input: { file_path: target, content: 'ok' } };
-    expect(registry.checkPermission(use)).toBe('ask');
+    expect(registry.checkPermission(use)).toBe('allow');
     const context = { cwd: workspace, workspaceRoots: [workspace], abortSignal: new AbortController().signal };
-    expect((await registry.execute(use, context)).output).toContain('Human approval required');
-    expect(existsSync(target)).toBe(false);
-    expect((await registry.execute(use, context, { humanApproved: true })).isError).toBe(false);
+    expect((await registry.execute(use, context)).isError).toBe(false);
     expect(existsSync(target)).toBe(true);
   });
 

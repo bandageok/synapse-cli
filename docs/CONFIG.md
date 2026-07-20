@@ -282,6 +282,10 @@ Provider 预设只是快捷配置，运行时不会把厂商写死。任何 Open
 - 使用 `synapse permissions set <mode>` 保存新会话默认值，`synapse chat --permission-mode <mode>` 或 `--yolo` 只覆盖本次启动，`/permissions <mode>` 只切换当前交互会话。
 - 未初始化权限的 Registry 默认拒绝；子代理只能继承或收紧父 Registry 权限。
 - 非交互模式没有人工审批处理器，因此高风险操作默认拒绝。
+- `permissions.json` 中的优先级为 `deniedTools > askForTools > allowedTools`。`allowedTools` 可在 `ask` 模式消除普通工具的重复确认，但不能绕过敏感路径、工作区边界或 deny；受限子代理不会继承高风险 allow 条目。
+- 权限确认框中，`A` 只允许一次，`D` 拒绝，`F`/`Y` 把当前会话切到 `full-access` 后允许当前工具；该选择不写入 `.synapse.json`。
+- 已存在但无法解析的 `permissions.json` 会阻止权限初始化并报告具体字段，不会静默回退到可能丢失 deny 条目的默认策略。文件保存使用同目录临时文件加原子 rename。
+- 完整状态、入口和运行时验收条件见 [权限测试矩阵](./PERMISSION-TEST-MATRIX.md)。
 
 ---
 

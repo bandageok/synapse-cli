@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -24,6 +24,14 @@ function runCli(args: string[], dataDir: string, extraEnv: Record<string, string
       SYNAPSE_DATA_DIR: dataDir,
       ...extraEnv,
     },
+    encoding: 'utf-8',
+  });
+}
+
+function runCliResult(args: string[], dataDir: string) {
+  return spawnSync(process.execPath, [tsxCli, entry, ...args], {
+    cwd: root,
+    env: { ...process.env, SYNAPSE_DATA_DIR: dataDir },
     encoding: 'utf-8',
   });
 }
@@ -150,7 +158,15 @@ describe('CLI integration', () => {
   it('shows and persists permission profiles with compatibility aliases', () => {
     const dataDir = tempDir('synapse-cli-permissions-');
 
-    expect(runCli(['permissions'], dataDir)).toContain('Default permission mode: ask');
+    for (const args of [
+      ['permissions'],
+      ['permissions', 'list'],
+      ['permissions', 'get'],
+      ['permissions', 'show'],
+    ]) {
+      expect(runCli(args, dataDir)).toContain('Default permission mode: ask');
+      expect(existsSync(join(dataDir, '.synapse.json'))).toBe(false);
+    }
     const fullAccess = runCli(['permissions', 'set', 'full-access'], dataDir);
     expect(fullAccess).toContain('Default permission mode: full-access');
     expect(fullAccess).toContain('Warning:');
@@ -158,6 +174,37 @@ describe('CLI integration', () => {
 
     runCli(['permissions', 'workspace-auto'], dataDir);
     expect(JSON.parse(readFileSync(join(dataDir, '.synapse.json'), 'utf-8')).permissionMode).toBe('auto');
+
+    runCli(['permissions', 'set', ' YOLO '], dataDir);
+    expect(JSON.parse(readFileSync(join(dataDir, '.synapse.json'), 'utf-8')).permissionMode).toBe('full-access');
+  });
+
+  it.each([
+    [['permissions', 'set'], 'permission mode must be'],
+    [['permissions', 'unknown'], 'permission mode must be'],
+    [['permissions', 'set', 'invalid'], 'permission mode must be'],
+  ] as const)('rejects invalid permission command %j without changing config', (args, message) => {
+    const dataDir = tempDir('synapse-cli-permissions-invalid-');
+    writeFileSync(join(dataDir, '.synapse.json'), JSON.stringify({ permissionMode: 'ask' }));
+
+    const result = runCliResult([...args], dataDir);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(message);
+    expect(JSON.parse(readFileSync(join(dataDir, '.synapse.json'), 'utf-8')).permissionMode).toBe('ask');
+  });
+
+  it.each([
+    [['chat', '--pipe', '--permission-mode', 'invalid'], '--permission-mode must be'],
+    [['chat', '--pipe', '--yolo', '--permission-mode', 'auto'], 'cannot be combined'],
+  ] as const)('rejects invalid chat permission selection %j before provider startup', (args, message) => {
+    const dataDir = tempDir('synapse-cli-chat-permissions-invalid-');
+    writeFileSync(join(dataDir, '.synapse.json'), JSON.stringify({ provider: 'local', model: 'test-model' }));
+
+    const result = runCliResult([...args], dataDir);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain(message);
   });
 
   it('inspects, searches, exports, and safely prunes memory', () => {

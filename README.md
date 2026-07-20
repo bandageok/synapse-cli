@@ -112,6 +112,8 @@ synapse resume 1 --yolo                      # same override when resuming
 
 `workspace-auto` remains an alias for `auto`; `yolo` is an alias for `full-access`. Full access is intentionally conspicuous because it runs host commands without approval prompts or strict shell isolation. It does not bypass JSON Schema validation, disabled-tool policy, dangerous-command checks, workspace path checks in file tools, MCP trust, or network destination controls.
 
+If an approval dialog is already open, press `F` or `Y` to switch the current session to `full-access` and allow that tool call immediately. `A` allows only the current call and `D` denies it. This in-dialog switch does not change the persisted default.
+
 Strict `auto` requires an operational Bubblewrap or Docker backend. Synapse runs a real isolation probe before use and denies shell execution if no strict backend works. PowerShell and other operations that cannot stay inside the strict boundary are denied rather than prompting, because `auto` has an approval policy of `never`.
 
 MCP servers remain inactive until their command, referenced scripts, and advertised capabilities are trusted. Network redirects are revalidated, private address ranges are rejected, and requests are pinned to the checked public address.
@@ -123,6 +125,7 @@ Read the decisions behind these boundaries:
 - [Trusted context and executable identity](./docs/adr/0003-trusted-context-and-executable-identity.md)
 - [Product identity and provider boundary](./docs/adr/0005-product-identity-and-provider-boundary.md)
 - [Permission profiles and dynamic switching](./docs/adr/0006-permission-profiles-and-dynamic-switching.md)
+- [Executable permission test matrix](./docs/PERMISSION-TEST-MATRIX.md)
 
 ## Memory and configuration
 
@@ -166,13 +169,14 @@ Search and export exclude session transcripts unless `--include-sessions` is sup
 
 ## Verification
 
-The `v0.3.3` release is covered by 275 passing tests across unit, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
+The `v0.3.3` release is covered by 394 passing tests across unit, matrix, component, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
 
 Run the same checks locally:
 
 ```bash
 npm ci
 npm run lint
+npm run test:permissions
 npm test
 npm run build
 npm pack --dry-run

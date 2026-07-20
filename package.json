@@ -12,6 +12,7 @@
     "dev": "tsx src/entry/cli.ts",
     "build": "tsup",
     "test": "vitest run",
+    "test:permissions": "vitest run tests/permission-matrix.test.ts tests/permission-dialog.test.tsx tests/permission-modes.test.ts tests/security-boundaries.test.ts tests/phase2-controls.test.ts tests/cli-integration.test.ts tests/commands.test.ts tests/conversation-e2e.test.ts",
     "lint": "tsc --noEmit",
     "prepack": "npm run build",
     "prepublishOnly": "npm run lint && npm test && npm run build"
@@ -75,6 +76,7 @@
     "SECURITY.md",
     "docs/adr",
     "docs/CONFIG.md",
+    "docs/PERMISSION-TEST-MATRIX.md",
     "docs/PROVIDER-MEMORY-CLI.md",
     "docs/ROADMAP.md",
     "docs/SYNAPSE-AUDIT-2026-07-19.md",

@@ -10,6 +10,11 @@ All notable changes to Synapse are documented in this file.
 - Added persisted `synapse permissions set`, launch-scoped `--permission-mode`/`--yolo`, and session-scoped `/permissions` switching backed by shared runtime state.
 - Kept `workspace-auto` as a compatibility alias, made strict `auto` deny instead of prompt or fall back, and warned before no-prompt host execution.
 - Added unit, CLI persistence, slash-command, and real Bash tool round-trip regression tests for permission switching.
+- Added an executable 90-case permission state matrix plus CLI and Provider round trips for every approval profile.
+- Added `npm run test:permissions` as the repeatable permission release gate.
+- Added read-only `synapse permissions list|get|show` aliases and verified that they never create or mutate configuration.
+- Added an in-dialog `F`/`Y` action that switches the current session to `full-access` before allowing the pending tool call, with dedicated component tests.
+- Fixed ineffective high-risk `allowedTools`, disabled-tool pre-authorization, child-registry allowlist inheritance, cross-directory default-policy mutation, and allow/ask conflict recovery.
 - Added an immutable Synapse/BandageOK product identity contract that distinguishes the CLI from its replaceable inference provider.
 - Wired `IDENTITY.md` into context assembly, auto-created it for existing data directories, and prevented it from overriding product provenance or safety rules.
 - Added sanitized runtime provider/model disclosure and explicit correction of stale identity claims in resumed conversations.
