@@ -2,6 +2,13 @@
 
 This roadmap records intended direction, not a release promise. Work moves into a version only after its behavior and validation plan are clear.
 
+## Shipped in v0.3.3
+
+- Separated immutable Synapse/BandageOK product provenance from replaceable Provider and model identity
+- Wired the local `IDENTITY.md` profile into context without allowing it to override product or safety facts
+- Added sanitized runtime route disclosure and deterministic local answers for direct product-identity questions
+- Added identity request-envelope, migration, injection-resistance, and no-Provider-call regression tests
+
 ## Shipped in v0.3.2
 
 - Replaced provenance-unclear memory and Vim modules with documented local contracts

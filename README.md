@@ -106,6 +106,7 @@ Read the decisions behind these boundaries:
 - [Secure tool boundaries and provider codecs](./docs/adr/0001-secure-tool-boundary-and-provider-codecs.md)
 - [Isolation, MCP trust, network policy, context, and TUI controls](./docs/adr/0002-isolation-trust-network-context-and-tui.md)
 - [Trusted context and executable identity](./docs/adr/0003-trusted-context-and-executable-identity.md)
+- [Product identity and provider boundary](./docs/adr/0005-product-identity-and-provider-boundary.md)
 
 ## Memory and configuration
 
@@ -115,12 +116,15 @@ Synapse keeps local state under `~/.synapse/` by default.
 | --- | --- |
 | `.synapse.json` | Active provider, model, protocol, and endpoint |
 | `.env` | API keys, excluded from normal command output |
-| `SOUL.md` | Agent behavior and identity |
+| `IDENTITY.md` | Configurable agent profile; cannot override product provenance |
+| `SOUL.md` | Agent behavior and tone |
 | `MEMORY.md` | Curated long-term memory |
 | `memory/` | Daily notes |
 | `AGENTS.md` / `CLAUDE.md` | Project instructions discovered from root to working directory |
 | `permissions.json` | Tool permission policy |
 | `sessions/` | Resumable session snapshots |
+
+Synapse identifies itself as a product developed and maintained by BandageOK. The configured provider and model are disclosed separately as replaceable inference dependencies; changing providers does not change Synapse's product identity.
 
 Memory operations are explicit and scriptable:
 
@@ -146,7 +150,7 @@ Search and export exclude session transcripts unless `--include-sessions` is sup
 
 ## Verification
 
-The `v0.3.2` release is covered by 260 passing tests across unit, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
+The `v0.3.3` release is covered by 267 passing tests across unit, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
 
 Run the same checks locally:
 
@@ -161,7 +165,7 @@ npm audit
 
 ## Project status
 
-Synapse is early-stage software. `v0.3.2` is usable and tested, but command names and configuration details can still change before `v1.0.0`. See the [current roadmap](./docs/ROADMAP.md) and [changelog](./CHANGELOG.md).
+Synapse is early-stage software. `v0.3.3` is usable and tested, but command names and configuration details can still change before `v1.0.0`. See the [current roadmap](./docs/ROADMAP.md) and [changelog](./CHANGELOG.md).
 
 For a code-backed explanation of the architecture and tradeoffs, read the [Chinese project case study](./docs/CASE-STUDY.zh-CN.md), the [Chinese interview guide](./docs/INTERVIEW-GUIDE.zh-CN.md), and [ADR-0004 on provenance remediation](./docs/adr/0004-provenance-remediation-and-maintenance.md).
 

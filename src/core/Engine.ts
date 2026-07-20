@@ -5,7 +5,10 @@ import type {
 } from './types.js';
 import type { ToolRegistry } from './ToolRegistry.js';
 
-export interface ContextBuilder { build(turnCount: number): Promise<string[]> }
+export interface ContextBuilder {
+  build(turnCount: number): Promise<string[]>;
+  answerIdentityQuestion?: (userInput: string) => string | null;
+}
 export interface HookSystem {
   preToolUse(toolUse: { id: string; name: string; input: Record<string, unknown> }): Promise<{ blocked: boolean; reason?: string }>;
   postToolUse(toolUse: { id: string; name: string; input: Record<string, unknown> }, result: ToolResult): Promise<void>;
@@ -61,6 +64,18 @@ export async function* createEngine(
     }
     turnCount++;
     options?.logger?.info(`Turn ${turnCount} started`);
+
+    const latestMessage = messages.at(-1);
+    const directIdentityAnswer = latestMessage?.role === 'user' && typeof latestMessage.content === 'string'
+      ? context.answerIdentityQuestion?.(latestMessage.content)
+      : null;
+    if (directIdentityAnswer) {
+      messages.push({ role: 'assistant', content: [{ type: 'text', text: directIdentityAnswer }] });
+      options?.logger?.audit?.('identity.local_response', { turn: turnCount });
+      yield { type: 'token', text: directIdentityAnswer };
+      yield { type: 'end_turn' };
+      return;
+    }
 
     // Build the complete request envelope before accounting so memory and tool schemas are included.
     const systemPrompt = await context.build(turnCount);

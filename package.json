@@ -1,7 +1,8 @@
 {
   "name": "@bandageok/synapse-cli",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Local-first coding agent CLI with persistent project memory, multi-provider LLM support, and fail-closed tool isolation",
+  "author": "BandageOK",
   "type": "module",
   "main": "./dist/cli.mjs",
   "bin": {

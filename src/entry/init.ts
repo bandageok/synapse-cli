@@ -3,7 +3,8 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import type { ToolDef } from '../core/types.js';
-import { createProvider } from '../providers/factory.js';
+import { createProviderFromRuntime } from '../providers/factory.js';
+import { resolveProviderRuntime } from '../providers/management.js';
 import { ToolRegistry } from '../core/ToolRegistry.js';
 import { ContextBuilder } from '../core/Context.js';
 import { SkillAutoLoader } from '../skills/AutoLoader.js';
@@ -19,6 +20,7 @@ import { MemoryMaintenance } from '../soul/MemoryMaintenance.js';
 import { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
 import { SelfImprovement } from '../soul/SelfImprovement.js';
 import { Logger } from '../core/Logger.js';
+import { ensureIdentityFile } from '../core/ProductIdentity.js';
 import { createBashTool } from '../tools/BashTool.js';
 import { FileReadTool } from '../tools/FileReadTool.js';
 import { FileEditTool } from '../tools/FileEditTool.js';
@@ -46,7 +48,9 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
   const dataDir = process.env.SYNAPSE_DATA_DIR || join(homedir(), '.synapse');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
-  const provider = createProvider(opts.model);
+  ensureIdentityFile(dataDir);
+  const providerRuntime = resolveProviderRuntime(opts.model, dataDir);
+  const provider = createProviderFromRuntime(providerRuntime);
   const permissionMode = opts.permissionMode ?? 'ask';
   const tools = new ToolRegistry({ permissionMode });
   tools.initPermissions(dataDir);
@@ -81,7 +85,20 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
   // Auto-match based on current working directory
   skillLoader.autoMatch('', process.cwd());
 
-  const context = new ContextBuilder({ dataDir, cwd: process.cwd(), additionalDirs: opts.addDir, soulLoader, skillLoader });
+  const context = new ContextBuilder({
+    dataDir,
+    cwd: process.cwd(),
+    additionalDirs: opts.addDir,
+    soulLoader,
+    skillLoader,
+    runtimeIdentity: providerRuntime ? {
+      providerId: providerRuntime.id,
+      providerName: providerRuntime.name,
+      protocol: providerRuntime.protocol,
+      model: providerRuntime.model,
+      fallbackModels: providerRuntime.fallbackModels,
+    } : undefined,
+  });
 
   // TaskTool 需要注入依赖
   const taskTool = createTaskTool({ provider: provider!, tools, context, hooks, compressor, errorRecovery });

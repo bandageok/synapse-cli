@@ -6,27 +6,44 @@ export const contextCommand: SlashCommand = {
   handler: async (_args, deps) => {
     const { existsSync, readFileSync, readdirSync } = await import('fs');
     const { join } = await import('path');
+    const { resolveProviderRuntime } = await import('../../providers/management.js');
 
     const lines: string[] = [];
     const cwd = process.cwd();
 
-    // Layer 1: Default prompt
-    lines.push('📦 Layer 1: Default prompt ✅');
+    // Layer 1: Product identity, runtime route, and safety kernel
+    const runtime = resolveProviderRuntime(undefined, deps.dataDir);
+    lines.push('📦 Layer 1: Product identity + safety kernel ✅');
+    lines.push('    ├── product: Synapse');
+    lines.push('    ├── developer: BandageOK');
+    lines.push(`    └── route: ${runtime ? `${runtime.id} / ${runtime.model} (${runtime.protocol})` : 'not configured'}`);
 
-    // Layer 2: SOUL.md
+    // Layer 2: IDENTITY.md
+    const identityPath = join(deps.dataDir, 'IDENTITY.md');
+    if (existsSync(identityPath)) {
+      const size = readFileSync(identityPath, 'utf-8').length;
+      lines.push(`📦 Layer 2: IDENTITY.md ✅ (${size} chars)`);
+    } else {
+      lines.push('📦 Layer 2: IDENTITY.md ❌ not found');
+    }
+
+    // Layer 3: SOUL.md
     const soulPath = join(deps.dataDir, 'SOUL.md');
     if (existsSync(soulPath)) {
       const size = readFileSync(soulPath, 'utf-8').length;
-      lines.push(`📦 Layer 2: SOUL.md ✅ (${size} chars)`);
+      lines.push(`📦 Layer 3: SOUL.md ✅ (${size} chars)`);
     } else {
-      lines.push('📦 Layer 2: SOUL.md ❌ not found');
+      lines.push('📦 Layer 3: SOUL.md ❌ not found');
     }
 
-    // Layer 3: Memory mechanics
-    lines.push('📦 Layer 3: Memory mechanics ✅');
+    // Layer 4: Active skills
+    lines.push('📦 Layer 4: Active skills (matched per turn)');
 
-    // Layer 4: User context (详细)
-    lines.push('📦 Layer 4: User context');
+    // Layer 5: Memory mechanics
+    lines.push('📦 Layer 5: Memory mechanics ✅');
+
+    // Layer 6: User context (详细)
+    lines.push('📦 Layer 6: User context');
     const userConfig = join(deps.dataDir, '.synapse.md');
     const projectConfig = join(cwd, '.synapse.md');
     const memoryPath = join(deps.dataDir, 'MEMORY.md');
@@ -70,14 +87,14 @@ export const contextCommand: SlashCommand = {
       }
     }
 
-    // Layer 5: System context
-    lines.push(`📦 Layer 5: System context`);
+    // Layer 7: System context
+    lines.push(`📦 Layer 7: System context`);
     lines.push(`    ├── cwd: ${cwd}`);
     lines.push(`    ├── platform: ${process.platform}`);
     lines.push(`    └── node: ${process.version}`);
 
-    // Layer 6: Dynamic reminders
-    lines.push(`📦 Layer 6: Dynamic reminders: ${deps.turnCount > 1 ? 'active' : 'inactive (turn 1)'}`);
+    // Layer 8: Dynamic reminders and safety seal
+    lines.push(`📦 Layer 8: Dynamic reminders + safety seal: ${deps.turnCount > 1 ? 'active' : 'inactive (turn 1)'}`);
 
     // Token estimate (使用精确计数)
     let totalChars = 0;

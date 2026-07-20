@@ -116,11 +116,11 @@ describe('E2E: Full Engine + MiMo V2 Pro', () => {
     expect(events.some(e => e.type === 'token')).toBe(true);
   }, 60_000);
 
-  it('context builder produces 7 layers (v7: skills layer added)', async () => {
+  it('context builder produces 8 layers with a dedicated identity profile', async () => {
     const layers = await context.build(1);
-    expect(layers).toHaveLength(7);
+    expect(layers).toHaveLength(8);
     expect(layers[0]).toContain('Synapse');
-    expect(layers[3]).toContain('Memory System');
+    expect(layers[4]).toContain('Memory System');
   });
 
   it('dynamic reminder fires on bash error', () => {

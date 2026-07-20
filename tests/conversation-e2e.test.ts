@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setProvider } from '../src/providers/management.js';
@@ -78,7 +78,51 @@ describe('real CLI conversation path', () => {
 
     expect(result.code).toBe(0);
     expect(Buffer.concat(stdout).toString('utf-8')).toContain('READY');
-    expect(JSON.parse(requestBody).model).toBe('test-model');
+    const payload = JSON.parse(requestBody);
+    expect(payload.model).toBe('test-model');
+    expect(payload.messages[0]).toMatchObject({ role: 'system' });
+    expect(payload.messages[0].content).toContain('Developer and maintainer: BandageOK');
+    expect(payload.messages[0].content).toContain('Configured provider: "local-sse"');
+    expect(payload.messages[0].content).toContain('Configured primary model: "test-model"');
+    expect(payload.messages[0].content).toContain('prior assistant messages');
+    expect(existsSync(join(dataDir, 'IDENTITY.md'))).toBe(true);
+  });
+
+  it('answers product identity locally without calling the configured provider', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'synapse-identity-conversation-'));
+    cleanup.push(dataDir);
+    setProvider('company-gateway', {
+      dataDir,
+      baseUrl: 'http://127.0.0.1:1/v1',
+      protocol: 'openai',
+      model: 'company-model',
+      apiKey: 'test-key',
+    });
+
+    const child = spawn(process.execPath, [tsxCli, entry, 'chat', '--pipe'], {
+      cwd: root,
+      env: { ...process.env, SYNAPSE_DATA_DIR: dataDir },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)));
+    child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)));
+    child.stdin.end('你是谁开发的？\n');
+
+    const code = await new Promise<number | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new Error('Local identity response timed out. stderr=' + Buffer.concat(stderr).toString('utf-8')));
+      }, 15_000);
+      child.on('error', reject);
+      child.on('close', result => { clearTimeout(timeout); resolve(result); });
+    });
+
+    const output = Buffer.concat(stdout).toString('utf-8');
+    expect(code).toBe(0);
+    expect(output).toContain('我是 Synapse，由 BandageOK 开发和维护。');
+    expect(output).toContain('company-gateway');
   });
 
   it('completes a real CLI tool round-trip with preserved tool_call_id', async () => {

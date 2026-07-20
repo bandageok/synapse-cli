@@ -8,6 +8,7 @@ import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { VERSION } from '../version.js';
+import { ensureIdentityFile } from '../core/ProductIdentity.js';
 import {
   PROVIDER_PRESETS,
   probeProvider,
@@ -169,6 +170,7 @@ function saveConfig(cfg: Config) {
   if (!existsSync(join(dataDir, 'SOUL.md'))) {
     writeUtf8(join(dataDir, 'SOUL.md'), SOUL_TEMPLATE);
   }
+  ensureIdentityFile(dataDir);
 
   // 目录
   for (const d of ['memory', 'sessions', 'logs', '.learnings']) {

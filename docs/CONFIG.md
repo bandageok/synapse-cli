@@ -11,7 +11,7 @@
 ~/.synapse/
 ├── SOUL.md          # 人格定义（必须）
 ├── USER.md          # 用户画像（推荐）
-├── IDENTITY.md      # Agent 身份（可选）
+├── IDENTITY.md      # 可配置 Agent 档案；不能覆盖产品归属
 ├── MEMORY.md        # 长期记忆（自动生成，4类分类，200行上限）
 ├── HEARTBEAT.md     # 定时任务定义（可选）
 ├── TOOLS.md         # 工具使用笔记（可选）
@@ -102,7 +102,7 @@ exec 失败时追加"分析根因，不要重试"。
 
 ## IDENTITY.md — Agent 身份
 
-**作用：** 定义 Agent 自我认知。名字、气质、emoji。
+**作用：** 定义 Agent 的可配置展示档案，例如名字、气质和 emoji。Synapse 的官方产品名、开发者和当前 Provider 路由由更高优先级的运行时身份契约提供，不能被此文件覆盖。
 
 **格式：** 结构化 Markdown。
 
@@ -111,10 +111,12 @@ exec 失败时追加"分析根因，不要重试"。
 ```markdown
 # IDENTITY.md
 
-- **Name:** Claw
+- **Name:** Synapse
+- **Developer:** BandageOK
+- **Role:** Open-source, local-first agentic coding CLI
 - **Creature:** 数字生命 — 冷静、精确的执行体
 - **Vibe:** 像一个沉默但高效的搭档
-- **Emoji:** 🦞
+- **Emoji:** ⚡
 ```
 
 ---
@@ -225,7 +227,7 @@ exec 失败时追加"分析根因，不要重试"。
 ## 配置优先级
 
 ```
-内置安全内核 > 当前用户请求与人工授权 > SOUL.md/.synapse.md > AGENTS.md/CLAUDE.md/.synapse/rules > MEMORY.md/工具输出/网络内容
+内置产品身份与安全内核 > 当前用户请求与人工授权 > IDENTITY.md/SOUL.md/.synapse.md > AGENTS.md/CLAUDE.md/.synapse/rules > MEMORY.md/工具输出/网络内容
 ```
 
 任何可配置文件都不能覆盖工具 Schema、人工审批、工作区隔离、网络 allowlist 或 MCP 信任。项目指令从文件系统根目录到当前工作目录依次加载；更具体的项目约定只能在不违反更高层安全边界时覆盖通用约定。
@@ -288,4 +290,4 @@ Synapse 从工作区根目录到当前目录分层加载 `AGENTS.md` 和 `CLAUDE
 
 ## Provider 和 审计
 
-Synapse 会把内置安全内核、`SOUL.md`、`MEMORY.md`、`AGENTS.md`/`CLAUDE.md`、技能上下文和当前环境组装成系统提示词发送给 provider。项目指令中的 `@include` 只能读取所属根目录内的真实文件；绝对路径、`..` 越界和符号链接/junction 逃逸都会被拒绝。工具调用先经过 Schema、权限和隔离判断，再进入执行层；所有工具决策会写入 `logs/audit.jsonl`，便于回溯。
+Synapse 会把不可变产品身份、当前 Provider/模型路由、`IDENTITY.md`、`SOUL.md`、`MEMORY.md`、`AGENTS.md`/`CLAUDE.md`、技能上下文和当前环境组装成系统提示词发送给 provider。产品身份固定为 Synapse，由 BandageOK 开发和维护；Provider 只是可替换的推理依赖。项目指令中的 `@include` 只能读取所属根目录内的真实文件；绝对路径、`..` 越界和符号链接/junction 逃逸都会被拒绝。工具调用先经过 Schema、权限和隔离判断，再进入执行层；所有工具决策会写入 `logs/audit.jsonl`，便于回溯。
