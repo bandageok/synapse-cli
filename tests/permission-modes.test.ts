@@ -6,7 +6,6 @@ import { PermissionManager, normalizePermissionMode, resolvePermissionModeSelect
 import { ToolRegistry } from '../src/core/ToolRegistry.js';
 import { createBashTool } from '../src/tools/BashTool.js';
 import { FileWriteTool } from '../src/tools/FileWriteTool.js';
-import { PowerShellTool } from '../src/tools/PowerShellTool.js';
 import { getConfiguredPermissionMode, setConfiguredPermissionMode } from '../src/utils/permissionConfig.js';
 import { readSynapseConfig } from '../src/providers/management.js';
 
@@ -42,10 +41,10 @@ describe('permission profiles', () => {
     const manager = new PermissionManager('ask');
     const registry = new ToolRegistry({ permissions, workspaceRoots: [workspace], permissionManager: manager });
     registry.register(FileWriteTool);
-    registry.register(PowerShellTool);
+    registry.register(createBashTool());
 
     const write = { id: 'write', name: 'FileWrite', input: { file_path: join(workspace, 'x.txt'), content: 'ok' } };
-    const shell = { id: 'shell', name: 'PowerShell', input: { command: 'Write-Output ok' } };
+    const shell = { id: 'shell', name: 'Bash', input: { command: 'echo ok' } };
     expect(registry.checkPermission(write)).toBe('ask');
     expect(registry.checkPermission(shell)).toBe('ask');
 

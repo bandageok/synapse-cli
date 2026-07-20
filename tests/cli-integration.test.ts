@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { execFileSync, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -17,7 +17,7 @@ function tempDir(prefix: string): string {
 }
 
 function runCli(args: string[], dataDir: string, extraEnv: Record<string, string> = {}): string {
-  return execFileSync(process.execPath, [tsxCli, entry, ...args], {
+  const result = spawnSync(process.execPath, [tsxCli, entry, ...args], {
     cwd: root,
     env: {
       ...process.env,
@@ -26,6 +26,15 @@ function runCli(args: string[], dataDir: string, extraEnv: Record<string, string
     },
     encoding: 'utf-8',
   });
+  if (result.error || result.status !== 0) {
+    throw new Error([
+      `CLI failed (${result.status ?? result.signal ?? 'spawn error'}): synapse ${args.join(' ')}`,
+      result.error?.message,
+      result.stdout && `stdout:\n${result.stdout}`,
+      result.stderr && `stderr:\n${result.stderr}`,
+    ].filter(Boolean).join('\n'));
+  }
+  return result.stdout;
 }
 
 function runCliResult(args: string[], dataDir: string) {

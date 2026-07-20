@@ -3,13 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync 
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { ToolRegistry } from '../src/core/ToolRegistry.js';
+import { createBashTool } from '../src/tools/BashTool.js';
 import { FileReadTool } from '../src/tools/FileReadTool.js';
 import { FileWriteTool } from '../src/tools/FileWriteTool.js';
-import { PowerShellTool } from '../src/tools/PowerShellTool.js';
 import { WebFetchTool } from '../src/tools/WebFetchTool.js';
 
 const explicitPermissions = {
-  allowedTools: ['FileRead', 'FileWrite', 'PowerShell'],
+  allowedTools: ['FileRead', 'FileWrite', 'Bash'],
   deniedTools: [],
   askForTools: [],
 };
@@ -95,9 +95,9 @@ describe('security boundaries', () => {
 
   it('restricted child registries inherit high-risk approval requirements', () => {
     const parent = new ToolRegistry({ permissions: explicitPermissions, workspaceRoots: [workspace] });
-    parent.register(PowerShellTool);
-    const child = parent.cloneRestricted(['PowerShell']);
-    expect(child.checkPermission({ id: '1', name: 'PowerShell', input: { command: 'Write-Output ok' } })).toBe('ask');
+    parent.register(createBashTool());
+    const child = parent.cloneRestricted(['Bash']);
+    expect(child.checkPermission({ id: '1', name: 'Bash', input: { command: 'echo ok' } })).toBe('ask');
   });
 
   it('requires approval for network tools and blocks explicit private destinations', async () => {
