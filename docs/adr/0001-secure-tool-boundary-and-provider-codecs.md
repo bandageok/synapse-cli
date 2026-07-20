@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-07-19
+- Updated by: ADR-0006 for permission profiles and dynamic switching
 
 ## Context
 
@@ -18,7 +19,7 @@ blacklist patterns would leave alternate execution paths open.
 1. `ToolRegistry` is the only authorization and validation boundary.
 2. Tool arguments are validated against their JSON Schema before execution.
 3. An uninitialized permission registry fails closed.
-4. Write and execute capabilities always require an explicit human decision.
+4. In the default `ask` policy, write and execute capabilities require an explicit human decision unless the user has deliberately placed the tool in `allowedTools`. ADR-0006 defines the no-prompt `auto` and `full-access` profiles.
 5. Child agents inherit a restricted clone of the parent registry and cannot
    widen permissions.
 6. File-system tools resolve paths against explicit workspace roots and reject
@@ -33,8 +34,9 @@ blacklist patterns would leave alternate execution paths open.
   test policy.
 - Out-of-workspace reads now require a future explicit capability flow; the
   current implementation denies them.
-- Child agents are read-only unless a later ADR defines scoped delegation with a
-  complete, reviewable approval UI.
+- In `ask`, restricted child registries strip inherited high-risk allow entries
+  and require a fresh decision. `auto` and `full-access` follow the shared
+  session profile defined by ADR-0006.
 - Provider conformance is tested with multi-turn tool calls, not text-only smoke
   responses.
 

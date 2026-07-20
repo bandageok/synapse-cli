@@ -35,10 +35,15 @@ Users can select a profile at three scopes:
 - Persistent: `synapse permissions set <mode>` writes the default to `.synapse.json` for new sessions.
 - Launch: `synapse chat --permission-mode <mode>` and `synapse resume <id> --permission-mode <mode>` override one launch; `--yolo` selects `full-access`.
 - Current interactive session: `/permissions <mode>` changes the shared manager without modifying the persisted default.
+- Pending approval dialog: `F` or `Y` changes the shared manager to `full-access` before approving the current call; this remains session-only.
 
 `auto` never asks. It allows workspace-confined reads and writes and tools with an independently enforced safe boundary. Bash must pass the strict Bubblewrap/Docker probe; otherwise it fails closed. Tools such as host PowerShell that cannot remain inside that boundary are denied with an explanation that names the active profile.
 
 `full-access` never asks and Bash uses the host shell. Selecting it emits a warning. It does not disable runtime JSON Schema validation, explicitly denied tools, dangerous-command patterns, file-tool path inspection, MCP trust, outbound network policy, hooks, or audit logging. This is defense in depth, not a claim that host execution is safe.
+
+Within `ask`, explicit policy precedence is `deniedTools` then `askForTools` then `allowedTools`. Sensitive-path inspection occurs before those per-tool allow entries. Restricted child registries keep read allow entries but tighten inherited write/execute/network allow entries back to `ask`. Every profile, tool class, boundary state, conflict, transition, and approval response is specified in [the permission test matrix](../PERMISSION-TEST-MATRIX.md).
+
+An existing malformed permission file is an initialization error. It is not replaced with defaults because doing so could discard explicit deny entries. Permission policy writes use a same-directory temporary file and atomic rename.
 
 ## Consequences
 

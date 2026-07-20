@@ -7,11 +7,11 @@ export function registerPermissionsCli(program: Command): void {
   program
     .command('permissions')
     .description('Show or persist the default permission profile')
-    .argument('[action]', 'list | set | ask | auto | full-access')
+    .argument('[action]', 'list | get | show | set | ask | auto | full-access')
     .argument('[mode]', 'ask | auto | full-access')
     .action((action?: string, value?: string) => {
       const dataDir = getSynapseDataDir();
-      if (!action || action === 'list') {
+      if (!action || action === 'list' || action === 'get' || action === 'show') {
         console.log(formatPermissionProfiles(getConfiguredPermissionMode(dataDir)));
         return;
       }

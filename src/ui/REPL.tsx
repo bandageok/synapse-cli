@@ -19,6 +19,11 @@ import { useVimInput } from '../vim/index.js';
 import { SkillAutoLoader } from '../skills/AutoLoader.js';
 import { VERSION } from '../version.js';
 import { TokenRenderBuffer, virtualizeText } from './streaming.js';
+import {
+  PermissionDialog,
+  applyPermissionPromptAction,
+  permissionPromptAction,
+} from './components/PermissionDialog.js';
 
 import type { Message, PermissionMode, PermissionModeInput } from '../core/types.js';
 import type { Provider } from '../providers/base.js';
@@ -162,24 +167,6 @@ function ThinkingSpinner({ label }: { label: string }) {
     React.createElement(Text, { color: 'cyan' as const }, ' ' + SPINNER[tick] + ' '),
     React.createElement(Text, { color: 'yellow' as const }, label || 'thinking'),
     React.createElement(Text, { color: 'gray' as const, dimColor: true }, ' ' + elapsed),
-  );
-}
-
-function PermissionDialog({ tool, input }: { tool: string; input: unknown }) {
-  const serialized = typeof input === 'string' ? input : JSON.stringify(input, null, 2);
-  const maxLength = 4_000;
-  const inputStr = (serialized ?? String(input)).length > maxLength
-    ? (serialized ?? String(input)).slice(0, maxLength) + '\n... [truncated; deny and narrow the request]'
-    : (serialized ?? String(input));
-  return React.createElement(Box, {
-    flexDirection: 'column' as const,
-    paddingX: 1,
-    borderStyle: 'single' as const,
-    borderColor: 'yellow' as const,
-  },
-    React.createElement(Text, { bold: true, color: 'yellow' as const }, ' \u26A0 Permission: ' + tool),
-    React.createElement(Text, { color: 'gray' as const }, '   ' + inputStr),
-    React.createElement(Text, null, '   [A] allow   [D] deny'),
   );
 }
 
@@ -414,15 +401,21 @@ export function launchREPL(deps: REPLDeps) {
       }
 
       if (pendingPermission) {
-        if (char === 'a' || char === 'A') {
-          pendingPermission.resolve(true);
-          addDisplay({ id: 'perm-ok', role: 'assistant' as const, content: '  [allowed] ' + pendingPermission.tool, timestamp: Date.now() });
-          setPendingPermission(null);
-          return;
-        }
-        if (char === 'd' || char === 'D') {
-          pendingPermission.resolve(false);
-          addDisplay({ id: 'perm-deny', role: 'assistant' as const, content: '  [denied] ' + pendingPermission.tool, timestamp: Date.now() });
+        const action = permissionPromptAction(char);
+        if (action) {
+          applyPermissionPromptAction(action, {
+            resolve: pendingPermission.resolve,
+            setFullAccess: () => {
+              tools.setPermissionMode('full-access');
+              setPermissionModeState('full-access');
+            },
+          });
+          const content = action === 'deny'
+            ? '  [denied] ' + pendingPermission.tool
+            : action === 'full-access'
+              ? '  [full-access] switched for this session; allowed ' + pendingPermission.tool
+              : '  [allowed once] ' + pendingPermission.tool;
+          addDisplay({ id: `perm-${pendingPermission.toolUseId}-${action}`, role: 'assistant' as const, content, timestamp: Date.now() });
           setPendingPermission(null);
           return;
         }

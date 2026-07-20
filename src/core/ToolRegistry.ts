@@ -92,7 +92,7 @@ export class ToolRegistry {
 
   checkPermission(toolUse: ToolUse, ctx?: ToolContext): 'allow' | 'deny' | 'ask' {
     const tool = this.tools.get(toolUse.name);
-    if (!tool || this.validateInput(toolUse) || !this.permissions) return 'deny';
+    if (!tool || !tool.isEnabled() || this.validateInput(toolUse) || !this.permissions) return 'deny';
     const pathInspection = inspectToolPaths(toolUse.name, toolUse.input, ctx ?? this.defaultContext());
     if (pathInspection.error || this.permissions.deniedTools.includes(toolUse.name)) return 'deny';
     const mode = this.permissionManager.getMode();
@@ -103,8 +103,8 @@ export class ToolRegistry {
       return 'deny';
     }
     if (this.permissions.askForTools.includes(toolUse.name)) return 'ask';
-    if (tool.permissions !== 'read') return 'ask';
-    return this.permissions.allowedTools.includes(toolUse.name) || tool.permissions === 'read' ? 'allow' : 'ask';
+    if (this.permissions.allowedTools.includes(toolUse.name)) return 'allow';
+    return tool.permissions === 'read' ? 'allow' : 'ask';
   }
 
   permissionDeniedMessage(toolUse: ToolUse): string {
@@ -125,8 +125,21 @@ export class ToolRegistry {
   }
 
   cloneRestricted(toolNames: string[]): ToolRegistry {
+    const restrictedPermissions = this.permissions
+      ? {
+          allowedTools: this.permissions.allowedTools.filter(name => this.tools.get(name)?.permissions === 'read'),
+          deniedTools: [...this.permissions.deniedTools],
+          askForTools: [...new Set([
+            ...this.permissions.askForTools,
+            ...toolNames.filter(name => {
+              const tool = this.tools.get(name);
+              return tool && tool.permissions !== 'read' && !this.permissions?.deniedTools.includes(name);
+            }),
+          ])],
+        }
+      : undefined;
     const clone = new ToolRegistry({
-      permissions: this.permissions ?? undefined,
+      permissions: restrictedPermissions,
       workspaceRoots: this.workspaceRoots,
       permissionManager: this.permissionManager,
     });

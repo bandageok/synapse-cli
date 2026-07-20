@@ -96,6 +96,8 @@ synapse resume 1 --yolo                      # 恢复会话时同样可覆盖
 
 `workspace-auto` 仍是 `auto` 的兼容别名，`yolo` 是 `full-access` 的别名。`full-access` 会在启动和切换时显示警告；它关闭审批与严格 Shell 隔离，但不会绕过 JSON Schema、禁用工具列表、危险命令检查、文件工具路径边界、MCP 信任和网络目标控制。
 
+如果确认框已经出现，可直接按 `F` 或 `Y`：Synapse 会把当前会话切到 `full-access`，并立即允许这次工具调用。`A` 只允许当前一次，`D` 拒绝；弹窗内切换不会修改持久默认值。
+
 `auto` 要求 Bubblewrap 或 Docker 通过实际隔离探测。没有可用的严格后端时，Synapse 会拒绝 Shell 执行，而不是回退到宿主 Shell；无法留在严格边界内的 PowerShell 等能力也会直接拒绝，不再弹出确认。
 
 详细设计见：
@@ -105,6 +107,7 @@ synapse resume 1 --yolo                      # 恢复会话时同样可覆盖
 - [可信上下文与可执行文件身份](./docs/adr/0003-trusted-context-and-executable-identity.md)
 - [产品身份与 Provider 边界](./docs/adr/0005-product-identity-and-provider-boundary.md)
 - [权限配置与动态切换](./docs/adr/0006-permission-profiles-and-dynamic-switching.md)
+- [可执行权限测试矩阵](./docs/PERMISSION-TEST-MATRIX.md)
 
 ## 记忆与配置
 
@@ -122,11 +125,12 @@ synapse memory export memories.json
 
 ## 验证状态
 
-`v0.3.3` 本地验证有 275 项测试通过、2 项按环境跳过，覆盖单元、集成、协议、CLI 和对抗性安全路径。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
+`v0.3.3` 本地验证有 394 项测试通过、2 项按环境跳过，覆盖单元、状态矩阵、组件、集成、协议、CLI 和对抗性安全路径。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
 
 ```bash
 npm ci
 npm run lint
+npm run test:permissions
 npm test
 npm run build
 npm pack --dry-run

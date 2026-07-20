@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setProvider } from '../src/providers/management.js';
+import { setConfiguredPermissionMode } from '../src/utils/permissionConfig.js';
 
 const root = process.cwd();
 const tsxCli = join(root, 'node_modules', 'tsx', 'dist', 'cli.mjs');
@@ -262,6 +263,94 @@ describe('real CLI conversation path', () => {
       role: 'tool',
       tool_call_id: 'call_yolo_bash',
       content: expect.stringContaining('YOLO_EXEC_OK'),
+    }));
+  });
+
+  it.each([
+    {
+      name: 'ask without an interactive approval handler',
+      args: ['--permission-mode', 'ask'],
+      persisted: 'full-access' as const,
+      expectedToolResult: 'Permission denied (no handler)',
+      finalText: 'ASK_DENIED_OK',
+    },
+    {
+      name: 'auto without prompting or host fallback',
+      args: [],
+      persisted: 'auto' as const,
+      expectedToolResult: 'Permission denied for tool "Task" in auto mode',
+      finalText: 'AUTO_DENIED_OK',
+    },
+  ])('returns a deterministic tool result in $name', async scenario => {
+    const requestBodies: any[] = [];
+    server = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      request.on('end', () => {
+        requestBodies.push(JSON.parse(Buffer.concat(chunks).toString('utf-8')));
+        response.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        });
+        if (requestBodies.length === 1) {
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: { tool_calls: [{
+            index: 0,
+            id: 'call_permission_task',
+            function: { name: 'Task', arguments: JSON.stringify({ task: 'must not execute' }) },
+          }] } }] }) + '\n\n');
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }) + '\n\n');
+        } else {
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: { content: scenario.finalText } }] }) + '\n\n');
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\n');
+        }
+        response.end();
+      });
+    });
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Test server did not expose a port');
+
+    const dataDir = mkdtempSync(join(tmpdir(), 'synapse-permission-denial-roundtrip-'));
+    cleanup.push(dataDir);
+    setProvider('local-permission-sse', {
+      dataDir,
+      baseUrl: 'http://127.0.0.1:' + address.port + '/v1',
+      protocol: 'openai',
+      model: 'test-model',
+      apiKey: 'test-key',
+    });
+    setConfiguredPermissionMode(dataDir, scenario.persisted);
+
+    const child = spawn(process.execPath, [tsxCli, entry, 'chat', '--pipe', ...scenario.args], {
+      cwd: root,
+      env: { ...process.env, SYNAPSE_DATA_DIR: dataDir },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)));
+    child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)));
+    child.stdin.end('Try the Task tool\n');
+
+    const code = await new Promise<number | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new Error('Permission denial round-trip timed out. stderr=' + Buffer.concat(stderr).toString('utf-8')));
+      }, 15_000);
+      child.on('error', reject);
+      child.on('close', result => { clearTimeout(timeout); resolve(result); });
+    });
+
+    expect(code).toBe(0);
+    expect(Buffer.concat(stdout).toString('utf-8')).toContain(scenario.finalText);
+    expect(Buffer.concat(stderr).toString('utf-8')).not.toContain('Full access runs host commands');
+    expect(JSON.parse(readFileSync(join(dataDir, '.synapse.json'), 'utf-8')).permissionMode).toBe(scenario.persisted);
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[1].messages).toContainEqual(expect.objectContaining({
+      role: 'tool',
+      tool_call_id: 'call_permission_task',
+      content: expect.stringContaining(scenario.expectedToolResult),
     }));
   });
 });
