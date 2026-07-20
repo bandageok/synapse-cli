@@ -1,7 +1,7 @@
 {
   "name": "@bandageok/synapse-cli",
-  "version": "0.3.0",
-  "description": "Synapse — a multi-provider agentic coding CLI",
+  "version": "0.3.1",
+  "description": "Local-first coding agent CLI with persistent project memory, multi-provider LLM support, and fail-closed tool isolation",
   "type": "module",
   "main": "./dist/cli.mjs",
   "bin": {
@@ -25,12 +25,19 @@
   },
   "keywords": [
     "cli",
-    "agent",
     "ai",
-    "claude",
+    "coding-agent",
+    "agentic-coding",
+    "llm",
     "multi-provider",
-    "copilot",
+    "openai-compatible",
+    "anthropic-compatible",
+    "mcp",
+    "local-first",
+    "memory",
+    "byok",
     "developer-tools",
+    "terminal",
     "typescript"
   ],
   "dependencies": {
@@ -60,12 +67,15 @@
   "files": [
     "dist",
     "README.md",
+    "README.zh-CN.md",
     "CHANGELOG.md",
     "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
     "docs/adr",
     "docs/CONFIG.md",
     "docs/PROVIDER-MEMORY-CLI.md",
-    "docs/ROADMAP-v0.3.0.md",
+    "docs/ROADMAP.md",
     "docs/SYNAPSE-AUDIT-2026-07-19.md"
   ],
   "engines": {

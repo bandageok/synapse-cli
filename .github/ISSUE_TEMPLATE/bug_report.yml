@@ -1,0 +1,77 @@
+name: Bug report
+description: Report reproducible Synapse behavior that is incorrect or unexpected.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove API keys, private source code, and session content before submitting. Report security boundary failures through the private advisory link instead.
+  - type: input
+    id: version
+    attributes:
+      label: Synapse version
+      description: Run `synapse --version`.
+      placeholder: 0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      description: Run `node --version`.
+      placeholder: v22.20.0
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: List the exact commands and smallest configuration needed to reproduce the problem.
+      placeholder: |
+        1. Run ...
+        2. Configure ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include redacted logs or `synapse doctor --json` output when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Provider protocol, permission mode, sandbox backend, or other details that affect the result.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I removed credentials, private code, and sensitive session content.
+          required: true
+        - label: I searched existing issues for the same behavior.
+          required: true
+        - label: This is not a private security report.
+          required: true

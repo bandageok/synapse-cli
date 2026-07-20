@@ -1,0 +1,24 @@
+$ synapse init
+
+$ synapse provider set local-demo ...
+Active provider: local-demo
+Model: synapse-demo
+Protocol: openai (bearer)
+Base URL: http://127.0.0.1:<port>/v1
+API key: configured via environment (SYNAPSE_DEMO_KEY)
+
+$ synapse doctor
+Synapse Doctor v0.3.1
+  [PASS] Node.js: 24.13.0
+  [PASS] Data directory: ~/.synapse is readable and writable
+  [PASS] Provider config: ~/.synapse/.synapse.json is valid
+  [PASS] Provider: local-demo / synapse-demo via environment (SYNAPSE_DEMO_KEY)
+  [PASS] SOUL.md: Available
+  [PASS] MEMORY.md: Available
+  [PASS] MCP config: No MCP servers configured
+  [PASS] Plugins: No plugins installed
+
+Result: ready (8 passed, 0 warnings, 0 failed)
+
+$ echo "Which package command should I use on Windows?" | synapse chat --pipe
+Project memory loaded. Use npm.cmd on Windows.
