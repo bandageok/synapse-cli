@@ -4,6 +4,9 @@ This roadmap records intended direction, not a release promise. Work moves into 
 
 ## Shipped in v0.3.3
 
+- Added explicit `ask`, fail-closed `auto`, and warned `full-access` permission profiles
+- Added persistent, launch-scoped, and live session permission switching with compatibility aliases
+- Kept approval decisions and Bash isolation synchronized through shared runtime state
 - Separated immutable Synapse/BandageOK product provenance from replaceable Provider and model identity
 - Wired the local `IDENTITY.md` profile into context without allowing it to override product or safety facts
 - Added sanitized runtime route disclosure and deterministic local answers for direct product-identity questions

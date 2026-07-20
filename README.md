@@ -61,8 +61,8 @@ Synapse is useful when you want to change models or gateways without changing th
 | --- | --- |
 | Move between providers | Provider routing is configured by protocol, auth method, BaseURL, model, and key environment variable. |
 | Keep project context | `AGENTS.md`, `CLAUDE.md`, `SOUL.md`, and curated memory load from local files. |
-| Control risky tools | Writes, shell commands, network access, sensitive reads, and sub-agents require permission. |
-| Automate without host-shell fallback | `workspace-auto` runs shell commands only through a working Bubblewrap or Docker backend. |
+| Control risky tools | Choose prompting, workspace-safe automation, or explicit no-prompt host execution. |
+| Automate without host-shell fallback | `auto` runs shell commands only through a working Bubblewrap or Docker backend. |
 | Inspect what happened | Permission decisions and tool lifecycle events are recorded in `logs/audit.jsonl`. |
 
 Synapse does not claim that these ideas are unique. The project focuses on making provider portability, persistent context, and strict execution boundaries work together in one inspectable CLI.
@@ -79,6 +79,9 @@ echo "Explain the failing test" | synapse chat --pipe
 # Search local project memory
 synapse memory search "release convention"
 
+# Persist the no-prompt, workspace-safe profile for new sessions
+synapse permissions set auto
+
 # Connect an MCP server, then inspect and trust it before first use
 synapse mcp add local node ./server.mjs
 synapse mcp trust local
@@ -89,15 +92,27 @@ synapse network allow docs.example.com
 
 ## Safety model
 
-The default permission model is `allow`, `ask`, or `deny` per tool. Non-sensitive workspace reads can run without a prompt. Writes, command execution, network access, sensitive-file reads, Git commits, and sub-agent execution require approval.
+Synapse separates approval policy from shell isolation and exposes three profiles:
 
-For an explicitly authorized workspace session:
+| Profile | Approval | Shell execution |
+| --- | --- | --- |
+| `ask` (default) | Prompts for state-changing, execution, network, and sensitive reads | Host shell after approval |
+| `auto` | Never prompts | Strict Bubblewrap/Docker workspace sandbox; fails closed if unavailable |
+| `full-access` | Never prompts | Host shell, with no strict isolation |
+
+Choose a persisted default, override one launch, or switch the running session:
 
 ```bash
-synapse chat --permission-mode workspace-auto --sandbox-backend auto
+synapse permissions set auto                 # new sessions
+synapse chat --permission-mode full-access   # this launch only
+synapse chat --yolo                          # alias for full-access
+synapse resume 1 --yolo                      # same override when resuming
+/permissions ask                             # inside an interactive session
 ```
 
-Strict auto-approval requires an operational Bubblewrap or Docker backend. Synapse runs a real isolation probe before use and denies command execution if no strict backend works. PowerShell host commands still require approval because constrained language mode is not an operating-system sandbox.
+`workspace-auto` remains an alias for `auto`; `yolo` is an alias for `full-access`. Full access is intentionally conspicuous because it runs host commands without approval prompts or strict shell isolation. It does not bypass JSON Schema validation, disabled-tool policy, dangerous-command checks, workspace path checks in file tools, MCP trust, or network destination controls.
+
+Strict `auto` requires an operational Bubblewrap or Docker backend. Synapse runs a real isolation probe before use and denies shell execution if no strict backend works. PowerShell and other operations that cannot stay inside the strict boundary are denied rather than prompting, because `auto` has an approval policy of `never`.
 
 MCP servers remain inactive until their command, referenced scripts, and advertised capabilities are trusted. Network redirects are revalidated, private address ranges are rejected, and requests are pinned to the checked public address.
 
@@ -107,6 +122,7 @@ Read the decisions behind these boundaries:
 - [Isolation, MCP trust, network policy, context, and TUI controls](./docs/adr/0002-isolation-trust-network-context-and-tui.md)
 - [Trusted context and executable identity](./docs/adr/0003-trusted-context-and-executable-identity.md)
 - [Product identity and provider boundary](./docs/adr/0005-product-identity-and-provider-boundary.md)
+- [Permission profiles and dynamic switching](./docs/adr/0006-permission-profiles-and-dynamic-switching.md)
 
 ## Memory and configuration
 
@@ -114,7 +130,7 @@ Synapse keeps local state under `~/.synapse/` by default.
 
 | Path | Purpose |
 | --- | --- |
-| `.synapse.json` | Active provider, model, protocol, and endpoint |
+| `.synapse.json` | Active provider, model, protocol, endpoint, and default permission profile |
 | `.env` | API keys, excluded from normal command output |
 | `IDENTITY.md` | Configurable agent profile; cannot override product provenance |
 | `SOUL.md` | Agent behavior and tone |
@@ -150,7 +166,7 @@ Search and export exclude session transcripts unless `--include-sessions` is sup
 
 ## Verification
 
-The `v0.3.3` release is covered by 267 passing tests across unit, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
+The `v0.3.3` release is covered by 275 passing tests across unit, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
 
 Run the same checks locally:
 

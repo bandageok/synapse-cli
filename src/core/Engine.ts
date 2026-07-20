@@ -217,7 +217,7 @@ export async function* createEngine(
         if (permission === 'deny') {
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied', is_error: true }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: tools.permissionDeniedMessage(toolUse), is_error: true }],
           });
           continue;
         }

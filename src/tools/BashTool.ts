@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { isAbsolute, relative, resolve } from 'path';
 import type { ToolDef, ToolContext, ToolResult } from '../core/types.js';
 import { createSandboxProcess, type SandboxBackend } from '../security/Sandbox.js';
+import type { PermissionManager } from '../core/PermissionManager.js';
 
 const DANGEROUS_PATTERNS = [
   /\brm\s+.*-rf?\s+[\/\\]/, /\bdd\s+.*of=\/dev\//, /\bmkfs\b/, /\bfdisk\b/, /\bformat\b/,
@@ -19,24 +20,23 @@ export interface BashToolConfig {
   sandboxBackend?: 'auto' | SandboxBackend;
   allowNetworkInSandbox?: boolean;
   maxBuffer?: number;
+  permissionManager?: PermissionManager;
 }
 
-const DEFAULT_CONFIG: Required<BashToolConfig> = {
+const DEFAULT_CONFIG = {
   timeout: 30_000,
   allowedDirs: [],
   sandbox: false,
   sandboxBackend: 'auto',
   allowNetworkInSandbox: false,
   maxBuffer: 1024 * 1024,
-};
+} satisfies Required<Omit<BashToolConfig, 'permissionManager'>>;
 
 export function createBashTool(userConfig: BashToolConfig = {}): ToolDef<{ command: string; timeout?: number }> {
   const config = { ...DEFAULT_CONFIG, ...userConfig };
   return {
     name: 'Bash',
-    description: config.sandbox
-      ? 'Execute a shell command in a strict workspace sandbox'
-      : 'Execute a shell command with safety checks and human approval',
+    description: 'Execute a shell command using the active permission profile and safety checks',
     schema: {
       type: 'object',
       properties: {
@@ -46,7 +46,7 @@ export function createBashTool(userConfig: BashToolConfig = {}): ToolDef<{ comma
       required: ['command'],
     },
     permissions: 'execute',
-    autoApproveInWorkspace: config.sandbox,
+    autoApproveInWorkspace: Boolean(config.permissionManager) || config.sandbox,
     isEnabled: () => true,
     execute: async (input, ctx): Promise<ToolResult> => {
       const dangerous = DANGEROUS_PATTERNS.find(pattern => pattern.test(input.command));
@@ -62,7 +62,10 @@ export function createBashTool(userConfig: BashToolConfig = {}): ToolDef<{ comma
       }
 
       try {
-        const spec = config.sandbox
+        const useStrictSandbox = config.permissionManager
+          ? config.permissionManager.getMode() === 'auto'
+          : config.sandbox;
+        const spec = useStrictSandbox
           ? createSandboxProcess(input.command, {
               cwd: ctx.cwd,
               workspaceRoots: allowedDirs,

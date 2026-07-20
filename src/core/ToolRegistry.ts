@@ -1,14 +1,16 @@
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import Ajv, { type ValidateFunction } from 'ajv';
-import type { PermissionMode, ToolContext, ToolDef, ToolResult, ToolUse } from './types.js';
+import type { PermissionMode, PermissionModeInput, ToolContext, ToolDef, ToolResult, ToolUse } from './types.js';
 import { loadPermissions, type PermissionConfig } from '../utils/permissions.js';
 import { inspectToolPaths } from '../utils/workspacePaths.js';
+import { PermissionManager } from './PermissionManager.js';
 
 export interface ToolRegistryOptions {
   permissions?: PermissionConfig;
   workspaceRoots?: string[];
-  permissionMode?: PermissionMode;
+  permissionMode?: PermissionModeInput;
+  permissionManager?: PermissionManager;
 }
 
 export interface ToolAuthorization {
@@ -22,12 +24,12 @@ export class ToolRegistry {
   private workspaceRoots: string[];
   private validators = new Map<string, ValidateFunction>();
   private ajv = new Ajv({ allErrors: true, useDefaults: true, strict: false });
-  private permissionMode: PermissionMode;
+  private permissionManager: PermissionManager;
 
   constructor(options: ToolRegistryOptions = {}) {
     this.permissions = options.permissions ? structuredClone(options.permissions) : null;
     this.workspaceRoots = this.normalizeWorkspaceRoots(options.workspaceRoots ?? [process.cwd()]);
-    this.permissionMode = options.permissionMode ?? 'ask';
+    this.permissionManager = options.permissionManager ?? new PermissionManager(options.permissionMode ?? 'ask');
   }
 
   initPermissions(dataDir: string): void {
@@ -39,8 +41,12 @@ export class ToolRegistry {
     this.workspaceRoots = this.normalizeWorkspaceRoots(roots);
   }
 
-  setPermissionMode(mode: PermissionMode): void {
-    this.permissionMode = mode;
+  setPermissionMode(mode: PermissionModeInput): PermissionMode {
+    return this.permissionManager.setMode(mode).mode;
+  }
+
+  getPermissionMode(): PermissionMode {
+    return this.permissionManager.getMode();
   }
 
   reloadPermissions(): void {
@@ -77,7 +83,7 @@ export class ToolRegistry {
     const pathInspection = inspectToolPaths(toolUse.name, toolUse.input, context);
     if (pathInspection.error) return { output: `Error: ${pathInspection.error}`, isError: true };
     const permission = this.checkPermission(toolUse, context);
-    if (permission === 'deny') return { output: `Error: Permission denied for tool "${toolUse.name}"`, isError: true };
+    if (permission === 'deny') return { output: `Error: ${this.permissionDeniedMessage(toolUse)}`, isError: true };
     if (permission === 'ask' && !authorization.humanApproved) {
       return { output: `Error: Human approval required for tool "${toolUse.name}"`, isError: true };
     }
@@ -89,11 +95,24 @@ export class ToolRegistry {
     if (!tool || this.validateInput(toolUse) || !this.permissions) return 'deny';
     const pathInspection = inspectToolPaths(toolUse.name, toolUse.input, ctx ?? this.defaultContext());
     if (pathInspection.error || this.permissions.deniedTools.includes(toolUse.name)) return 'deny';
-    if (pathInspection.sensitive) return 'ask';
-    if (this.permissionMode === 'workspace-auto' && (tool.permissions === 'write' || tool.autoApproveInWorkspace)) return 'allow';
+    const mode = this.permissionManager.getMode();
+    if (mode === 'full-access') return 'allow';
+    if (pathInspection.sensitive) return mode === 'ask' ? 'ask' : 'deny';
+    if (mode === 'auto') {
+      if (tool.permissions === 'read' || tool.permissions === 'write' || tool.autoApproveInWorkspace) return 'allow';
+      return 'deny';
+    }
     if (this.permissions.askForTools.includes(toolUse.name)) return 'ask';
     if (tool.permissions !== 'read') return 'ask';
     return this.permissions.allowedTools.includes(toolUse.name) || tool.permissions === 'read' ? 'allow' : 'ask';
+  }
+
+  permissionDeniedMessage(toolUse: ToolUse): string {
+    const mode = this.permissionManager.getMode();
+    if (mode === 'auto') {
+      return `Permission denied for tool "${toolUse.name}" in auto mode. The tool cannot run inside the active workspace-safe boundary; use ask or explicitly switch to full-access.`;
+    }
+    return `Permission denied for tool "${toolUse.name}".`;
   }
 
   validateInput(toolUse: ToolUse): string | null {
@@ -109,7 +128,7 @@ export class ToolRegistry {
     const clone = new ToolRegistry({
       permissions: this.permissions ?? undefined,
       workspaceRoots: this.workspaceRoots,
-      permissionMode: this.permissionMode,
+      permissionManager: this.permissionManager,
     });
     for (const name of toolNames) {
       const tool = this.tools.get(name);

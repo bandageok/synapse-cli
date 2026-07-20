@@ -77,7 +77,7 @@ export interface ToolDef<T = Record<string, unknown>> {
   description: string;
   schema: Record<string, unknown>;
   permissions: 'read' | 'write' | 'execute' | 'network';
-  /** Safe for session-scoped workspace-auto after enforcing its own boundary. */
+  /** Safe for no-prompt auto mode after enforcing its own workspace or network boundary. */
   autoApproveInWorkspace?: boolean;
   isEnabled: () => boolean;
   execute: (input: T, ctx: ToolContext) => Promise<ToolResult>;
@@ -148,7 +148,8 @@ export interface Provider {
   countTokens?(params: StreamParams): Promise<number>;
 }
 
-export type PermissionMode = 'ask' | 'workspace-auto';
+export type PermissionMode = 'ask' | 'auto' | 'full-access';
+export type PermissionModeInput = PermissionMode | 'workspace-auto' | 'yolo';
 
 export interface HookResult {
   blocked: boolean;

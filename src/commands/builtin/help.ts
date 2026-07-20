@@ -11,6 +11,7 @@ const COMMANDS = [
   { cmd: '/soul', desc: 'View current agent personality' },
   { cmd: '/soul-edit', desc: 'Edit agent personality' },
   { cmd: '/status', desc: 'System status overview' },
+  { cmd: '/permissions <mode>', desc: 'Switch session permission profile' },
   { cmd: '/config', desc: 'Show current configuration' },
   { cmd: '/cost', desc: 'Token usage and cost estimate' },
   { cmd: '/session', desc: 'Session management' },

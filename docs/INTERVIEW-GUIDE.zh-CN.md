@@ -37,7 +37,7 @@ Git 历史包含两组主要署名：
 >
 > Memory 方面，我把用户级、项目级、局部规则和长期记忆分层加载。include 必须留在所属 root 内，realpath、深度、文件数和总字符数都有边界。最近一次整改还替换了旧的后台维护器：现在只维护实际注入的根目录 MEMORY.md，使用独占 lease 和原子 rename，不再保留未接入运行时的 Prompt 与 SessionIndex 模块。
 >
-> 安全方面，模型参数先过 AJV Schema，再过工作区路径和敏感文件检查，最后做 allow/ask/deny。workspace-auto 只有在 Bubblewrap 或 Docker 探测成功时才执行；失败会返回错误。CI 除了单测，还真的启动 Bubblewrap，验证宿主路径、网络和 PID 隔离。
+> 安全方面，模型参数先过 AJV Schema，再过工作区路径和敏感文件检查，最后由共享 PermissionManager 做 allow/ask/deny。权限与隔离分开：ask 是逐次确认后宿主执行，auto 从不询问但只允许工作区安全能力，full-access 是显式无询问宿主执行。auto 只有在 Bubblewrap 或 Docker 探测成功时才执行 Shell；失败会返回错误。CI 除了单测，还真的启动 Bubblewrap，验证宿主路径、网络和 PID 隔离。
 >
 > 我最重要的一次修正是在来源审查时发现 Heartbeat 绕过 ToolRegistry 直接执行 shell。这个问题与公开的 Fail-closed 承诺冲突，所以我删除了这条能力，并用恶意 marker 命令做了回归测试。
 
@@ -107,7 +107,15 @@ Model tool use -> ToolRegistry -> Permission -> Sandbox -> Result
 
 ### 面试官：你如何定义 Fail-closed？
 
-> 不是“尽量安全”，而是关键前置条件缺失时拒绝执行。例如权限没有初始化、Schema 不存在、路径越界、需要审批但没有 humanApproved、workspace-auto 没有严格隔离后端，都会返回错误，而不是降级到更危险路径。
+> 不是“尽量安全”，而是关键前置条件缺失时拒绝执行。例如权限没有初始化、Schema 不存在、路径越界、ask 需要审批但没有 humanApproved、auto 没有严格隔离后端，都会返回错误，而不是降级到更危险路径。full-access 是用户显式选择的另一种策略，不是 auto 的隐式降级。
+
+### 面试官：为什么要同时提供 auto 和 full-access？
+
+> 因为“是否询问”和“在哪里执行”是两个问题。auto 的 approval policy 是 never，但 Bash 必须进入严格工作区沙箱，不能隔离的 PowerShell 等工具直接 deny；full-access 同样 never，但明确使用宿主 shell 并显示警告。两者不能混成一个模糊的 yolo 开关，否则沙箱失败时就可能静默扩大权限。
+
+### 面试官：会话内切换为什么需要共享状态？
+
+> 如果 REPL、ToolRegistry 和 Bash 各自保存模式，`/permissions` 可能只改了界面，旧 Bash 实例仍使用原隔离方式。我让它们共享一个 PermissionManager，子 Agent 的受限 Registry clone 也引用同一模式，所以一次切换会同时改变审批决策和 Shell 隔离。持久默认、单次启动覆盖和会话内切换是三个明确作用域。
 
 ### 面试官：ToolRegistry 的顺序为什么重要？
 
@@ -115,7 +123,7 @@ Model tool use -> ToolRegistry -> Permission -> Sandbox -> Result
 
 ### 面试官：Windows 上怎么做严格隔离？
 
-> 当前自动模式在 Windows 依赖 Docker。PowerShell 的 Constrained Language Mode 不是操作系统级沙箱，所以不会被描述成等价替代。普通 ask 模式仍可在用户明确审批后运行宿主命令。
+> 当前 auto 模式在 Windows 依赖 Docker。PowerShell 的 Constrained Language Mode 不是操作系统级沙箱，所以不会被描述成等价替代；auto 会直接拒绝宿主 PowerShell。ask 可在明确审批后运行宿主命令，full-access 则是用户显式选择的不询问宿主模式。
 
 ### 面试官：你发现过安全设计与实现不一致吗？
 
@@ -151,6 +159,8 @@ Model tool use -> ToolRegistry -> Permission -> Sandbox -> Result
 
 > 我在 `cdc8944` 建立集中 ToolRegistry 边界，并通过四个后续提交把 Bubblewrap 探测、网络隔离和工作区 ownership 从 mock 修到真实 CI 可运行。最近又删除了 Heartbeat 的宿主 shell 旁路。
 
+当前版本还把 Codex 中“审批策略与沙箱策略分离”的原则落成 Synapse 自己的三配置模型。我实现了共享 PermissionManager、持久/启动/会话三层入口、兼容别名、状态展示和真实 `--yolo` Bash 往返测试，同时保留集中校验与审计层。
+
 ## AI 辅助开发怎么回答
 
 推荐直接回答，不要回避：
@@ -160,7 +170,7 @@ Model tool use -> ToolRegistry -> Permission -> Sandbox -> Result
 说完后，面试官通常会用代码追问验证。必须提前做到：
 
 - 能手画 Provider 与 ToolRegistry 调用链；
-- 能解释 `workspace-auto` 为什么不会回退；
+- 能解释 `auto` 为什么不会回退，以及它与 `full-access` 的区别；
 - 能现场指出一个安全测试；
 - 能解释本次删除三个模块的依据；
 - 能说出一个自己判断错误后如何修正的例子。
@@ -178,6 +188,7 @@ synapse provider set company-gateway \
   --model local-model \
   --api-key-env COMPANY_LLM_API_KEY
 synapse doctor
+synapse permissions set auto
 synapse memory inspect
 ```
 

@@ -20,12 +20,7 @@ These gaps are especially dangerous in an agent because model output is untruste
 
 ### Permission modes and process isolation
 
-Synapse exposes two permission modes:
-
-- `ask` (default): every state-changing or network capability requires a fresh decision.
-- `workspace-auto`: the command-line flag is a session-scoped human authorization for workspace-bounded operations. Shell execution is allowed without another prompt only when a strict sandbox backend is available.
-
-There is deliberately no unsandboxed `skip all permissions` mode. Such a mode conflicts with the project's invariant that state-changing host operations require human authorization.
+This section's original two-mode decision was updated by [ADR-0006](./0006-permission-profiles-and-dynamic-switching.md). Synapse now separates approval policy from shell isolation and exposes `ask`, `auto`, and explicit `full-access` profiles. The strict sandbox behavior described below remains the execution boundary for `auto`; it still fails closed and never falls back to the host shell.
 
 Strict shell isolation is provided by:
 

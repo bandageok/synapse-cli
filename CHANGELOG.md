@@ -6,6 +6,10 @@ All notable changes to Synapse are documented in this file.
 
 ## 0.3.3 - 2026-07-20
 
+- Added `ask`, `auto`, and `full-access` permission profiles with separate approval and shell-isolation semantics.
+- Added persisted `synapse permissions set`, launch-scoped `--permission-mode`/`--yolo`, and session-scoped `/permissions` switching backed by shared runtime state.
+- Kept `workspace-auto` as a compatibility alias, made strict `auto` deny instead of prompt or fall back, and warned before no-prompt host execution.
+- Added unit, CLI persistence, slash-command, and real Bash tool round-trip regression tests for permission switching.
 - Added an immutable Synapse/BandageOK product identity contract that distinguishes the CLI from its replaceable inference provider.
 - Wired `IDENTITY.md` into context assembly, auto-created it for existing data directories, and prevented it from overriding product provenance or safety rules.
 - Added sanitized runtime provider/model disclosure and explicit correction of stale identity claims in resumed conversations.

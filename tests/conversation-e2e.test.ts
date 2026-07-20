@@ -193,4 +193,75 @@ describe('real CLI conversation path', () => {
       tool_call_id: 'call_read_package',
     }));
   });
+
+  it('executes a Bash tool call without approval when --yolo selects full-access', async () => {
+    const requestBodies: any[] = [];
+    server = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      request.on('end', () => {
+        requestBodies.push(JSON.parse(Buffer.concat(chunks).toString('utf-8')));
+        response.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'cache-control': 'no-cache',
+          connection: 'keep-alive',
+        });
+        if (requestBodies.length === 1) {
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: { tool_calls: [{
+            index: 0,
+            id: 'call_yolo_bash',
+            function: { name: 'Bash', arguments: JSON.stringify({ command: 'echo YOLO_EXEC_OK' }) },
+          }] } }] }) + '\n\n');
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }) + '\n\n');
+        } else {
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: { content: 'YOLO_ROUNDTRIP_OK' } }] }) + '\n\n');
+          response.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\n');
+        }
+        response.end();
+      });
+    });
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Test server did not expose a port');
+
+    const dataDir = mkdtempSync(join(tmpdir(), 'synapse-yolo-roundtrip-'));
+    cleanup.push(dataDir);
+    setProvider('local-yolo-sse', {
+      dataDir,
+      baseUrl: 'http://127.0.0.1:' + address.port + '/v1',
+      protocol: 'openai',
+      model: 'test-model',
+      apiKey: 'test-key',
+    });
+
+    const child = spawn(process.execPath, [tsxCli, entry, 'chat', '--pipe', '--yolo'], {
+      cwd: root,
+      env: { ...process.env, SYNAPSE_DATA_DIR: dataDir },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)));
+    child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)));
+    child.stdin.end('Run the requested Bash command\n');
+
+    const code = await new Promise<number | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new Error('CLI --yolo round-trip timed out. stderr=' + Buffer.concat(stderr).toString('utf-8')));
+      }, 15_000);
+      child.on('error', reject);
+      child.on('close', result => { clearTimeout(timeout); resolve(result); });
+    });
+
+    expect(code).toBe(0);
+    expect(Buffer.concat(stdout).toString('utf-8')).toContain('YOLO_ROUNDTRIP_OK');
+    expect(Buffer.concat(stderr).toString('utf-8')).toContain('Full access runs host commands without approval prompts');
+    expect(requestBodies).toHaveLength(2);
+    expect(requestBodies[1].messages).toContainEqual(expect.objectContaining({
+      role: 'tool',
+      tool_call_id: 'call_yolo_bash',
+      content: expect.stringContaining('YOLO_EXEC_OK'),
+    }));
+  });
 });

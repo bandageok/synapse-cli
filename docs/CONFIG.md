@@ -276,7 +276,10 @@ Provider 预设只是快捷配置，运行时不会把厂商写死。任何 Open
 
 - 所有模型生成的工具参数在执行前经过 JSON Schema 校验。
 - 文件读写仅限启动工作区和显式 `--add-dir` 目录，并检查真实路径以阻止链接逃逸。
-- `ask` 模式下，写入、执行、网络、子代理和敏感文件读取要求当前会话人工确认；`workspace-auto` 仅自动允许受工作区或严格沙箱约束的能力。
+- `ask`：写入、执行、网络、子代理和敏感文件读取要求当前会话人工确认；获批的 Shell 命令在宿主执行。
+- `auto`：审批策略为 `never`；工作区文件操作直接执行，Shell 只进入严格 Bubblewrap/Docker 沙箱，无法留在严格边界内的工具直接拒绝。`workspace-auto` 是兼容别名。
+- `full-access`：审批策略为 `never`，Shell 在宿主执行；`yolo` 是别名。Schema、禁用工具、危险命令、文件路径、MCP 信任和网络目标检查仍然生效。
+- 使用 `synapse permissions set <mode>` 保存新会话默认值，`synapse chat --permission-mode <mode>` 或 `--yolo` 只覆盖本次启动，`/permissions <mode>` 只切换当前交互会话。
 - 未初始化权限的 Registry 默认拒绝；子代理只能继承或收紧父 Registry 权限。
 - 非交互模式没有人工审批处理器，因此高风险操作默认拒绝。
 

@@ -4,6 +4,9 @@ import type { Message } from '../core/types.js';
 import { registerDoctorCli } from '../commands/doctor-cli.js';
 import { registerMemoryCli } from '../commands/memory-cli.js';
 import { registerProviderCli } from '../commands/provider-cli.js';
+import { registerPermissionsCli } from '../commands/permissions-cli.js';
+import { PERMISSION_PROFILES, resolvePermissionModeSelection } from '../core/PermissionManager.js';
+import { getConfiguredPermissionMode } from '../utils/permissionConfig.js';
 import { compareVersions } from '../utils/semver.js';
 import { findTemplateDir } from '../utils/templates.js';
 import { VERSION } from '../version.js';
@@ -18,6 +21,7 @@ program
 registerProviderCli(program);
 registerMemoryCli(program);
 registerDoctorCli(program, VERSION);
+registerPermissionsCli(program);
 
 program
   .command('network')
@@ -61,7 +65,8 @@ program
   .option('-p, --pipe', 'Pipe mode: read from stdin, output to stdout')
   .option('-v, --verbose', 'Verbose mode: show full API requests')
   .option('--add-dir <dirs...>', 'Additional trusted roots for AGENTS.md, CLAUDE.md, and .synapse/rules')
-  .option('--permission-mode <mode>', 'Permission mode: ask | workspace-auto', 'ask')
+  .option('--permission-mode <mode>', 'Permission mode: ask | auto | full-access')
+  .option('--yolo', 'Alias for --permission-mode full-access')
   .option('--sandbox-backend <backend>', 'Strict sandbox backend: auto | bubblewrap | docker', 'auto')
   .action(async (opts) => {
     const { join } = await import('path');
@@ -93,10 +98,16 @@ program
         process.exit(0);
       }
     }
-    if (!['ask', 'workspace-auto'].includes(opts.permissionMode)) {
-      console.error('Error: --permission-mode must be ask or workspace-auto.');
+    let permissionMode;
+    try {
+      permissionMode = resolvePermissionModeSelection(opts, getConfiguredPermissionMode(dataDir));
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(2);
     }
+    opts.permissionMode = permissionMode;
+    const permissionWarning = PERMISSION_PROFILES[permissionMode].warning;
+    if (permissionWarning) process.stderr.write(`Warning: ${permissionWarning}\n`);
     if (!['auto', 'bubblewrap', 'docker'].includes(opts.sandboxBackend)) {
       console.error('Error: --sandbox-backend must be auto, bubblewrap, or docker.');
       process.exit(2);
@@ -204,7 +215,9 @@ program
   .command('resume')
   .description('Resume a previous session')
   .argument('[session]', 'Session id or recent-session number')
-  .action(async (session?: string) => {
+  .option('--permission-mode <mode>', 'Permission mode: ask | auto | full-access')
+  .option('--yolo', 'Alias for --permission-mode full-access')
+  .action(async (session: string | undefined, opts: { permissionMode?: string; yolo?: boolean }) => {
     const { homedir } = await import('os');
     const { join, basename } = await import('path');
     const { existsSync, readdirSync, readFileSync } = await import('fs');
@@ -263,7 +276,16 @@ program
     }
 
     const { init } = await import('./init.js');
-    const deps = await init({});
+    let resumePermissionMode;
+    try {
+      resumePermissionMode = resolvePermissionModeSelection(opts, getConfiguredPermissionMode(dataDir));
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(2);
+    }
+    const resumeWarning = PERMISSION_PROFILES[resumePermissionMode].warning;
+    if (resumeWarning) process.stderr.write(`Warning: ${resumeWarning}\n`);
+    const deps = await init({ permissionMode: resumePermissionMode });
     if (!deps.provider) {
       console.error('Error: No API key found. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY.');
       process.exit(1);

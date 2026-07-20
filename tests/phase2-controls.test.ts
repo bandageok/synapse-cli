@@ -61,7 +61,7 @@ describe('strict sandbox policy', () => {
     expect(() => buildDockerSandboxProcess('echo no', { cwd: outside, workspaceRoots: [root] })).toThrow(/outside/);
   });
 
-  it('auto-approves only explicitly bounded tools in workspace-auto mode', () => {
+  it('allows bounded tools and denies host tools without prompting in auto mode', () => {
     const registry = new ToolRegistry({
       permissionMode: 'workspace-auto',
       permissions: { allowedTools: [], deniedTools: [], askForTools: ['BoundedExec', 'HostExec'] },
@@ -70,7 +70,7 @@ describe('strict sandbox policy', () => {
     registry.register({ ...base, name: 'BoundedExec', autoApproveInWorkspace: true });
     registry.register({ ...base, name: 'HostExec' });
     expect(registry.checkPermission({ id: '1', name: 'BoundedExec', input: {} })).toBe('allow');
-    expect(registry.checkPermission({ id: '2', name: 'HostExec', input: {} })).toBe('ask');
+    expect(registry.checkPermission({ id: '2', name: 'HostExec', input: {} })).toBe('deny');
   });
 });
 

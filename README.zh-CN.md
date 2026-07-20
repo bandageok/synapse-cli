@@ -54,8 +54,8 @@ Synapse 适合需要切换模型或网关，同时希望保留同一套项目上
 | --- | --- |
 | 切换 Provider | 通过协议、认证方式、BaseURL、模型和密钥环境变量进行配置 |
 | 保留项目上下文 | 从本地加载 `AGENTS.md`、`CLAUDE.md`、`SOUL.md` 和长期记忆 |
-| 控制危险工具 | 写文件、Shell、网络、敏感读取和子 Agent 都受权限控制 |
-| 自动执行但不回退宿主 Shell | `workspace-auto` 只在 Bubblewrap 或 Docker 隔离可用时执行命令 |
+| 控制危险工具 | 可选择逐次确认、工作区安全自动执行或显式无确认宿主执行 |
+| 自动执行但不回退宿主 Shell | `auto` 只在 Bubblewrap 或 Docker 隔离可用时执行命令 |
 | 检查执行过程 | 权限决策和工具生命周期写入 `logs/audit.jsonl` |
 
 项目不宣称这些概念只有 Synapse 才有。Synapse 的重点是把 Provider 可移植性、持久上下文和严格执行边界放在一个可检查的 CLI 中。
@@ -66,6 +66,7 @@ Synapse 适合需要切换模型或网关，同时希望保留同一套项目上
 synapse provider list
 echo "解释这个失败的测试" | synapse chat --pipe
 synapse memory search "发布约定"
+synapse permissions set auto
 
 synapse mcp add local node ./server.mjs
 synapse mcp trust local
@@ -75,15 +76,27 @@ synapse network allow docs.example.com
 
 ## 安全模型
 
-工具权限分为 `allow`、`ask` 和 `deny`。非敏感的工作区读取可以直接运行；写入、命令执行、网络访问、敏感文件读取、Git 提交和子 Agent 默认需要确认。
+Synapse 将“是否请求确认”和“Shell 是否隔离”分开，提供三种权限配置：
 
-明确授权一个工作区自动执行时，可以使用：
+| 配置 | 确认策略 | Shell 执行方式 |
+| --- | --- | --- |
+| `ask`（默认） | 写入、执行、网络和敏感读取逐次确认 | 确认后使用宿主 Shell |
+| `auto` | 从不弹出确认 | 严格 Bubblewrap/Docker 工作区沙箱；不可用时拒绝执行 |
+| `full-access` | 从不弹出确认 | 直接使用宿主 Shell，不启用严格隔离 |
+
+可以设置持久默认值、覆盖一次启动，或在当前交互会话中切换：
 
 ```bash
-synapse chat --permission-mode workspace-auto --sandbox-backend auto
+synapse permissions set auto                 # 后续新会话
+synapse chat --permission-mode full-access   # 仅本次启动
+synapse chat --yolo                          # full-access 的别名
+synapse resume 1 --yolo                      # 恢复会话时同样可覆盖
+/permissions ask                             # 交互会话内切换
 ```
 
-自动执行要求 Bubblewrap 或 Docker 通过实际隔离探测。没有可用的严格后端时，Synapse 会拒绝执行，而不是回退到宿主 Shell。
+`workspace-auto` 仍是 `auto` 的兼容别名，`yolo` 是 `full-access` 的别名。`full-access` 会在启动和切换时显示警告；它关闭审批与严格 Shell 隔离，但不会绕过 JSON Schema、禁用工具列表、危险命令检查、文件工具路径边界、MCP 信任和网络目标控制。
+
+`auto` 要求 Bubblewrap 或 Docker 通过实际隔离探测。没有可用的严格后端时，Synapse 会拒绝 Shell 执行，而不是回退到宿主 Shell；无法留在严格边界内的 PowerShell 等能力也会直接拒绝，不再弹出确认。
 
 详细设计见：
 
@@ -91,6 +104,7 @@ synapse chat --permission-mode workspace-auto --sandbox-backend auto
 - [隔离、MCP 信任、网络策略与 TUI 控制](./docs/adr/0002-isolation-trust-network-context-and-tui.md)
 - [可信上下文与可执行文件身份](./docs/adr/0003-trusted-context-and-executable-identity.md)
 - [产品身份与 Provider 边界](./docs/adr/0005-product-identity-and-provider-boundary.md)
+- [权限配置与动态切换](./docs/adr/0006-permission-profiles-and-dynamic-switching.md)
 
 ## 记忆与配置
 
@@ -108,7 +122,7 @@ synapse memory export memories.json
 
 ## 验证状态
 
-`v0.3.3` 本地验证有 267 项测试通过、2 项按环境跳过，覆盖单元、集成、协议、CLI 和对抗性安全路径。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
+`v0.3.3` 本地验证有 275 项测试通过、2 项按环境跳过，覆盖单元、集成、协议、CLI 和对抗性安全路径。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
 
 ```bash
 npm ci
