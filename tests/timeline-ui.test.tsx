@@ -77,4 +77,22 @@ describe('Timeline UI', () => {
     expect(frame).toContain('input  echo 1');
     expect(frame).toContain('all good');
   });
+
+  it('sanitizes control sequences in every non-tool text region', () => {
+    const items: DisplayItem[] = [
+      { id: 'user-ansi', kind: 'user', content: '\u001b[31muser\u001b[0m text', timestamp: 1 },
+      {
+        id: 'notice-ansi', kind: 'notice', tone: 'warning', title: '\u001b[33mwarning\u001b[0m',
+        detail: '\u001b]0;changed-title\u0007detail', timestamp: 2,
+      },
+    ];
+    const frame = render(React.createElement(Timeline, {
+      items, detailsMode: 'compact', maxAnswerLines: 20,
+    })).lastFrame() ?? '';
+    expect(frame).toContain('user text');
+    expect(frame).toContain('warning');
+    expect(frame).toContain('detail');
+    expect(frame).not.toContain('\u001b');
+    expect(frame).not.toContain('changed-title');
+  });
 });

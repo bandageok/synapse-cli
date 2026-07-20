@@ -4,6 +4,7 @@ import { MarkdownRenderer } from '../MarkdownRenderer.js';
 import {
   compactTimeline,
   previewToolOutput,
+  stripAnsi,
   summarizeToolInput,
   type DetailsMode,
   type DisplayItem,
@@ -43,7 +44,7 @@ function ToolItem({ item, detailsMode }: { item: ToolDisplayItem; detailsMode: D
     React.createElement(Box, null,
       React.createElement(Text, { color: 'gray', dimColor: true }, ' │ '),
       React.createElement(Text, { color, bold: item.status !== 'success' }, icon + ' '),
-      React.createElement(Text, { bold: item.status === 'running' }, item.name),
+      React.createElement(Text, { bold: item.status === 'running' }, stripAnsi(item.name)),
       duration ? React.createElement(Text, { color: 'gray', dimColor: true }, ` · ${duration}`) : null,
       detailsMode === 'compact' && input
         ? React.createElement(Text, { color: 'gray', dimColor: true, wrap: 'truncate-end' }, ` · ${input}`)
@@ -69,8 +70,8 @@ function NoticeItem({ item }: { item: NoticeDisplayItem }): React.ReactElement {
   const color = item.tone === 'error' ? 'red' : item.tone === 'warning' ? 'yellow' : item.tone === 'info' ? 'cyan' : 'gray';
   const icon = item.tone === 'error' ? '×' : item.tone === 'warning' ? '!' : item.tone === 'info' ? 'i' : '·';
   return React.createElement(Box, { key: item.id, flexDirection: 'column' },
-    React.createElement(Text, { color, dimColor: item.tone === 'muted' }, ` ${icon} ${item.title}`),
-    item.detail ? React.createElement(Text, { color: 'gray', dimColor: true }, `   ${item.detail}`) : null,
+    React.createElement(Text, { color, dimColor: item.tone === 'muted' }, ` ${icon} ${stripAnsi(item.title)}`),
+    item.detail ? React.createElement(Text, { color: 'gray', dimColor: true }, `   ${stripAnsi(item.detail)}`) : null,
   );
 }
 
@@ -80,7 +81,7 @@ export function TimelineView({ items, detailsMode, maxAnswerLines, columns = 100
       if (item.kind === 'user') {
         return React.createElement(Box, { key: item.id, flexDirection: 'column', marginTop: 1 },
           React.createElement(Text, { color: 'cyan', bold: true }, ' You'),
-          React.createElement(Box, { paddingLeft: 3 }, React.createElement(Text, { wrap: 'wrap' }, item.content)),
+          React.createElement(Box, { paddingLeft: 3 }, React.createElement(Text, { wrap: 'wrap' }, stripAnsi(item.content))),
         );
       }
       if (item.kind === 'assistant') {
@@ -94,7 +95,7 @@ export function TimelineView({ items, detailsMode, maxAnswerLines, columns = 100
       if (item.kind === 'tool') return React.createElement(ToolItem, { key: item.id, item, detailsMode });
       if (item.kind === 'tool-summary') {
         return React.createElement(Text, { key: item.id, color: 'gray', dimColor: true },
-          ` │ … ${item.count} completed · ${item.tools}`,
+          ` │ … ${item.count} completed · ${stripAnsi(item.tools)}`,
         );
       }
       return React.createElement(NoticeItem, { key: item.id, item });

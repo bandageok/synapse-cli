@@ -48,4 +48,13 @@ describe('MarkdownRenderer', () => {
     expect(frame).toContain('response shortened in this view');
     expect(frame.length).toBeLessThan(300);
   });
+
+  it('removes terminal control sequences from provider text', () => {
+    const view = render(React.createElement(MarkdownRenderer, {
+      text: '\u001b[31mfailed\u001b[0m but readable',
+    }));
+    const frame = view.lastFrame() ?? '';
+    expect(frame).toContain('failed but readable');
+    expect(frame).not.toContain('\u001b');
+  });
 });

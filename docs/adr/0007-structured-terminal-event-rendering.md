@@ -45,7 +45,7 @@ The default detail mode is `compact`:
 - the three most recent calls remain visible;
 - running and failed calls always remain visible;
 - failed output shows a bounded head/tail preview;
-- ANSI control sequences are removed before display.
+- ANSI control sequences are removed from tool, Provider, user, and notice text at the rendering boundary.
 
 `Ctrl+O` toggles between `compact` and `expanded`. `/details compact|expanded|toggle` provides an explicit command path. Expanded mode shows tool input and bounded output while preserving the same event history.
 
