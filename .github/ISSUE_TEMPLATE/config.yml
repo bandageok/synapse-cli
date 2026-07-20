@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Design and usage questions
+    url: https://github.com/bandageok/synapse-cli/discussions
+    about: Discuss provider setup, integrations, and larger design ideas.
+  - name: Private security report
+    url: https://github.com/bandageok/synapse-cli/security/advisories/new
+    about: Report permission, isolation, trust, network, or secret-handling vulnerabilities privately.

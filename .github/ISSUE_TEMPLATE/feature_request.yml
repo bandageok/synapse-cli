@@ -1,0 +1,41 @@
+name: Feature request
+description: Describe a concrete workflow that Synapse does not handle well today.
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow
+      description: What are you trying to complete, and where does the current workflow stop?
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround
+      description: Explain how you handle this today, including another tool when relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest behavior that would solve the workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Permission and compatibility impact
+      description: Note any effect on provider protocols, local files, network access, shell execution, or existing configuration.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Submission checks
+      options:
+        - label: I searched existing issues and Discussions.
+          required: true
+        - label: This request describes a user workflow, not only an implementation preference.
+          required: true

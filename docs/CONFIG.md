@@ -280,18 +280,11 @@ Provider 预设只是快捷配置，运行时不会把厂商写死。任何 Open
 
 ---
 
-## 与 OpenClaw / Claude Code 的对应关系
+## 项目指令文件
 
-| Synapse | OpenClaw | Claude Code | 作用 |
-|----------|----------|-------------|------|
-| SOUL.md | SOUL.md | — | 人格定义 |
-| USER.md | USER.md | — | 用户画像 |
-| IDENTITY.md | IDENTITY.md | — | Agent 身份 |
-| MEMORY.md | MEMORY.md | MEMORY.md | 长期记忆 |
-| HEARTBEAT.md | HEARTBEAT.md | — | 定时任务 |
-| TOOLS.md | TOOLS.md | — | 工具笔记 |
-| .synapse.md | .bronya.md | CLAUDE.md | 项目级配置 |
-| AGENTS.md / CLAUDE.md | — | AGENTS.md / CLAUDE.md | 分层项目指令 |
+Synapse 从工作区根目录到当前目录分层加载 `AGENTS.md` 和 `CLAUDE.md`。更靠近当前目录的文件可以补充项目约定，但不能覆盖内置安全内核、工具权限或隔离策略。
+
+`.synapse.md` 用于 Synapse 专属的项目配置。`SOUL.md`、`USER.md`、`IDENTITY.md`、`MEMORY.md`、`HEARTBEAT.md` 和 `TOOLS.md` 保存在用户数据目录中，用于跨项目的本地状态。
 
 ## Provider 和 审计
 

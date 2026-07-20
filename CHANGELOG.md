@@ -4,6 +4,14 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.3.1 - 2026-07-20
+
+- Reworked the public README around project memory, provider portability, and verified tool boundaries.
+- Added English and Chinese quick-start paths plus a reproducible offline CLI demo.
+- Replaced the stale v0.3.0 implementation checklist with a current, evidence-driven roadmap.
+- Added contribution, conduct, security, issue, and pull request guidance for public collaboration.
+- Added a launch kit, tracked measurement targets, and deterministic README and social-preview assets.
+
 ## 0.3.0 - 2026-07-20
 
 - Added a fail-closed tool registry with runtime JSON Schema validation and detailed self-correction errors.
