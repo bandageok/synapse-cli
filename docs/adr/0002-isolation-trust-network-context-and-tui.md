@@ -29,7 +29,7 @@ There is deliberately no unsandboxed `skip all permissions` mode. Such a mode co
 
 Strict shell isolation is provided by:
 
-- Linux: Bubblewrap with a read-only host view, writable workspace binds, private PID namespace, and an unshared network namespace by default.
+- Linux: Bubblewrap with a read-only host view, writable workspace binds, a private user/PID namespace, and an unshared network namespace by default. The invoking user is mapped to UID/GID 0 only inside the new user namespace so Bubblewrap can configure isolated loopback without host privileges.
 - Windows and Linux fallback: Docker with a read-only container root, explicit workspace bind, dropped capabilities, no-new-privileges, PID/memory limits, and network disabled by default.
 
 If the requested backend is missing or cannot prove isolation, execution fails closed. No strict mode may silently fall back to the host shell.

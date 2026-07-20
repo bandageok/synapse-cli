@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { buildDockerSandboxProcess } from '../src/security/Sandbox.js';
+import { buildBubblewrapSandboxProcess, buildDockerSandboxProcess } from '../src/security/Sandbox.js';
 import { MCPTrustStore } from '../src/services/mcp/trust.js';
 import { MCPClient } from '../src/services/mcp/client.js';
 import type { MCPCapabilityManifest, MCPServerConfig } from '../src/services/mcp/types.js';
@@ -28,6 +28,16 @@ function tempDir(): string {
 }
 
 describe('strict sandbox policy', () => {
+  it.skipIf(process.platform !== 'linux')('builds Bubblewrap with an isolated root user before network setup', () => {
+    const root = tempDir();
+    const spec = buildBubblewrapSandboxProcess('npm test', { cwd: root, workspaceRoots: [root] });
+    expect(spec.args).toContain('--unshare-user');
+    expect(spec.args).toContain('--unshare-net');
+    expect(spec.args.slice(spec.args.indexOf('--uid'), spec.args.indexOf('--uid') + 2)).toEqual(['--uid', '0']);
+    expect(spec.args.slice(spec.args.indexOf('--gid'), spec.args.indexOf('--gid') + 2)).toEqual(['--gid', '0']);
+    expect(spec.args.indexOf('--unshare-user')).toBeLessThan(spec.args.indexOf('--unshare-net'));
+  });
+
   it('builds a capability-dropped, read-only, networkless Docker command', () => {
     const root = tempDir();
     const spec = buildDockerSandboxProcess('npm test', { cwd: root, workspaceRoots: [root] });

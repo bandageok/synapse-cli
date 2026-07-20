@@ -44,7 +44,8 @@ function createBubblewrapProcess(command: string, options: SandboxOptions): Sand
   if (process.platform !== 'linux') throw new Error('Bubblewrap is supported only on Linux.');
   assertWorkspaceCwd(options.cwd, options.workspaceRoots);
   const args = [
-    '--die-with-parent', '--new-session', '--unshare-pid', '--unshare-uts', '--unshare-ipc',
+    '--die-with-parent', '--new-session', '--unshare-user', '--uid', '0', '--gid', '0',
+    '--unshare-pid', '--unshare-uts', '--unshare-ipc',
     '--unshare-cgroup-try', '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp',
   ];
   if (!options.network) args.push('--unshare-net');
