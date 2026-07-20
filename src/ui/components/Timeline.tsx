@@ -16,12 +16,14 @@ export interface TimelineProps {
   items: DisplayItem[];
   detailsMode: DetailsMode;
   maxAnswerLines: number;
+  columns?: number;
 }
 
 export interface TimelineViewProps {
   items: RenderableDisplayItem[];
   detailsMode: DetailsMode;
   maxAnswerLines: number;
+  columns?: number;
 }
 
 function formatDuration(durationMs?: number): string {
@@ -72,7 +74,7 @@ function NoticeItem({ item }: { item: NoticeDisplayItem }): React.ReactElement {
   );
 }
 
-export function TimelineView({ items, detailsMode, maxAnswerLines }: TimelineViewProps): React.ReactElement {
+export function TimelineView({ items, detailsMode, maxAnswerLines, columns = 100 }: TimelineViewProps): React.ReactElement {
   return React.createElement(Box, { flexDirection: 'column' },
     ...items.map(item => {
       if (item.kind === 'user') {
@@ -85,7 +87,7 @@ export function TimelineView({ items, detailsMode, maxAnswerLines }: TimelineVie
         return React.createElement(Box, { key: item.id, flexDirection: 'column', marginTop: 1 },
           React.createElement(Text, { color: 'cyan', bold: true }, ' Synapse'),
           React.createElement(Box, { paddingLeft: 3 },
-            React.createElement(MarkdownRenderer, { text: item.content, maxLines: maxAnswerLines }),
+            React.createElement(MarkdownRenderer, { text: item.content, maxLines: maxAnswerLines, columns }),
           ),
         );
       }
@@ -100,10 +102,11 @@ export function TimelineView({ items, detailsMode, maxAnswerLines }: TimelineVie
   );
 }
 
-export function Timeline({ items, detailsMode, maxAnswerLines }: TimelineProps): React.ReactElement {
+export function Timeline({ items, detailsMode, maxAnswerLines, columns = 100 }: TimelineProps): React.ReactElement {
   return React.createElement(TimelineView, {
     items: compactTimeline(items, detailsMode),
     detailsMode,
     maxAnswerLines,
+    columns,
   });
 }
