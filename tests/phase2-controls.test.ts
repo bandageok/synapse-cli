@@ -48,6 +48,11 @@ describe('strict sandbox policy', () => {
     expect(spec.args).toContain('--network');
     expect(spec.args).toContain('none');
     expect(spec.args.join(' ')).toContain('type=bind');
+    if (typeof process.getuid === 'function') {
+      expect(spec.args.slice(spec.args.indexOf('--user'), spec.args.indexOf('--user') + 2)).toEqual([
+        '--user', `${process.getuid()}:${process.getgid!()}`,
+      ]);
+    }
   });
 
   it('rejects a working directory outside the mounted workspace', () => {

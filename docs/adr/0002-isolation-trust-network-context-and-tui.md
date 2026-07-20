@@ -32,6 +32,8 @@ Strict shell isolation is provided by:
 - Linux: Bubblewrap with a read-only host view, writable workspace binds, a private user/PID namespace, and an unshared network namespace by default. The invoking user is mapped to UID/GID 0 only inside the new user namespace so Bubblewrap can configure isolated loopback without host privileges.
 - Windows and Linux fallback: Docker with a read-only container root, explicit workspace bind, dropped capabilities, no-new-privileges, PID/memory limits, and network disabled by default.
 
+On Linux, Docker runs with the invoking host UID/GID so writable workspace mounts remain usable after all capabilities are dropped. It does not run as container root and does not restore `DAC_OVERRIDE`.
+
 Backend discovery executes a minimal isolation probe. A Bubblewrap binary that exists but cannot create the required user, PID, and network namespaces is treated as unavailable, allowing `auto` to try Docker. Version output alone is not evidence of a usable sandbox.
 
 If the requested backend is missing or cannot prove isolation, execution fails closed. No strict mode may silently fall back to the host shell.

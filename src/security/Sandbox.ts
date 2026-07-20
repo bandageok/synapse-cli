@@ -75,7 +75,10 @@ function createDockerProcess(command: string, options: SandboxOptions): SandboxP
   const containerCwd = relativeCwd ? `${selected.target}/${relativeCwd}` : selected.target;
   const args = [
     'run', '--rm', '--init', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-    '--pids-limit', '256', '--memory', '1g', '--cpus', '2', '--tmpfs', '/tmp:rw,noexec,nosuid,size=268435456',
+    '--pids-limit', '256', '--memory', '1g', '--cpus', '2', '--tmpfs', '/tmp:rw,noexec,nosuid,mode=1777,size=268435456',
+    ...(typeof process.getuid === 'function' && typeof process.getgid === 'function'
+      ? ['--user', `${process.getuid()}:${process.getgid()}`]
+      : []),
     ...(options.network ? [] : ['--network', 'none']),
   ];
   for (const mount of mounts) args.push('--mount', `type=bind,source=${mount.root},target=${mount.target}`);
