@@ -105,10 +105,13 @@ describe('Engine', () => {
     const toolUse = events.find(e => e.type === 'tool_use');
     expect(toolUse).toBeDefined();
     expect(toolUse.tool).toBe('Echo');
+    expect(toolUse.toolUseId).toBe('tool-1');
 
     const toolResult = events.find(e => e.type === 'tool_result');
     expect(toolResult).toBeDefined();
     expect(toolResult.output).toContain('Echoed: hello');
+    expect(toolResult).toMatchObject({ toolUseId: 'tool-1', isError: false });
+    expect(toolResult.durationMs).toBeGreaterThanOrEqual(0);
 
     const endTurn = events.find(e => e.type === 'end_turn');
     expect(endTurn).toBeDefined();
@@ -140,9 +143,11 @@ describe('Engine', () => {
       events.push(event);
     }
 
-    // Tool should be blocked, no tool_result from execution
+    // The blocked attempt is visible, but the tool itself never executes.
     const toolResults = events.filter(e => e.type === 'tool_result');
-    expect(toolResults).toHaveLength(0);
+    expect(toolResults).toHaveLength(1);
+    expect(toolResults[0]).toMatchObject({ toolUseId: 'tool-1', tool: 'Bash', isError: true, durationMs: 0 });
+    expect(toolResults[0].output).toContain('Dangerous command blocked');
   });
 
   it('handles denied permission', async () => {
@@ -158,7 +163,8 @@ describe('Engine', () => {
     }
 
     const toolResults = events.filter(e => e.type === 'tool_result');
-    expect(toolResults).toHaveLength(0);
+    expect(toolResults).toHaveLength(1);
+    expect(toolResults[0]).toMatchObject({ toolUseId: 'tool-1', tool: 'Secret', isError: true, durationMs: 0 });
   });
 
   it('handles tool execution error gracefully', async () => {
@@ -185,6 +191,7 @@ describe('Engine', () => {
     const toolResult = events.find(e => e.type === 'tool_result');
     expect(toolResult).toBeDefined();
     expect(toolResult.output).toContain('Tool exploded');
+    expect(toolResult.isError).toBe(true);
   });
 
   it('audits tool permission and execution lifecycle', async () => {
@@ -247,6 +254,9 @@ describe('Engine', () => {
     }
     expect(executions).toBe(0);
     expect(JSON.stringify(messages)).toContain('Invalid tool input for Echo');
+    expect(events.find(event => event.type === 'tool_result')).toMatchObject({
+      toolUseId: 'tool-1', tool: 'Echo', isError: true, durationMs: 0,
+    });
     expect(events.filter(event => event.type === 'token').map(event => event.text).join('')).toBe('Corrected');
   });
 

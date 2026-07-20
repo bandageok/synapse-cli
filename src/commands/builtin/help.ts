@@ -12,6 +12,7 @@ const COMMANDS = [
   { cmd: '/soul-edit', desc: 'Edit agent personality' },
   { cmd: '/status', desc: 'System status overview' },
   { cmd: '/permissions <mode>', desc: 'Switch session permission profile' },
+  { cmd: '/details <mode>', desc: 'Compact or expand tool activity' },
   { cmd: '/config', desc: 'Show current configuration' },
   { cmd: '/cost', desc: 'Token usage and cost estimate' },
   { cmd: '/session', desc: 'Session management' },
@@ -50,7 +51,7 @@ export const helpCommand: SlashCommand = {
       lines.push('  ' + padded + c.desc);
     }
     lines.push('');
-    lines.push('Shortcuts: Ctrl+C exit  Ctrl+L clear  Ctrl+U clear input');
+    lines.push('Shortcuts: Ctrl+O details  Ctrl+C exit  Ctrl+L clear  Ctrl+U clear input');
     return lines.join('\n');
   },
 };

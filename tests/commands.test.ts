@@ -4,6 +4,7 @@ import { helpCommand } from '../src/commands/builtin/help.js';
 import { clearCommand } from '../src/commands/builtin/clear.js';
 import { modelCommand } from '../src/commands/builtin/model.js';
 import { permissionsCommand } from '../src/commands/builtin/permissions.js';
+import { detailsCommand } from '../src/commands/builtin/details.js';
 import { statusCommand } from '../src/commands/builtin/status.js';
 import type { PermissionMode } from '../src/core/types.js';
 
@@ -134,5 +135,34 @@ describe('CommandRegistry', () => {
     reg.register(statusCommand);
     const result = await reg.execute('/status', { ...mockDeps, permissionMode: 'auto' });
     expect(result.output).toContain('permission mode: auto');
+  });
+
+  it('shows, switches, and toggles tool detail mode', async () => {
+    const reg = new CommandRegistry();
+    reg.register(detailsCommand);
+    let mode: 'compact' | 'expanded' = 'compact';
+    const deps = () => ({
+      ...mockDeps,
+      detailsMode: mode,
+      setDetailsMode: (next: 'compact' | 'expanded') => {
+        mode = next;
+        return next;
+      },
+    });
+
+    expect((await reg.execute('/details', deps())).output).toBe('Tool details: compact');
+    expect((await reg.execute('/details expanded', deps())).output).toBe('Tool details: expanded');
+    expect(mode).toBe('expanded');
+    expect((await reg.execute('/details toggle', deps())).output).toBe('Tool details: compact');
+    expect(mode).toBe('compact');
+    expect((await reg.execute('/details hidden', deps())).output).toContain('Usage:');
+    expect(mode).toBe('compact');
+  });
+
+  it('fails clearly when detail switching is unavailable', async () => {
+    const reg = new CommandRegistry();
+    reg.register(detailsCommand);
+    const result = await reg.execute('/details expanded', mockDeps);
+    expect(result.output).toContain('unavailable');
   });
 });

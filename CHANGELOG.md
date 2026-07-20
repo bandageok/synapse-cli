@@ -4,6 +4,11 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+- Rebuilt the interactive terminal around structured user, assistant, tool, and notice items instead of prefix-parsed strings.
+- Added automatic successful-tool folding, always-visible failures, ANSI-safe output previews, stable tool ids, durations, and `Ctrl+O` or `/details` compact/expanded views.
+- Replaced the unused terminal Markdown implementation with a streaming-safe semantic renderer and added responsive status, composer, and footer layouts.
+- Added structured failure events for schema, hook, and permission rejections without executing the rejected tool.
+
 ## 0.3.3 - 2026-07-20
 
 - Added `ask`, `auto`, and `full-access` permission profiles with separate approval and shell-isolation semantics.

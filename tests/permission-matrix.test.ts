@@ -11,6 +11,7 @@ import {
 } from '../src/core/PermissionManager.js';
 import { ToolRegistry } from '../src/core/ToolRegistry.js';
 import type {
+  EngineEvent,
   Message,
   PermissionMode,
   Provider,
@@ -427,7 +428,7 @@ describe('engine approval event matrix', () => {
       execute: async () => { executions++; return { output: 'executed', isError: false }; },
     }));
     const messages: Message[] = [{ role: 'user', content: 'run it' }];
-    const events: Array<{ type: string }> = [];
+    const events: EngineEvent[] = [];
     const options = scenario.response === undefined
       ? {}
       : { onPermissionAsk: async () => scenario.response };
@@ -445,7 +446,10 @@ describe('engine approval event matrix', () => {
 
     expect(events.filter(event => event.type === 'permission_ask')).toHaveLength(scenario.asks);
     expect(events.filter(event => event.type === 'tool_use')).toHaveLength(scenario.executes);
-    expect(events.filter(event => event.type === 'tool_result')).toHaveLength(scenario.executes);
+    const results = events.filter((event): event is Extract<EngineEvent, { type: 'tool_result' }> => event.type === 'tool_result');
+    expect(results).toHaveLength(1);
+    expect(results[0].isError).toBe(scenario.executes === 0);
+    if (!scenario.executes) expect(results[0].durationMs).toBe(0);
     expect(executions).toBe(scenario.executes);
     expect(JSON.stringify(messages)).toContain(scenario.executes ? 'executed' : 'Permission denied');
   });
