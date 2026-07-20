@@ -12,7 +12,7 @@ Short version:
 
 ## Proof points
 
-- 260 passing tests in the v0.3.2 suite, plus two environment-gated skips locally
+- 267 passing tests in the v0.3.3 suite, plus two environment-gated skips locally
 - Node.js 18 and 22 CI on Windows and Linux
 - A Linux job that runs the strict sandbox and checks filesystem, network, and PID isolation
 - A deterministic offline demo that verifies local memory reaches the provider request
@@ -42,7 +42,7 @@ Body:
 >
 > The part I spent the most time on is the tool boundary. Writes, commands, network access, sensitive reads, and sub-agents require permission. Explicit workspace automation only runs shell commands through a working Bubblewrap or Docker backend and fails closed otherwise.
 >
-> v0.3.2 is on npm. The repository includes 260 passing tests, Windows/Linux CI, adversarial security tests, and a deterministic offline demo that checks whether project memory reaches the provider request.
+> v0.3.3 is on npm. The repository includes 267 passing tests, Windows/Linux CI, adversarial security tests, and a deterministic offline demo that checks whether project memory reaches the provider request.
 >
 > I would value feedback on provider compatibility, onboarding friction, and whether the memory model is useful in real repositories.
 
@@ -72,7 +72,7 @@ Body:
 >
 > Synapse 把项目上下文保存在本地文件中，Provider 则通过协议、BaseURL、模型和密钥环境变量独立配置。写文件、Shell、网络、敏感读取和子 Agent 都经过权限层；明确开启工作区自动执行后，如果 Bubblewrap 或 Docker 隔离不可用，命令会被拒绝，不会静默回退到宿主 Shell。
 >
-> README 中的离线演示运行真实 CLI，并验证本地记忆确实进入 Provider 请求。v0.3.2 目前有 260 项测试通过和 Windows/Linux CI。我更需要真实的安装失败、Provider 兼容性问题和工作流反馈，而不是单纯的 star。
+> README 中的离线演示运行真实 CLI，并验证本地记忆确实进入 Provider 请求。v0.3.3 目前有 267 项测试通过和 Windows/Linux CI。我更需要真实的安装失败、Provider 兼容性问题和工作流反馈，而不是单纯的 star。
 
 ## Launch sequence
 

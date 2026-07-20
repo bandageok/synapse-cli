@@ -41,6 +41,7 @@ describe('CLI integration', () => {
 
     expect(output).toContain('SOUL.md created');
     expect(existsSync(join(dataDir, 'SOUL.md'))).toBe(true);
+    expect(existsSync(join(dataDir, 'IDENTITY.md'))).toBe(true);
     expect(existsSync(join(dataDir, 'memory'))).toBe(true);
     expect(existsSync(join(dataDir, 'sessions'))).toBe(true);
   });

@@ -4,6 +4,14 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.3.3 - 2026-07-20
+
+- Added an immutable Synapse/BandageOK product identity contract that distinguishes the CLI from its replaceable inference provider.
+- Wired `IDENTITY.md` into context assembly, auto-created it for existing data directories, and prevented it from overriding product provenance or safety rules.
+- Added sanitized runtime provider/model disclosure and explicit correction of stale identity claims in resumed conversations.
+- Added deterministic unit and real-CLI request-envelope regression tests plus ADR-0005.
+- Answered explicit product-identity questions locally before Provider invocation so model compliance cannot change product provenance.
+
 ## 0.3.2 - 2026-07-20
 
 - Replaced the provenance-unclear Dream and Vim modules with documented project-local contracts and regression tests.

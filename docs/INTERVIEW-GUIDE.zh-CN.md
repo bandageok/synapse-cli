@@ -33,6 +33,8 @@ Git 历史包含两组主要署名：
 >
 > Provider 方面，我把 Preset 降级成默认数据，运行时统一解析 protocol、auth、BaseURL、model 和 apiKeyEnv。Engine 不知道具体厂商，协议适配器负责 OpenAI-compatible 或 Anthropic-compatible 消息转换，并保留工具调用 ID。主模型只有在没有输出任何 token 时才允许 fallback，避免半段答案后换模型。
 >
+> Provider 解耦还暴露过一个身份问题：DeepSeek 路由下的模型曾错误自称 Claude。我的修复不是增加一句品牌文案，而是建立三层身份契约：Synapse/BandageOK 是不可变产品归属，IDENTITY.md 只控制本地展示档案，Provider/模型作为转义后的运行时事实单独注入。这样切换模型不会改变产品身份，旧会话中的错误自述也不能覆盖系统事实。
+>
 > Memory 方面，我把用户级、项目级、局部规则和长期记忆分层加载。include 必须留在所属 root 内，realpath、深度、文件数和总字符数都有边界。最近一次整改还替换了旧的后台维护器：现在只维护实际注入的根目录 MEMORY.md，使用独占 lease 和原子 rename，不再保留未接入运行时的 Prompt 与 SessionIndex 模块。
 >
 > 安全方面，模型参数先过 AJV Schema，再过工作区路径和敏感文件检查，最后做 allow/ask/deny。workspace-auto 只有在 Bubblewrap 或 Docker 探测成功时才执行；失败会返回错误。CI 除了单测，还真的启动 Bubblewrap，验证宿主路径、网络和 PID 隔离。
@@ -78,6 +80,10 @@ Model tool use -> ToolRegistry -> Permission -> Sandbox -> Result
 ### 面试官：API key 怎么处理？
 
 > 配置保存环境变量名，不保存明文值。运行时先查进程环境，再查用户数据目录的 `.env`。Provider list 只显示 key 来源和变量名。CLI 写 `.env` 时用临时文件和 rename，并拒绝包含换行的 key。
+
+### 面试官：为什么模型会把 Synapse 说成 Claude？你怎么修？
+
+> 大模型没有稳定的产品自我认知，只会根据当前 system prompt 和历史消息生成答案。旧实现写了“You are Synapse”，但没有开发者事实，也没有注入当前 Provider/模型，IDENTITY.md 甚至没有接入 Context。模型在信息缺口里产生了身份幻觉。修复后，官方产品身份进入不可变内核，配置文件只能调整档案风格，运行时路由以单行、限长、JSON 引号包裹的数据注入，并用真实 CLI 假 endpoint 捕获最终请求做回归测试。
 
 ## 深挖二：记忆系统
 
@@ -198,7 +204,7 @@ node examples/demo/run-demo.mjs
 - [ ] 确认 `C.C.Claw` 是否是本人历史身份，并准备一致说法
 - [ ] 只在简历写自己能解释的提交范围
 - [ ] 重新跑 lint、test、build 和离线 Demo
-- [ ] 打开 ADR-0001 到 ADR-0004，能各用一句话解释
+- [ ] 打开 ADR-0001 到 ADR-0005，能各用一句话解释
 - [ ] 准备一个失败案例：Heartbeat shell 旁路
 - [ ] 准备一个兼容案例：Node 18 / Windows / Linux
 - [ ] 准备一个取舍案例：删除未接入的 MemoryExtractor/SessionIndex

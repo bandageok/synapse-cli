@@ -8,7 +8,7 @@ Base URL: http://127.0.0.1:<port>/v1
 API key: configured via environment (SYNAPSE_DEMO_KEY)
 
 $ synapse doctor
-Synapse Doctor v0.3.2
+Synapse Doctor v0.3.3
   [PASS] Node.js: 24.13.0
   [PASS] Data directory: ~/.synapse is readable and writable
   [PASS] Provider config: ~/.synapse/.synapse.json is valid

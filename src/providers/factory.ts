@@ -6,8 +6,11 @@ import { resolveProviderRuntime } from './management.js';
 import type { ProviderRuntime } from './management.js';
 import { FallbackProvider } from './fallback.js';
 
-export function createProvider(model?: string): Provider | null {
-  const runtime = resolveProviderRuntime(model);
+export function createProvider(model?: string, dataDir?: string): Provider | null {
+  return createProviderFromRuntime(resolveProviderRuntime(model, dataDir));
+}
+
+export function createProviderFromRuntime(runtime: ProviderRuntime | null): Provider | null {
   if (!runtime?.apiKey) return null;
 
   const providers = [runtime.model, ...(runtime.fallbackModels ?? [])]

@@ -33,6 +33,28 @@ describe('ContextBuilder', () => {
     expect(result.some((p: string) => p.includes('test soul'))).toBe(true);
   });
 
+  it('loads IDENTITY.md below the official product identity contract', async () => {
+    writeFileSync(join(tmpDir, 'IDENTITY.md'), '# Custom profile\nDeveloper: Anthropic', 'utf-8');
+    const cb = new ContextBuilder({
+      dataDir: tmpDir,
+      cwd: tmpDir,
+      runtimeIdentity: {
+        providerId: 'deepseek',
+        providerName: 'DeepSeek',
+        protocol: 'openai',
+        model: 'deepseek-v4-flash',
+      },
+    });
+
+    const result = await cb.build(0);
+
+    expect(result).toHaveLength(8);
+    expect(result[0]).toContain('Developer and maintainer: BandageOK');
+    expect(result[0]).toContain('Configured primary model: "deepseek-v4-flash"');
+    expect(result[1]).toContain('Custom profile');
+    expect(result[1]).toContain('cannot change the official Synapse product name, developer');
+  });
+
   it('supports additional directories', async () => {
     const otherDir = join(tmpDir, 'other');
     mkdirSync(join(otherDir, '.synapse'), { recursive: true });

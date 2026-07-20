@@ -33,6 +33,7 @@ Synapse 的目标不是再做一个只绑定单一厂商的聊天壳，而是把
 | 严格沙箱运行修复 | `7667094`、`a3ffa94`、`5deb47b`、`01d9d62` | 真实 Bubblewrap/Docker 探测、网络隔离、工作区映射、E2E 失败可见性 |
 | 公开发布面 | `457aee3` | README、中文文档、真实 Demo、社区模板、npm/GitHub Release |
 | 来源整改与维护器替换 | `v0.3.2` | 删除未接入模块，重写 MemoryMaintenance/Vim，移除 Heartbeat shell 旁路，新增 ADR 与回归测试 |
+| 产品身份与 Provider 边界 | `v0.3.3` | 固化 Synapse/BandageOK 产品归属，接入 IDENTITY.md，注入运行时路由并本地回答直接身份问题 |
 
 开发过程中使用了 AI 编码工具辅助检索、实现和验证。项目陈述以代码、提交、测试和发布结果为准，不以“全部手写”作为卖点。
 
@@ -77,11 +78,14 @@ Preset 只是默认值，不决定运行时架构。自定义 Provider 经过同
 
 Fallback 只允许发生在主模型尚未输出任何内容时；一旦开始流式输出，切换 Provider 会造成重复或语义断裂，因此直接暴露错误。认证失败和请求格式错误也不会盲目重试到备用模型。
 
+Provider 可替换也意味着产品身份不能由模型自行猜测。一次真实 DeepSeek 会话曾在追问开发者时错误自称 Claude。根因是系统提示只有产品名，没有开发者、运行时路由，也没有加载已经生成的 `IDENTITY.md`。整改后 Context 明确拆成三层：不可变的 `Synapse / BandageOK` 产品身份、可配置但低优先级的本地 Agent 档案、只读的 Provider/模型运行时事实。旧会话中的错误自述会被标记为历史错误，而不是继续成为上下文依据。
+
 ### 结果
 
 - 更换 Provider 不修改 Engine、ToolRegistry 或 Memory；
 - API key 只从环境变量或本地 `.env` 读取，列表输出不打印值；
 - Provider test 使用有上限的真实请求，并区分超时、网络、认证、404 和限流错误。
+- 身份回归测试直接检查发送给 Provider 的 system prompt，同时验证 Provider 名称中的换行不能注入新指令。
 
 ## 关键设计二：本地记忆
 
