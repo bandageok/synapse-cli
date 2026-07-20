@@ -4,6 +4,16 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.3.2 - 2026-07-20
+
+- Replaced the provenance-unclear Dream and Vim modules with documented project-local contracts and regression tests.
+- Removed unused memory prompt and session-index modules that were not connected to the runtime.
+- Added deterministic root `MEMORY.md` maintenance with exclusive leases, stale-lock recovery, atomic writes, and legacy timestamp migration.
+- Removed the Heartbeat host-shell bypass; `HEARTBEAT.md` is now descriptive and cannot create executable scheduled tasks.
+- Fixed Vim command reset, `d0`, and bounded operator-count behavior.
+- Added a provenance remediation ADR, a Chinese project case study, and a commit-backed Chinese interview guide.
+- Included the offline demo, demo asset, case study, and interview guide in the npm package.
+
 ## 0.3.1 - 2026-07-20
 
 - Reworked the public README around project memory, provider portability, and verified tool boundaries.

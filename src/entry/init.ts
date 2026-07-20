@@ -15,7 +15,7 @@ import { SoulLoader } from '../soul/SoulLoader.js';
 import { MemoryManager } from '../soul/MemoryManager.js';
 import { DynamicReminder } from '../soul/DynamicReminder.js';
 import { Heartbeat } from '../soul/Heartbeat.js';
-import { Dream } from '../soul/Dream.js';
+import { MemoryMaintenance } from '../soul/MemoryMaintenance.js';
 import { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
 import { SelfImprovement } from '../soul/SelfImprovement.js';
 import { Logger } from '../core/Logger.js';
@@ -102,12 +102,12 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
   const pluginRegistry = new PluginRegistry();
   pluginRegistry.loadFromDir(dataDir);
 
-  // Heartbeat + Dream + Watchdog + SelfImprovement
+  // Heartbeat + deterministic memory maintenance + Watchdog + SelfImprovement
   const heartbeat = new Heartbeat(dataDir);
-  const dream = new Dream(dataDir);
-  heartbeat.setDream(dream);
+  const memoryMaintenance = new MemoryMaintenance(dataDir);
+  heartbeat.setMemoryMaintenance(memoryMaintenance);
   const watchdog = new FakeExecutionWatchdog();
   const selfImprovement = new SelfImprovement(dataDir);
 
-  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, heartbeat, dream, watchdog, selfImprovement, mcpClient, pluginRegistry, logger, dataDir, skillLoader };
+  return { provider, tools, context, compressor, hooks, sessionStore, errorRecovery, soulLoader, memoryManager, dynamicReminder, heartbeat, memoryMaintenance, watchdog, selfImprovement, mcpClient, pluginRegistry, logger, dataDir, skillLoader };
 }

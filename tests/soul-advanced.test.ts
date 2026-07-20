@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Heartbeat } from '../src/soul/Heartbeat.js';
 import { SelfImprovement } from '../src/soul/SelfImprovement.js';
 import { FakeExecutionWatchdog } from '../src/soul/FakeExecutionWatchdog.js';
-import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
+import { existsSync, mkdtempSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -16,15 +16,20 @@ describe('Heartbeat', () => {
     const hb = new Heartbeat(dir);
     const tasks = hb.getTasks();
     expect(tasks.length).toBeGreaterThanOrEqual(2);
-    expect(tasks.some(t => t.name === 'memory-archive')).toBe(true);
-    expect(tasks.some(t => t.name === 'session-cleanup')).toBe(true);
+    expect(tasks.some(t => t.name === 'memory-limit-observer')).toBe(true);
+    expect(tasks.some(t => t.name === 'session-retention-observer')).toBe(true);
   });
 
-  it('loads tasks from HEARTBEAT.md', () => {
-    writeFileSync(join(dir, 'HEARTBEAT.md'), `## custom-task\n\`\`\`bash\necho hello\n\`\`\`\n`);
+  it('never turns HEARTBEAT.md command blocks into executable tasks', async () => {
+    const marker = join(dir, 'command-ran.txt');
+    writeFileSync(
+      join(dir, 'HEARTBEAT.md'),
+      `## unsafe\n\`\`\`powershell\nSet-Content -LiteralPath '${marker}' -Value unsafe\n\`\`\`\n`,
+    );
     const hb = new Heartbeat(dir);
-    const tasks = hb.getTasks();
-    expect(tasks.some(t => t.name === 'custom-task')).toBe(true);
+    await hb.runOnce();
+    expect(hb.getTasks().some(t => t.name === 'unsafe')).toBe(false);
+    expect(existsSync(marker)).toBe(false);
   });
 
   it('start and stop without error', () => {

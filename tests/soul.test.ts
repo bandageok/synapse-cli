@@ -1,5 +1,5 @@
 // tests/soul.test.ts
-// Soul system: Heartbeat, SoulLoader, Dream baseline tests
+// Soul system: Heartbeat and SoulLoader baseline tests
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';

@@ -146,7 +146,7 @@ Search and export exclude session transcripts unless `--include-sessions` is sup
 
 ## Verification
 
-The `v0.3.1` release is covered by 269 tests across unit, integration, protocol, CLI, and adversarial security paths. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
+The `v0.3.2` release is covered by 260 passing tests across unit, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
 
 Run the same checks locally:
 
@@ -161,7 +161,9 @@ npm audit
 
 ## Project status
 
-Synapse is early-stage software. `v0.3.1` is usable and tested, but command names and configuration details can still change before `v1.0.0`. See the [current roadmap](./docs/ROADMAP.md) and [changelog](./CHANGELOG.md).
+Synapse is early-stage software. `v0.3.2` is usable and tested, but command names and configuration details can still change before `v1.0.0`. See the [current roadmap](./docs/ROADMAP.md) and [changelog](./CHANGELOG.md).
+
+For a code-backed explanation of the architecture and tradeoffs, read the [Chinese project case study](./docs/CASE-STUDY.zh-CN.md), the [Chinese interview guide](./docs/INTERVIEW-GUIDE.zh-CN.md), and [ADR-0004 on provenance remediation](./docs/adr/0004-provenance-remediation-and-maintenance.md).
 
 ## Contributing
 

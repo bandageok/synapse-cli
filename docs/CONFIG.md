@@ -153,11 +153,11 @@ exec 失败时追加"分析根因，不要重试"。
 
 ---
 
-## HEARTBEAT.md — 定时任务
+## HEARTBEAT.md — 维护检查清单
 
-**作用：** 定义 Agent 的后台定时任务。
+**作用：** 记录希望定期关注的维护事项，供用户和 Agent 会话读取。
 
-**格式：** 任务列表，每个 = 命令 + 条件 + 动作。
+**安全边界：** `HEARTBEAT.md` 是说明性文本，不是可执行任务文件。Synapse 不会执行其中的 shell、PowerShell 或代码块。后台 Heartbeat 只运行内置的进程内观察器；需要执行命令的维护工作必须经过正常工具权限和沙箱流程。
 
 ```markdown
 # HEARTBEAT.md

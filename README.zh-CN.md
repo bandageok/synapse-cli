@@ -105,7 +105,7 @@ synapse memory export memories.json
 
 ## 验证状态
 
-`v0.3.1` 有 269 项测试，覆盖单元、集成、协议、CLI 和对抗性安全路径。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
+`v0.3.2` 本地验证有 260 项测试通过、2 项按环境跳过，覆盖单元、集成、协议、CLI 和对抗性安全路径。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
 
 ```bash
 npm ci
@@ -118,7 +118,9 @@ npm audit
 
 ## 项目状态
 
-Synapse 仍处于早期阶段。`v0.3.1` 已完成验证，但在 `v1.0.0` 之前，命令名和配置细节仍可能调整。查看[当前路线图](./docs/ROADMAP.md)和[更新记录](./CHANGELOG.md)。
+Synapse 仍处于早期阶段。`v0.3.2` 已完成验证，但在 `v1.0.0` 之前，命令名和配置细节仍可能调整。查看[当前路线图](./docs/ROADMAP.md)和[更新记录](./CHANGELOG.md)。
+
+需要了解真实架构、工程取舍和个人贡献边界时，请阅读[项目案例页](./docs/CASE-STUDY.zh-CN.md)、[中文面试讲稿](./docs/INTERVIEW-GUIDE.zh-CN.md)以及[来源整改 ADR](./docs/adr/0004-provenance-remediation-and-maintenance.md)。
 
 ## 参与项目
 

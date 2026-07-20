@@ -29,7 +29,7 @@ import type { HookSystem } from '../core/HookSystem.js';
 import type { ErrorRecovery } from '../core/ErrorRecovery.js';
 import type { DynamicReminder } from '../soul/DynamicReminder.js';
 import type { Heartbeat } from '../soul/Heartbeat.js';
-import type { Dream } from '../soul/Dream.js';
+import type { MemoryMaintenance } from '../soul/MemoryMaintenance.js';
 import type { FakeExecutionWatchdog } from '../soul/FakeExecutionWatchdog.js';
 import type { SelfImprovement } from '../soul/SelfImprovement.js';
 import type { Logger } from '../core/Logger.js';
@@ -56,7 +56,7 @@ interface REPLDeps {
   errorRecovery: ErrorRecovery;
   dynamicReminder: DynamicReminder;
   heartbeat?: Heartbeat;
-  dream?: Dream;
+  memoryMaintenance?: MemoryMaintenance;
   watchdog?: FakeExecutionWatchdog;
   selfImprovement?: SelfImprovement;
   logger?: Logger;

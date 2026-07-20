@@ -1,5 +1,5 @@
 // src/soul/SelfImprovement.ts
-// 自动学习 + 纠错系统 — 借鉴 OpenClaw .learnings/ 机制
+// Local markdown journal for errors, corrections, and recurring learnings.
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 

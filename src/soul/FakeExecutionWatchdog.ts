@@ -1,6 +1,5 @@
 // src/soul/FakeExecutionWatchdog.ts
-// 假执行监控 — 借鉴 OpenClaw session-watchdog.py
-// 检测 Agent 声称执行了某操作但实际未调用工具的情况
+// Detects assistant execution claims that are not accompanied by a tool call.
 
 export interface TurnRecord {
   turnNumber: number;

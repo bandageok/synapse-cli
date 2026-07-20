@@ -1,5 +1,5 @@
 // src/skills/AutoLoader.ts
-// Skill 自动发现与加载系统 -- 对标 Claude Code 的 loadSkillsDir
+// Skill discovery and activation for user and project skill directories.
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 

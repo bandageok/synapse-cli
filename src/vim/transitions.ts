@@ -1,9 +1,4 @@
-/**
- * Vim State Transition Table (Synapse MVP)
- *
- * Simplified from Claude Code's transitions.ts.
- * Handles: idle, count, operator, operatorCount states.
- */
+/** Pure command parser for Synapse's prompt-line Vim mode. */
 
 import { resolveMotion } from './motions.js';
 import {
@@ -32,194 +27,185 @@ export type TransitionResult = {
   execute?: () => void;
 };
 
+const OPERATOR_KEYS: Record<Operator, keyof typeof OPERATORS> = {
+  delete: 'd',
+  change: 'c',
+  yank: 'y',
+};
+
 export function transition(
   state: CommandState,
   input: string,
   ctx: TransitionContext,
 ): TransitionResult {
+  if (input.length !== 1) return reset();
+
   switch (state.type) {
     case 'idle':
-      return fromIdle(input, ctx);
+      return transitionIdle(input, ctx);
     case 'count':
-      return fromCount(state, input, ctx);
+      return transitionCount(state.digits, input, ctx);
     case 'operator':
-      return fromOperator(state, input, ctx);
+      return transitionOperator(state.op, state.count, input, ctx);
     case 'operatorCount':
-      return fromOperatorCount(state, input, ctx);
+      return transitionOperatorCount(state, input, ctx);
   }
 }
 
-// ============================================================================
-// Shared Input Handling
-// ============================================================================
+function transitionIdle(input: string, ctx: TransitionContext): TransitionResult {
+  if (isNonZeroDigit(input)) return { next: { type: 'count', digits: input } };
+  if (input === '0') return motion('0', 1, ctx);
+  return normalCommand(input, 1, ctx);
+}
 
-function handleNormalInput(
+function transitionCount(
+  digits: string,
+  input: string,
+  ctx: TransitionContext,
+): TransitionResult {
+  if (isDigit(input)) return { next: { type: 'count', digits: appendCount(digits, input) } };
+  return normalCommand(input, parseCount(digits), ctx);
+}
+
+function transitionOperator(
+  operator: Operator,
+  count: number,
+  input: string,
+  ctx: TransitionContext,
+): TransitionResult {
+  if (input === OPERATOR_KEYS[operator]) return lineOperator(operator, count, ctx);
+  if (input === '0') return operatorMotion(operator, '0', count, ctx);
+  if (isNonZeroDigit(input)) {
+    return { next: { type: 'operatorCount', op: operator, count, digits: input } };
+  }
+  return operatorCommand(operator, count, input, ctx);
+}
+
+function transitionOperatorCount(
+  state: Extract<CommandState, { type: 'operatorCount' }>,
+  input: string,
+  ctx: TransitionContext,
+): TransitionResult {
+  if (isDigit(input)) {
+    return { next: { ...state, digits: appendCount(state.digits, input) } };
+  }
+
+  const effectiveCount = clampCount(state.count * parseCount(state.digits));
+  if (input === OPERATOR_KEYS[state.op]) return lineOperator(state.op, effectiveCount, ctx);
+  return operatorCommand(state.op, effectiveCount, input, ctx);
+}
+
+function normalCommand(
   input: string,
   count: number,
   ctx: TransitionContext,
-): TransitionResult | null {
+): TransitionResult {
   if (isOperatorKey(input)) {
     return { next: { type: 'operator', op: OPERATORS[input], count } };
   }
+  if (SIMPLE_MOTIONS.has(input)) return motion(input, count, ctx);
 
-  if (SIMPLE_MOTIONS.has(input)) {
-    return {
-      execute: () => {
-        const target = resolveMotion(input, ctx.cursor, ctx.text, count);
-        ctx.setCursor(target);
-      },
-    };
+  switch (input) {
+    case 'x':
+      return executeAndReset(() => executeX(count, ctx));
+    case 'u':
+      return executeAndReset(() => ctx.onUndo?.());
+    case '.':
+      return executeAndReset(() => ctx.onDotRepeat?.());
+    case 'i':
+      return { execute: () => ctx.enterInsert(ctx.cursor) };
+    case 'a':
+      return {
+        execute: () => ctx.enterInsert(
+          ctx.cursor < ctx.text.length ? ctx.cursor + 1 : ctx.cursor,
+        ),
+      };
+    case 'I':
+      return { execute: () => ctx.enterInsert(firstNonBlankOffset(ctx.text, ctx.cursor)) };
+    case 'A':
+      return { execute: () => ctx.enterInsert(lineEndOffset(ctx.text, ctx.cursor)) };
+    case 'o':
+      return { execute: () => executeOpenLine('below', ctx) };
+    case 'O':
+      return { execute: () => executeOpenLine('above', ctx) };
+    default:
+      return reset();
   }
-
-  if (input === 'x') {
-    return { execute: () => executeX(count, ctx) };
-  }
-
-  if (input === 'u') {
-    return { execute: () => ctx.onUndo?.() };
-  }
-
-  if (input === 'i') {
-    return { execute: () => ctx.enterInsert(ctx.cursor) };
-  }
-
-  if (input === 'a') {
-    return {
-      execute: () => {
-        const newOffset = ctx.cursor < ctx.text.length ? ctx.cursor + 1 : ctx.cursor;
-        ctx.enterInsert(newOffset);
-      },
-    };
-  }
-
-  if (input === 'I') {
-    return {
-      execute: () => {
-        const sol = ctx.text.lastIndexOf('\n', ctx.cursor - 1) + 1;
-        const eol = ctx.text.indexOf('\n', ctx.cursor);
-        const lineEnd = eol === -1 ? ctx.text.length : eol;
-        let i = sol;
-        while (i < lineEnd && (ctx.text[i] === ' ' || ctx.text[i] === '\t')) i++;
-        ctx.enterInsert(i < lineEnd ? i : sol);
-      },
-    };
-  }
-
-  if (input === 'A') {
-    return {
-      execute: () => {
-        const eol = ctx.text.indexOf('\n', ctx.cursor);
-        ctx.enterInsert(eol === -1 ? ctx.text.length : eol);
-      },
-    };
-  }
-
-  if (input === 'o') {
-    return { execute: () => executeOpenLine('below', ctx) };
-  }
-
-  if (input === 'O') {
-    return { execute: () => executeOpenLine('above', ctx) };
-  }
-
-  if (input === '.') {
-    return { execute: () => ctx.onDotRepeat?.() };
-  }
-
-  return null;
 }
 
-function handleOperatorInput(
-  op: Operator,
+function operatorCommand(
+  operator: Operator,
   count: number,
   input: string,
   ctx: TransitionContext,
-): TransitionResult | null {
-  if (SIMPLE_MOTIONS.has(input)) {
-    return { execute: () => executeOperatorMotion(op, input, count, ctx) };
-  }
-  return null;
+): TransitionResult {
+  if (!SIMPLE_MOTIONS.has(input)) return reset();
+  return operatorMotion(operator, input, count, ctx);
 }
 
-// ============================================================================
-// Transition Functions
-// ============================================================================
-
-function fromIdle(input: string, ctx: TransitionContext): TransitionResult {
-  if (/[1-9]/.test(input)) {
-    return { next: { type: 'count', digits: input } };
-  }
-  if (input === '0') {
-    return {
-      execute: () => {
-        const prevNewline = ctx.text.lastIndexOf('\n', ctx.cursor - 1);
-        ctx.setCursor(prevNewline === -1 ? 0 : prevNewline + 1);
-      },
-    };
-  }
-
-  const result = handleNormalInput(input, 1, ctx);
-  if (result) return result;
-  return {};
+function motion(input: string, count: number, ctx: TransitionContext): TransitionResult {
+  return executeAndReset(() => {
+    ctx.setCursor(resolveMotion(input, ctx.cursor, ctx.text, count));
+  });
 }
 
-function fromCount(
-  state: { type: 'count'; digits: string },
-  input: string,
+function lineOperator(
+  operator: Operator,
+  count: number,
   ctx: TransitionContext,
 ): TransitionResult {
-  if (/[0-9]/.test(input)) {
-    const newDigits = state.digits + input;
-    const count = Math.min(parseInt(newDigits, 10), MAX_VIM_COUNT);
-    return { next: { type: 'count', digits: String(count) } };
-  }
+  const execute = () => executeLineOp(operator, count, ctx);
+  return operator === 'change' ? { execute } : executeAndReset(execute);
+}
 
-  const count = parseInt(state.digits, 10);
-  const result = handleNormalInput(input, count, ctx);
-  if (result) return result;
+function operatorMotion(
+  operator: Operator,
+  input: string,
+  count: number,
+  ctx: TransitionContext,
+): TransitionResult {
+  const execute = () => executeOperatorMotion(operator, input, count, ctx);
+  return operator === 'change' ? { execute } : executeAndReset(execute);
+}
+
+function executeAndReset(execute: () => void): TransitionResult {
+  return { next: { type: 'idle' }, execute };
+}
+
+function reset(): TransitionResult {
   return { next: { type: 'idle' } };
 }
 
-function fromOperator(
-  state: { type: 'operator'; op: Operator; count: number },
-  input: string,
-  ctx: TransitionContext,
-): TransitionResult {
-  // dd, cc, yy = line operation
-  if (input === state.op[0]) {
-    return { execute: () => executeLineOp(state.op, state.count, ctx) };
-  }
-
-  if (/[0-9]/.test(input)) {
-    return {
-      next: {
-        type: 'operatorCount',
-        op: state.op,
-        count: state.count,
-        digits: input,
-      },
-    };
-  }
-
-  const result = handleOperatorInput(state.op, state.count, input, ctx);
-  if (result) return result;
-  return { next: { type: 'idle' } };
+function appendCount(digits: string, nextDigit: string): string {
+  return String(clampCount(Number.parseInt(`${digits}${nextDigit}`, 10)));
 }
 
-function fromOperatorCount(
-  state: { type: 'operatorCount'; op: Operator; count: number; digits: string },
-  input: string,
-  ctx: TransitionContext,
-): TransitionResult {
-  if (/[0-9]/.test(input)) {
-    const newDigits = state.digits + input;
-    const parsedDigits = Math.min(parseInt(newDigits, 10), MAX_VIM_COUNT);
-    return { next: { ...state, digits: String(parsedDigits) } };
-  }
+function parseCount(digits: string): number {
+  return clampCount(Number.parseInt(digits, 10));
+}
 
-  const motionCount = parseInt(state.digits, 10);
-  const effectiveCount = state.count * motionCount;
-  const result = handleOperatorInput(state.op, effectiveCount, input, ctx);
-  if (result) return result;
-  return { next: { type: 'idle' } };
+function clampCount(value: number): number {
+  if (!Number.isFinite(value) || value < 1) return 1;
+  return Math.min(Math.floor(value), MAX_VIM_COUNT);
+}
+
+function isDigit(input: string): boolean {
+  return input >= '0' && input <= '9';
+}
+
+function isNonZeroDigit(input: string): boolean {
+  return input >= '1' && input <= '9';
+}
+
+function lineEndOffset(text: string, cursor: number): number {
+  const end = text.indexOf('\n', cursor);
+  return end === -1 ? text.length : end;
+}
+
+function firstNonBlankOffset(text: string, cursor: number): number {
+  const start = text.lastIndexOf('\n', cursor - 1) + 1;
+  const end = lineEndOffset(text, cursor);
+  let offset = start;
+  while (offset < end && (text[offset] === ' ' || text[offset] === '\t')) offset++;
+  return offset < end ? offset : start;
 }
