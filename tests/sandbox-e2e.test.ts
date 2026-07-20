@@ -29,18 +29,18 @@ describe.skipIf(!enabled)('Bubblewrap runtime isolation', () => {
     };
 
     const workspaceWrite = await tool.execute({ command: 'printf isolated > sandbox-proof.txt' }, context);
-    expect(workspaceWrite.isError).toBe(false);
+    expect(workspaceWrite.isError, workspaceWrite.output).toBe(false);
     expect(readFileSync(join(workspace, 'sandbox-proof.txt'), 'utf-8')).toBe('isolated');
 
     const hostWrite = await tool.execute({ command: `printf escaped > '${join(outside, 'escape.txt')}'` }, context);
-    expect(hostWrite.isError).toBe(true);
+    expect(hostWrite.isError, hostWrite.output).toBe(true);
     expect(existsSync(join(outside, 'escape.txt'))).toBe(false);
 
     const network = await tool.execute({ command: 'getent hosts example.com >/dev/null 2>&1 && exit 7 || exit 0' }, context);
-    expect(network.isError).toBe(false);
+    expect(network.isError, network.output).toBe(false);
 
     const processes = await tool.execute({ command: "find /proc -maxdepth 1 -type d -name '[0-9]*' | wc -l" }, context);
-    expect(processes.isError).toBe(false);
+    expect(processes.isError, processes.output).toBe(false);
     expect(Number.parseInt(processes.output.trim(), 10)).toBeLessThanOrEqual(5);
   });
 });
