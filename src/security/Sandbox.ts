@@ -33,7 +33,13 @@ export function resolveSandboxBackend(preference: 'auto' | SandboxBackend = 'aut
     : [preference];
   for (const candidate of candidates) {
     const executable = candidate === 'bubblewrap' ? 'bwrap' : 'docker';
-    const args = candidate === 'docker' ? ['info', '--format', '{{.ServerVersion}}'] : ['--version'];
+    const args = candidate === 'docker'
+      ? ['info', '--format', '{{.ServerVersion}}']
+      : [
+          '--die-with-parent', '--new-session', '--unshare-user', '--uid', '0', '--gid', '0',
+          '--unshare-pid', '--unshare-net', '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev',
+          '/bin/true',
+        ];
     const result = spawnSync(executable, args, { stdio: 'ignore', timeout: 3_000, windowsHide: true });
     if (!result.error && result.status === 0) return candidate;
   }

@@ -23,7 +23,7 @@ All notable changes to Synapse are documented in this file.
 - Bound MCP trust to resolved executable and referenced local script content so same-path code replacement invalidates trust before spawn.
 - Fixed unintended activation of every installed skill and propagated cancellation into in-process and spawned Task agents.
 - Added adversarial regression tests for context exfiltration, MCP code replacement, skill activation, and nested-agent cancellation.
-- Added a Linux CI job that executes commands inside Bubblewrap and proves workspace, host filesystem, network, and PID isolation at runtime.
+- Added a Linux CI job that executes commands inside the selected strict backend and proves workspace, host filesystem, network, and PID isolation at runtime.
 - Made compression reject summaries that drop explicit approval or prohibition constraints.
 - Added cooperative streaming backpressure and bounded scanning for million-character TUI output.
 

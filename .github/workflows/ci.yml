@@ -33,7 +33,7 @@ jobs:
       - run: npm audit --registry=https://registry.npmjs.org
 
   sandbox-e2e:
-    name: Bubblewrap runtime isolation
+    name: Strict sandbox runtime isolation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

@@ -238,7 +238,7 @@ Synapse sends each provider a system prompt assembled from an immutable safety k
 
 File tools are restricted to the startup directory and explicit `--add-dir` roots. Paths are checked lexically and through their real existing ancestors to block traversal and link escapes. Instruction-file `@include` directives are also confined to their owning root, including real-path checks for symlinks and junctions. Network tools require approval and reject loopback, private, and link-local destinations.
 
-Strict shell auto-approval requires Bubblewrap or Docker and fails closed when neither backend is usable. CI runs a real Bubblewrap process to verify writable workspace mounts, read-only host paths, isolated networking, and a private PID namespace.
+Strict shell auto-approval requires an operational Bubblewrap or Docker backend and fails closed when neither is usable. Availability is proven with a runtime isolation probe rather than a version check. Linux CI executes the selected strict backend to verify writable workspace mounts, host-path isolation, isolated networking, and a private PID namespace.
 
 ---
 
