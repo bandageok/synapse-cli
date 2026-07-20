@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { virtualizeText } from './streaming.js';
+import { stripAnsi } from './timeline.js';
 
 type MarkdownBlock =
   | { kind: 'code'; language: string; lines: string[] }
@@ -106,10 +107,11 @@ function renderCodeBlock(block: Extract<MarkdownBlock, { kind: 'code' }>, index:
 }
 
 export function MarkdownRenderer({ text, maxLines = 200, columns = 100 }: MarkdownRendererProps): React.ReactElement {
-  const visibleText = virtualizeText(text, maxLines, Math.max(20, columns));
+  const safeText = stripAnsi(text);
+  const visibleText = virtualizeText(safeText, maxLines, Math.max(20, columns));
   const parsed = parseMarkdownBlocks(visibleText, maxLines);
   const { blocks } = parsed;
-  const truncated = parsed.truncated || visibleText !== text;
+  const truncated = parsed.truncated || visibleText !== safeText;
   const elements = blocks.map((block, index) => block.kind === 'code'
     ? renderCodeBlock(block, index)
     : renderLine(block.text, index));
