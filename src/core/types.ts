@@ -91,8 +91,8 @@ export interface ToolContext {
 
 export type EngineEvent =
   | { type: 'token'; text: string }
-  | { type: 'tool_use'; tool: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; tool: string; output: string }
+  | { type: 'tool_use'; toolUseId: string; tool: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; toolUseId: string; tool: string; output: string; isError: boolean; durationMs: number }
   | { type: 'compressed'; tokensBefore: number; tokensAfter: number }
   | { type: 'end_turn' }
   | { type: 'error'; error: string }

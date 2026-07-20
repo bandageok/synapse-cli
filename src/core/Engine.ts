@@ -166,19 +166,22 @@ export async function* createEngine(
       // 6. Execute tools
       for (const toolUse of toolUses) {
         if (toolUse._parseError) {
+          const output = 'Error: Invalid JSON in tool input';
           options?.logger?.audit?.('tool.input.invalid_json', {
             toolUseId: toolUse.id,
             tool: toolUse.name,
           });
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Error: Invalid JSON in tool input', is_error: true }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: output, is_error: true }],
           });
+          yield { type: 'tool_result', toolUseId: toolUse.id, tool: toolUse.name, output, isError: true, durationMs: 0 };
           continue;
         }
 
         const validationError = tools.validateInput(toolUse);
         if (validationError) {
+          const output = `Error: ${validationError}`;
           options?.logger?.audit?.('tool.input.schema_validation_failed', {
             toolUseId: toolUse.id,
             tool: toolUse.name,
@@ -186,13 +189,15 @@ export async function* createEngine(
           });
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: `Error: ${validationError}`, is_error: true }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: output, is_error: true }],
           });
+          yield { type: 'tool_result', toolUseId: toolUse.id, tool: toolUse.name, output, isError: true, durationMs: 0 };
           continue;
         }
 
         const hookResult = await hooks.preToolUse(toolUse);
         if (hookResult.blocked) {
+          const output = hookResult.reason ?? 'Blocked by hook';
           options?.logger?.audit?.('tool.blocked_by_hook', {
             toolUseId: toolUse.id,
             tool: toolUse.name,
@@ -201,8 +206,9 @@ export async function* createEngine(
           });
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: hookResult.reason ?? 'Blocked by hook', is_error: true }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: output, is_error: true }],
           });
+          yield { type: 'tool_result', toolUseId: toolUse.id, tool: toolUse.name, output, isError: true, durationMs: 0 };
           continue;
         }
 
@@ -215,10 +221,12 @@ export async function* createEngine(
           decision: permission,
         });
         if (permission === 'deny') {
+          const output = tools.permissionDeniedMessage(toolUse);
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: tools.permissionDeniedMessage(toolUse), is_error: true }],
+            content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: output, is_error: true }],
           });
+          yield { type: 'tool_result', toolUseId: toolUse.id, tool: toolUse.name, output, isError: true, durationMs: 0 };
           continue;
         }
 
@@ -235,10 +243,12 @@ export async function* createEngine(
               allowed,
             });
             if (!allowed) {
+              const output = 'Permission denied by user';
               messages.push({
                 role: 'user',
-                content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied by user', is_error: true }],
+                content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: output, is_error: true }],
               });
+              yield { type: 'tool_result', toolUseId: toolUse.id, tool: toolUse.name, output, isError: true, durationMs: 0 };
               continue;
             }
             humanApproved = true;
@@ -250,15 +260,18 @@ export async function* createEngine(
               allowed: false,
               reason: 'no handler',
             });
+            const output = 'Permission denied (no handler)';
             messages.push({
               role: 'user',
-              content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Permission denied (no handler)', is_error: true }],
+              content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: output, is_error: true }],
             });
+            yield { type: 'tool_result', toolUseId: toolUse.id, tool: toolUse.name, output, isError: true, durationMs: 0 };
             continue;
           }
         }
 
-        yield { type: 'tool_use', tool: toolUse.name, input: toolUse.input };
+        yield { type: 'tool_use', toolUseId: toolUse.id, tool: toolUse.name, input: toolUse.input };
+        const executionStartedAt = Date.now();
         options?.logger?.audit?.('tool.execution_started', {
           toolUseId: toolUse.id,
           tool: toolUse.name,
@@ -292,6 +305,7 @@ export async function* createEngine(
           toolUseId: toolUse.id,
           tool: toolUse.name,
           isError: result.isError,
+          durationMs: Date.now() - executionStartedAt,
           outputPreview: result.output.slice(0, 500),
         });
 
@@ -299,7 +313,14 @@ export async function* createEngine(
           role: 'user',
           content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: result.output, is_error: result.isError }],
         });
-        yield { type: 'tool_result', tool: toolUse.name, output: result.output };
+        yield {
+          type: 'tool_result',
+          toolUseId: toolUse.id,
+          tool: toolUse.name,
+          output: result.output,
+          isError: result.isError,
+          durationMs: Date.now() - executionStartedAt,
+        };
       }
     } catch (err: unknown) {
       if (options?.signal?.aborted || (err instanceof Error && err.name === 'AbortError')) {

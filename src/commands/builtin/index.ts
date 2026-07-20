@@ -18,3 +18,4 @@ export { diffCommand } from './diff.js';
 export { undoCommand } from './undo.js';
 export { contextCommand } from './context.js';
 export { permissionsCommand } from './permissions.js';
+export { detailsCommand } from './details.js';

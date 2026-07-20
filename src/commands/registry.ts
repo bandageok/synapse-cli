@@ -1,5 +1,6 @@
 // src/commands/registry.ts
 import type { Message, PermissionMode, PermissionModeInput } from '../core/types.js';
+import type { DetailsMode } from '../ui/timeline.js';
 
 export interface SlashCommand {
   name: string;
@@ -22,6 +23,8 @@ export interface CommandDeps {
   turnCount: number;
   permissionMode?: PermissionMode;
   setPermissionMode?: (mode: PermissionModeInput) => PermissionMode;
+  detailsMode?: DetailsMode;
+  setDetailsMode?: (mode: DetailsMode) => DetailsMode;
 }
 
 export class CommandRegistry {

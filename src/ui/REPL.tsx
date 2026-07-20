@@ -1,5 +1,5 @@
 // src/ui/REPL.tsx
-// Synapse REPL v6 -- Complete: virtual scroll + tool detail + skills auto-load + message timeline
+// Synapse REPL: structured activity timeline, responsive chrome, and streamed answers.
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
 import { existsSync, readFileSync } from 'fs';
@@ -12,18 +12,29 @@ import {
   sessionCommand, costCommand, compactCommand, initCommand,
   resumeCommand, historyCommand, soulEditCommand, vimCommand,
   diffCommand, undoCommand, contextCommand, permissionsCommand,
+  detailsCommand,
 } from '../commands/builtin/index.js';
 import { statusCommand } from '../commands/builtin/status.js';
 import { skillsCommand } from '../commands/builtin/skills.js';
 import { useVimInput } from '../vim/index.js';
 import { SkillAutoLoader } from '../skills/AutoLoader.js';
 import { VERSION } from '../version.js';
-import { TokenRenderBuffer, virtualizeText } from './streaming.js';
+import { TokenRenderBuffer } from './streaming.js';
+import { TimelineView } from './components/Timeline.js';
 import {
   PermissionDialog,
   applyPermissionPromptAction,
   permissionPromptAction,
 } from './components/PermissionDialog.js';
+import {
+  appendAssistantText,
+  compactTimeline,
+  finishAssistantStreams,
+  finishTool,
+  startTool,
+  type DetailsMode,
+  type DisplayItem,
+} from './timeline.js';
 
 import type { Message, PermissionMode, PermissionModeInput } from '../core/types.js';
 import type { Provider } from '../providers/base.js';
@@ -74,17 +85,6 @@ interface REPLDeps {
   permissionManager: PermissionManager;
 }
 
-interface DisplayMsg {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  toolName?: string;
-  toolOutput?: string;
-  toolError?: boolean;
-  collapsed?: boolean;
-  timestamp: number;
-}
-
 // ============================================================
 // Utilities
 // ============================================================
@@ -112,7 +112,7 @@ function getInitialModel(dataDir: string): string {
 // UI Components
 // ============================================================
 
-function WelcomeBanner({ providerName, model }: { providerName: string; model: string }) {
+export function WelcomeBanner({ providerName, model }: { providerName: string; model: string }) {
   return React.createElement(Box, { flexDirection: 'column' as const, marginBottom: 1 },
     React.createElement(Text, { bold: true, color: 'cyan' as const }, '  Synapse v' + VERSION),
     React.createElement(Text, { color: 'gray' as const }, '  ' + (BADGE[providerName] || '\u25CF') + ' ' + providerName + ' / ' + model),
@@ -120,35 +120,47 @@ function WelcomeBanner({ providerName, model }: { providerName: string; model: s
   );
 }
 
-function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, activeSkills, turnCount, permissionMode }: {
+export function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, activeSkills, turnCount, permissionMode, columns }: {
   providerName: string; model: string; tokens: number; msgs: number;
-  vimMode: boolean; sessionTitle?: string; activeSkills: string[]; turnCount: number; permissionMode: PermissionMode;
+  vimMode: boolean; sessionTitle?: string; activeSkills: string[]; turnCount: number; permissionMode: PermissionMode; columns: number;
 }) {
   const pct = Math.min(100, Math.round((tokens / CONTEXT_WINDOW) * 100));
-  const filled = Math.round((pct / 100) * 20);
-  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(20 - filled);
   const color = pct < 60 ? 'green' as const : pct < 85 ? 'yellow' as const : 'red' as const;
-  const skillBadge = activeSkills.length > 0 ? ' | \u{1F9E9} ' + activeSkills.length : '';
-  return React.createElement(Box, null,
-    React.createElement(Text, { color: 'gray' as const },
-      ' ' + providerName + ' ' + model
+  const line = formatStatusLine({
+    providerName, model, msgs, sessionTitle, activeSkills, turnCount, permissionMode, columns,
+  });
+  return React.createElement(Box, { paddingX: 1 },
+    React.createElement(Text, { wrap: 'truncate-end' },
+      React.createElement(Text, { color: 'cyan' as const, bold: true }, 'Synapse'),
+      React.createElement(Text, { color: 'gray' as const, dimColor: true }, line),
+      React.createElement(Text, { color }, ` · ctx ${pct}%`),
+      vimMode ? React.createElement(Text, { color: 'yellow' as const, bold: true }, ' NORMAL') : null,
     ),
-    sessionTitle ? React.createElement(Text, { color: 'gray' as const, dimColor: true },
-      ' \u2014 ' + sessionTitle
-    ) : null,
-    React.createElement(Text, { color: 'gray' as const },
-      ' \u00B7 ' + msgs + ' msgs \u00B7 turn ' + turnCount + ' \u00B7 ' + permissionMode + skillBadge
-    ),
-    React.createElement(Text, { color },
-      ' | ' + bar + ' ' + pct + '%'
-    ),
-    vimMode ? React.createElement(Text, { color: 'yellow' as const, bold: true }, ' NORMAL') : null,
   );
 }
 
-function Divider() {
+export function formatStatusLine(input: {
+  providerName: string;
+  model: string;
+  msgs: number;
+  sessionTitle?: string;
+  activeSkills: string[];
+  turnCount: number;
+  permissionMode: PermissionMode;
+  columns: number;
+}): string {
+  const compact = input.columns < 84;
+  const parts = compact
+    ? [input.model, `turn ${input.turnCount}`, input.permissionMode]
+    : [input.providerName, input.model, `${input.msgs} msgs`, `turn ${input.turnCount}`, input.permissionMode];
+  if (input.columns >= 110 && input.activeSkills.length > 0) parts.push(`${input.activeSkills.length} skills`);
+  if (input.columns >= 140 && input.sessionTitle) parts.push(input.sessionTitle);
+  return ' · ' + parts.join(' · ');
+}
+
+export function Divider({ columns }: { columns: number }) {
   return React.createElement(Text, { color: 'gray' as const, dimColor: true },
-    ' ' + '\u2500'.repeat(60)
+    ' ' + '\u2500'.repeat(Math.max(20, columns - 2))
   );
 }
 
@@ -164,18 +176,25 @@ function ThinkingSpinner({ label }: { label: string }) {
     return () => clearInterval(timer);
   }, []);
   return React.createElement(Box, null,
-    React.createElement(Text, { color: 'cyan' as const }, ' ' + SPINNER[tick] + ' '),
-    React.createElement(Text, { color: 'yellow' as const }, label || 'thinking'),
-    React.createElement(Text, { color: 'gray' as const, dimColor: true }, ' ' + elapsed),
+    React.createElement(Text, { color: 'cyan' as const }, ' ' + SPINNER[tick] + ' Working'),
+    label ? React.createElement(Text, { color: 'gray' as const }, ' · ' + label) : null,
+    React.createElement(Text, { color: 'gray' as const, dimColor: true }, ' · ' + elapsed),
   );
 }
 
-function Footer({ vimMode, scrollPos, maxScroll }: { vimMode: boolean; scrollPos: number; maxScroll: number }) {
+export function Footer({ vimMode, scrollPos, maxScroll, detailsMode, columns }: {
+  vimMode: boolean; scrollPos: number; maxScroll: number; detailsMode: DetailsMode; columns: number;
+}) {
   const scrollInfo = maxScroll > 0 ? ' PgUp/Dn:scroll ' + (scrollPos + 1) + '/' + (maxScroll + 1) : ' ';
+  if (columns < 72) {
+    return React.createElement(Text, { color: 'gray' as const, dimColor: true },
+      ` ${detailsMode} · Ctrl+O details · Enter send${scrollInfo}`,
+    );
+  }
   return React.createElement(Text, { color: 'gray' as const, dimColor: true },
     vimMode
-      ? ' i:insert  esc:normal  h/j/k/l:move PgUp/Dn:scroll ctrl+c:cancel/exit'
-      : ' Enter:send  Ctrl+C:cancel/exit  Ctrl+L:clear  Ctrl+U:clear  PgUp/Dn:scroll  /help:cmds'
+      ? ` ${detailsMode} · Ctrl+O:details · i:insert · esc:normal · PgUp/Dn:scroll · Ctrl+C:cancel/exit${scrollInfo}`
+      : ` ${detailsMode} · Ctrl+O:details · Enter:send · Ctrl+C:cancel/exit · PgUp/Dn:scroll · /help${scrollInfo}`,
   );
 }
 
@@ -200,7 +219,7 @@ export function launchREPL(deps: REPLDeps) {
     soulCommand, doctorCommand, configCommand, sessionCommand, costCommand,
     compactCommand, initCommand, resumeCommand, historyCommand, soulEditCommand,
     vimCommand, diffCommand, undoCommand, contextCommand, permissionsCommand,
-    statusCommand, skillsCommand,
+    detailsCommand, statusCommand, skillsCommand,
   ]) {
     registry.register(cmd);
   }
@@ -212,16 +231,19 @@ export function launchREPL(deps: REPLDeps) {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>(initialMessages ?? []);
     const [permissionMode, setPermissionModeState] = useState<PermissionMode>(permissionManager.getMode());
-    const [displayMessages, setDisplayMessages] = useState<DisplayMsg[]>(() =>
+    const [displayItems, setDisplayItems] = useState<DisplayItem[]>(() =>
       initialMessages && initialMessages.length > 0
         ? [{
             id: 'resumed-' + Date.now(),
-            role: 'system' as const,
-            content: `  [resumed] ${sessionId} (${initialMessages.length} messages loaded)`,
+            kind: 'notice' as const,
+            tone: 'muted' as const,
+            title: `Resumed ${sessionId}`,
+            detail: `${initialMessages.length} messages loaded`,
             timestamp: Date.now(),
           }]
         : [],
     );
+    const [detailsMode, setDetailsModeState] = useState<DetailsMode>('compact');
     const [isThinking, setIsThinking] = useState(false);
     const [thinkingLabel, setThinkingLabel] = useState('');
     const [model, setModelState] = useState(initialModel);
@@ -232,14 +254,15 @@ export function launchREPL(deps: REPLDeps) {
     const [scrollPos, setScrollPos] = useState(0);
     const [terminalRows, setTerminalRows] = useState(40);
     const { exit } = useApp();
-    const stdout = useStdout();
-    const rows = (stdout as any).rows;
+    const { stdout } = useStdout();
+    const rows = stdout.rows;
     const vim = useVimInput(input, setInput);
 
     const allMessagesRef = useRef<Message[]>(initialMessages ? [...initialMessages] : []);
     const activeRunRef = useRef<AbortController | null>(null);
     const sessionTitleRef = useRef<string>('');
     const activeSkillsRef = useRef<string[]>([]);
+    const displaySequenceRef = useRef(0);
 
     useEffect(() => {
       if (rows) setTerminalRows(Math.max(10, rows - SCROLL_MARGIN));
@@ -258,24 +281,32 @@ export function launchREPL(deps: REPLDeps) {
       activeSkillsRef.current = skillLoader.getActiveNames();
     }
 
-    const addDisplay = useCallback((msg: DisplayMsg) => {
-      setDisplayMessages(prev => [...prev, msg]);
+    const nextDisplayId = useCallback((prefix: string) => {
+      displaySequenceRef.current += 1;
+      return `${prefix}-${displaySequenceRef.current}`;
     }, []);
 
+    const addItem = useCallback((item: DisplayItem) => {
+      setDisplayItems(prev => [...prev, item]);
+    }, []);
+
+    const addNoticeText = useCallback((output: string, tone: 'muted' | 'info' | 'warning' | 'error' = 'info') => {
+      const [title = '', ...detailLines] = output.split('\n');
+      addItem({
+        id: nextDisplayId('notice'),
+        kind: 'notice',
+        tone,
+        title: title || '(no output)',
+        detail: detailLines.length ? detailLines.join('\n') : undefined,
+        timestamp: Date.now(),
+      });
+    }, [addItem, nextDisplayId]);
+
     const runEngine = useCallback(async (allMessages: Message[]) => {
-      let responseText = '';
-      let currentToolName = '';
       const controller = new AbortController();
       activeRunRef.current = controller;
       const renderBuffer = new TokenRenderBuffer(batch => {
-        responseText += batch;
-        setDisplayMessages(prev => {
-          const last = prev[prev.length - 1];
-          if (last && last.role === 'assistant' && last.id.startsWith('stream-')) {
-            return [...prev.slice(0, -1), { ...last, content: responseText }];
-          }
-          return [...prev, { id: `stream-${Date.now()}`, role: 'assistant', content: responseText, timestamp: Date.now() }];
-        });
+        setDisplayItems(prev => appendAssistantText(prev, batch, nextDisplayId('assistant'), Date.now()));
       });
 
       try {
@@ -301,52 +332,50 @@ export function launchREPL(deps: REPLDeps) {
 
             case 'tool_use':
               renderBuffer.flush();
-              currentToolName = event.tool;
               setThinkingLabel(event.tool);
-              addDisplay({
-                id: 'toolhdr-' + Date.now(),
-                role: 'system' as const,
-                content: '  [\u25B2 ' + event.tool + '] running...',
+              setDisplayItems(prev => startTool(prev, {
+                id: nextDisplayId('tool'),
+                toolUseId: event.toolUseId,
+                name: event.tool,
+                input: event.input,
                 timestamp: Date.now(),
-              });
+              }));
               break;
 
             case 'tool_result': {
-              const isError = typeof event.output === 'string' && event.output.startsWith('Error:');
-              addDisplay({
-                id: 'result-' + Date.now(),
-                role: 'assistant' as const,
-                content: isError
-                  ? '  [\u00D7] ' + currentToolName + ' failed: ' + event.output.slice(0, 150)
-                  : '  [\u2713] ' + currentToolName + ' -- ' + event.output.slice(0, 120),
-                toolName: currentToolName,
-                toolOutput: event.output.slice(0, 500),
-                toolError: isError,
-                collapsed: true,
+              setDisplayItems(prev => finishTool(prev, {
+                id: nextDisplayId('tool-result'),
+                toolUseId: event.toolUseId,
+                name: event.tool,
+                output: event.output,
+                isError: event.isError,
+                durationMs: event.durationMs,
                 timestamp: Date.now(),
-              });
+              }));
               setThinkingLabel('');
               break;
             }
 
             case 'compressed':
-              addDisplay({
-                id: 'comp-' + Date.now(),
-                role: 'system' as const,
-                content: '  [\u{1F4C6}] Compressed ' + event.tokensBefore.toLocaleString() + ' \u2192 ' + event.tokensAfter.toLocaleString() + ' tokens',
+              addItem({
+                id: nextDisplayId('compressed'),
+                kind: 'notice',
+                tone: 'info',
+                title: 'Context compressed',
+                detail: `${event.tokensBefore.toLocaleString()} → ${event.tokensAfter.toLocaleString()} tokens`,
                 timestamp: Date.now(),
               });
               break;
 
             case 'end_turn': {
               renderBuffer.flush();
+              setDisplayItems(finishAssistantStreams);
               const lastMsg = allMessages[allMessages.length - 1];
               const lastText = lastMsg && typeof lastMsg.content === 'string' ? lastMsg.content : '';
               skillLoader.autoMatch(lastText, process.cwd());
               activeSkillsRef.current = skillLoader.getActiveNames();
               setIsThinking(false);
               setThinkingLabel('');
-              currentToolName = '';
               if (sessionStore) {
                 const turns = allMessagesRef.current.filter(m => m.role === 'user').length;
                 sessionStore.save(sessionId, allMessagesRef.current, {
@@ -361,10 +390,12 @@ export function launchREPL(deps: REPLDeps) {
 
             case 'error':
               renderBuffer.flush();
-              addDisplay({
-                id: 'err-' + Date.now(),
-                role: 'system' as const,
-                content: 'X ' + event.error,
+              setDisplayItems(finishAssistantStreams);
+              addItem({
+                id: nextDisplayId('error'),
+                kind: 'notice',
+                tone: 'error',
+                title: event.error,
                 timestamp: Date.now(),
               });
               setIsThinking(false);
@@ -374,7 +405,8 @@ export function launchREPL(deps: REPLDeps) {
         }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        addDisplay({ id: 'err-' + Date.now(), role: 'system' as const, content: 'X ' + msg, timestamp: Date.now() });
+        setDisplayItems(finishAssistantStreams);
+        addItem({ id: nextDisplayId('error'), kind: 'notice', tone: 'error', title: msg, timestamp: Date.now() });
         setIsThinking(false);
         setThinkingLabel('');
       } finally {
@@ -382,7 +414,7 @@ export function launchREPL(deps: REPLDeps) {
         if (activeRunRef.current === controller) activeRunRef.current = null;
         setIsThinking(false);
       }
-    }, [addDisplay]);
+    }, [addItem, nextDisplayId]);
 
     useInput(async (char, key) => {
       // Ctrl+C must remain available while a provider request is in flight.
@@ -410,22 +442,34 @@ export function launchREPL(deps: REPLDeps) {
               setPermissionModeState('full-access');
             },
           });
-          const content = action === 'deny'
-            ? '  [denied] ' + pendingPermission.tool
+          const title = action === 'deny'
+            ? `Denied ${pendingPermission.tool}`
             : action === 'full-access'
-              ? '  [full-access] switched for this session; allowed ' + pendingPermission.tool
-              : '  [allowed once] ' + pendingPermission.tool;
-          addDisplay({ id: `perm-${pendingPermission.toolUseId}-${action}`, role: 'assistant' as const, content, timestamp: Date.now() });
+              ? `Enabled full access and allowed ${pendingPermission.tool}`
+              : `Allowed ${pendingPermission.tool} once`;
+          addItem({
+            id: `permission-${pendingPermission.toolUseId}-${action}`,
+            kind: 'notice',
+            tone: action === 'deny' ? 'warning' : 'info',
+            title,
+            timestamp: Date.now(),
+          });
           setPendingPermission(null);
           return;
         }
         return;
       }
 
+      if (key.ctrl && char === 'o') {
+        setDetailsModeState(previous => previous === 'compact' ? 'expanded' : 'compact');
+        setScrollPos(0);
+        return;
+      }
+
       if (isThinking) return;
       if (vim.handleKey(char, key).handled) return;
 
-      const maxScroll = Math.max(0, displayMessages.length - terminalRows + 4);
+      const maxScroll = Math.max(0, compactTimeline(displayItems, detailsMode).length - terminalRows + 4);
 
       if (key.pageUp || (key.upArrow && scrollPos > 0)) {
         setScrollPos(prev => Math.min(maxScroll, prev + terminalRows - 4));
@@ -436,7 +480,7 @@ export function launchREPL(deps: REPLDeps) {
         return;
       }
 
-      if (key.ctrl && char === 'l') { setDisplayMessages([]); setScrollPos(0); setShowWelcome(true); return; }
+      if (key.ctrl && char === 'l') { setDisplayItems([]); setScrollPos(0); setShowWelcome(true); return; }
       if (key.ctrl && char === 'u') { setInput(''); return; }
       if (key.ctrl && char === 'w') {
         setInput(prev => { const t = prev.trimEnd(); const i = t.lastIndexOf(' '); return i === -1 ? '' : t.slice(0, i + 1); });
@@ -455,10 +499,10 @@ export function launchREPL(deps: REPLDeps) {
           const commandDeps = {
             dataDir, model,
             setModel: (m: string) => setModelState(m),
-            clearOutput: () => { setDisplayMessages([]); setScrollPos(0); setShowWelcome(true); },
-            addOutput: (line: string) => addDisplay({ id: 'cmd-' + Date.now(), role: 'assistant' as const, content: line, timestamp: Date.now() }),
+            clearOutput: () => { setDisplayItems([]); setScrollPos(0); setShowWelcome(true); },
+            addOutput: (line: string) => addNoticeText(line),
             messages: allMessagesRef.current,
-            resetMessages: () => { allMessagesRef.current = []; setMessages([]); setDisplayMessages([]); setScrollPos(0); setShowWelcome(true); },
+            resetMessages: () => { allMessagesRef.current = []; setMessages([]); setDisplayItems([]); setScrollPos(0); setShowWelcome(true); },
             setMessages: (msgs: Message[]) => { allMessagesRef.current = msgs; setMessages(msgs); },
             clearMemoryCache: () => context.clearMemoryCache(),
             turnCount: messages.filter(m => m.role === 'user').length,
@@ -468,13 +512,15 @@ export function launchREPL(deps: REPLDeps) {
               setPermissionModeState(next);
               return next;
             },
+            detailsMode,
+            setDetailsMode: (next: DetailsMode) => {
+              setDetailsModeState(next);
+              setScrollPos(0);
+              return next;
+            },
           };
           const result = await registry.execute(trimmed, commandDeps);
-          if (result.output) {
-            for (const line of result.output.split('\n')) {
-              addDisplay({ id: 'cmd-' + Date.now() + '-' + line.slice(0, 20), role: 'assistant' as const, content: line, timestamp: Date.now() });
-            }
-          }
+          if (result.output) addNoticeText(result.output);
           return;
         }
 
@@ -482,7 +528,7 @@ export function launchREPL(deps: REPLDeps) {
         if (!sessionTitleRef.current) {
           sessionTitleRef.current = trimmed.length > 50 ? trimmed.slice(0, 50) + '...' : trimmed;
         }
-        addDisplay({ id: 'user-' + Date.now(), role: 'user', content: '> ' + trimmed, timestamp: Date.now() });
+        addItem({ id: nextDisplayId('user'), kind: 'user', content: trimmed, timestamp: Date.now() });
         const userMsg: Message = { role: 'user', content: trimmed };
         setMessages(prev => {
           const all = [...prev, userMsg];
@@ -508,38 +554,21 @@ export function launchREPL(deps: REPLDeps) {
       }
     });
 
-    // Virtual scroll window calculation
-    const visibleStart = Math.max(0, displayMessages.length - terminalRows + 4 - scrollPos);
-    const visibleEnd = displayMessages.length - scrollPos;
-    const visibleMessages = displayMessages.slice(visibleStart, visibleEnd);
-    const terminalColumns = Math.max(40, Number((stdout as any).columns) || 100);
+    const terminalColumns = Math.max(40, Number(stdout.columns) || 100);
+    const renderableItems = compactTimeline(displayItems, detailsMode);
+    const maxScroll = Math.max(0, renderableItems.length - terminalRows + 4);
+    const visibleStart = Math.max(0, renderableItems.length - terminalRows + 4 - scrollPos);
+    const visibleEnd = renderableItems.length - scrollPos;
+    const visibleItems = renderableItems.slice(visibleStart, visibleEnd);
 
     const tokens = estTokens(allMessagesRef.current);
     const msgCount = allMessagesRef.current.length;
     const turnCount = allMessagesRef.current.filter(m => m.role === 'user').length;
-
-    // Render
-    const msgElements: React.ReactElement[] = [];
-    for (const msg of visibleMessages) {
-      const renderedContent = virtualizeText(msg.content, Math.max(6, Math.floor(terminalRows / 2)), terminalColumns - 4);
-      if (msg.role === 'user') {
-        msgElements.push(React.createElement(Text, { key: msg.id }, renderedContent));
-      } else if (msg.role === 'system') {
-        msgElements.push(React.createElement(Text, { key: msg.id, color: 'gray' as const, dimColor: true }, renderedContent));
-      } else if (msg.content) {
-        if (msg.content.startsWith('  [\u25B2 ')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'yellow' as const, bold: true }, renderedContent));
-        } else if (msg.content.startsWith('  [\u00D7]')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'red' as const }, renderedContent));
-        } else if (msg.content.startsWith('  [\u2713]')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'green' as const }, renderedContent));
-        } else if (msg.content.startsWith('  [\u{1F4C6}]')) {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'blue' as const }, renderedContent));
-        } else {
-          msgElements.push(React.createElement(Text, { key: msg.id, color: 'white' as const }, renderedContent));
-        }
-      }
-    }
+    const latestDisplayItem = displayItems.at(-1);
+    const showWorkingIndicator = isThinking && !(
+      (latestDisplayItem?.kind === 'assistant' && latestDisplayItem.streaming)
+      || (latestDisplayItem?.kind === 'tool' && latestDisplayItem.status === 'running')
+    );
 
     const scrollHint = scrollPos > 0
       ? React.createElement(Text, { color: 'gray' as const, dimColor: true },
@@ -559,25 +588,31 @@ export function launchREPL(deps: REPLDeps) {
         activeSkills: activeSkillsRef.current,
         turnCount,
         permissionMode,
+        columns: terminalColumns,
       }),
-      React.createElement(Divider),
+      React.createElement(Divider, { columns: terminalColumns }),
       scrollHint,
-      React.createElement(Box, { flexDirection: 'column' as const }, ...msgElements),
+      React.createElement(TimelineView, {
+        items: visibleItems,
+        detailsMode,
+        maxAnswerLines: Math.max(10, terminalRows - 10),
+      }),
       pendingPermission && React.createElement(PermissionDialog, {
         tool: pendingPermission.tool,
         input: pendingPermission.input,
       }),
-      isThinking && React.createElement(ThinkingSpinner, { label: thinkingLabel }),
+      showWorkingIndicator && React.createElement(ThinkingSpinner, { label: thinkingLabel }),
       React.createElement(Box, { flexGrow: 1 } as any),
-      React.createElement(Box, null,
+      React.createElement(Divider, { columns: terminalColumns }),
+      React.createElement(Box, { paddingX: 1 },
         React.createElement(Text, {
-          color: vim.enabled && vim.isNormalMode ? 'yellow' as const : 'green' as const,
+          color: vim.enabled && vim.isNormalMode ? 'yellow' as const : 'cyan' as const,
           bold: true,
-        }, vim.enabled && vim.isNormalMode ? 'N ' : '> '),
+        }, vim.enabled && vim.isNormalMode ? 'N ' : '❯ '),
         React.createElement(Text, null, input),
         React.createElement(Text, { color: 'gray' as const }, '\u2588'),
       ),
-      React.createElement(Footer, { vimMode: vim.enabled, scrollPos, maxScroll: Math.max(0, displayMessages.length - terminalRows + 4) }),
+      React.createElement(Footer, { vimMode: vim.enabled, scrollPos, maxScroll, detailsMode, columns: terminalColumns }),
     );
   }
 
