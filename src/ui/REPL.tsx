@@ -596,6 +596,7 @@ export function launchREPL(deps: REPLDeps) {
         items: visibleItems,
         detailsMode,
         maxAnswerLines: Math.max(10, terminalRows - 10),
+        columns: Math.max(20, terminalColumns - 6),
       }),
       pendingPermission && React.createElement(PermissionDialog, {
         tool: pendingPermission.tool,

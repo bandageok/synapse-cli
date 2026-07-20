@@ -36,4 +36,16 @@ describe('MarkdownRenderer', () => {
     }));
     expect(view.lastFrame()).toContain('response shortened in this view');
   });
+
+  it('bounds a wrapped single-line response by the available terminal width', () => {
+    const view = render(React.createElement(MarkdownRenderer, {
+      text: '0123456789'.repeat(60),
+      maxLines: 6,
+      columns: 20,
+    }));
+    const frame = view.lastFrame() ?? '';
+    expect(frame).toContain('rendered lines omitted');
+    expect(frame).toContain('response shortened in this view');
+    expect(frame.length).toBeLessThan(300);
+  });
 });

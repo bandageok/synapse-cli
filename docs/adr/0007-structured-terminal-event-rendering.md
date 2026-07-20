@@ -50,6 +50,7 @@ The default detail mode is `compact`:
 `Ctrl+O` toggles between `compact` and `expanded`. `/details compact|expanded|toggle` provides an explicit command path. Expanded mode shows tool input and bounded output while preserving the same event history.
 
 Assistant responses use a semantic terminal renderer for headings, emphasis, inline code, lists, quotes, rules, and fenced code. Markdown is an input syntax for answer content, not the UI event model.
+Answer previews are bounded by estimated visual rows at the current terminal width, so a long wrapped line cannot displace the prompt even when it contains no source newline.
 
 The initial implementation keeps inline terminal scrollback. Alternate-screen rendering is deferred to a separate renderer because it changes copy, scrollback, multiplexing, and accessibility behavior. The structured display model is renderer-independent so an alternate-screen implementation can be added without changing Engine events.
 
