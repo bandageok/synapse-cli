@@ -1,3 +1,8 @@
+import stringWidth from 'string-width';
+
+const EXACT_WIDTH_LIMIT = 32_768;
+const WIDTH_SAMPLE_SIZE = 4_096;
+
 export class TokenRenderBuffer {
   private pending = '';
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -39,7 +44,20 @@ export interface VirtualizedText {
 }
 
 function lineRows(line: string, columns: number): number {
-  return Math.max(1, Math.ceil(stringWidth(line) / Math.max(1, columns)));
+  const width = Math.max(1, columns);
+  if (line.length <= EXACT_WIDTH_LIMIT) return Math.max(1, Math.ceil(stringWidth(line) / width));
+  const head = line.slice(0, WIDTH_SAMPLE_SIZE);
+  const tail = line.slice(-WIDTH_SAMPLE_SIZE);
+  const sampledUnits = head.length + tail.length;
+  const sampledWidth = stringWidth(head) + stringWidth(tail);
+  const estimatedWidth = Math.ceil(line.length * (sampledWidth / Math.max(1, sampledUnits)));
+  return Math.max(1, Math.ceil(estimatedWidth / width));
+}
+
+function exceedsDisplayWidth(value: string, maxWidth: number): boolean {
+  const scanCharacters = Math.max(32, maxWidth * 4);
+  if (value.length > scanCharacters) return true;
+  return stringWidth(value) > maxWidth;
 }
 
 function takeDisplayWidth(value: string, maxWidth: number, fromEnd = false): string {
@@ -61,7 +79,7 @@ function takeDisplayWidth(value: string, maxWidth: number, fromEnd = false): str
 
 export function tailTextByRows(value: string, columns: number, maxRows: number): string {
   const maxWidth = Math.max(1, columns) * Math.max(1, maxRows);
-  if (stringWidth(value) <= maxWidth) return value;
+  if (!exceedsDisplayWidth(value, maxWidth)) return value;
   return '…' + takeDisplayWidth(value, Math.max(1, maxWidth - 1), true);
 }
 
@@ -106,4 +124,3 @@ export function virtualizeText(content: string, maxLines: number, columns = 100)
     omittedRows,
   };
 }
-import stringWidth from 'string-width';

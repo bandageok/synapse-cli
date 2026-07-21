@@ -206,11 +206,14 @@ describe('TUI streaming controls', () => {
 
   it('bounds virtualization work for very large single-line output', () => {
     const source = 'x'.repeat(1_000_000);
+    const startedAt = performance.now();
     const rendered = virtualizeText(source, 20, 100);
+    const elapsedMs = performance.now() - startedAt;
     expect(rendered.text.length).toBeLessThan(10_000);
     expect(rendered.text).toContain('rendered lines hidden');
     expect(rendered.omittedRows).toBeGreaterThan(9_000);
     expect(source.length).toBe(1_000_000);
+    expect(elapsedMs).toBeLessThan(2_000);
   });
 
   it('propagates cancellation through the engine provider signal', async () => {
