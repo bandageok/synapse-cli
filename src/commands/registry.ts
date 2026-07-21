@@ -1,6 +1,7 @@
 // src/commands/registry.ts
 import type { Message, PermissionMode, PermissionModeInput } from '../core/types.js';
 import type { DetailsMode } from '../ui/timeline.js';
+import type { SkillAutoLoader } from '../skills/AutoLoader.js';
 
 export interface SlashCommand {
   name: string;
@@ -25,6 +26,7 @@ export interface CommandDeps {
   setPermissionMode?: (mode: PermissionModeInput) => PermissionMode;
   detailsMode?: DetailsMode;
   setDetailsMode?: (mode: DetailsMode) => DetailsMode;
+  skillLoader?: SkillAutoLoader;
 }
 
 export class CommandRegistry {

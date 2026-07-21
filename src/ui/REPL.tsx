@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { render, Text, Box, useInput, useApp, useStdout } from 'ink';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { createEngine } from '../core/Engine.js';
 import { CommandRegistry } from '../commands/registry.js';
 import {
@@ -18,9 +18,11 @@ import { statusCommand } from '../commands/builtin/status.js';
 import { skillsCommand } from '../commands/builtin/skills.js';
 import { useVimInput } from '../vim/index.js';
 import { SkillAutoLoader } from '../skills/AutoLoader.js';
+import { answerSkillInventoryQuery } from '../skills/query.js';
 import { VERSION } from '../version.js';
-import { TokenRenderBuffer } from './streaming.js';
-import { TimelineView } from './components/Timeline.js';
+import { tailTextByRows, TokenRenderBuffer } from './streaming.js';
+import { ActivityRail, TimelineView } from './components/Timeline.js';
+import { CommandPalette, filterSlashCommands } from './components/CommandPalette.js';
 import {
   PermissionDialog,
   applyPermissionPromptAction,
@@ -29,8 +31,12 @@ import {
 import {
   appendAssistantText,
   compactTimeline,
+  countFailures,
   finishAssistantStreams,
   finishTool,
+  latestTurnId,
+  preserveScrollOffset,
+  sliceTimelineByRows,
   startTool,
   type DetailsMode,
   type DisplayItem,
@@ -56,8 +62,22 @@ import type { PermissionManager } from '../core/PermissionManager.js';
 // Constants
 // ============================================================
 const CONTEXT_WINDOW = 200_000;
-const SCROLL_MARGIN = 5;
+const MAX_QUEUED_INPUTS = 8;
 const SPINNER = ['\u280B','\u2819','\u2839','\u2838','\u283C','\u2834','\u2826','\u2827','\u2807','\u280F'];
+const ACCENT = {
+  cyan: '#5fd7ff',
+  blue: '#5f87ff',
+  purple: '#af87ff',
+  magenta: '#d75f87',
+  green: '#87d787',
+};
+const SYNAPSE_LOGO = [
+  ' ██████ ██  ██ ███  ██  ███  █████  ████  █████',
+  ' ██      ████   ████ ██ ██ ██ ██  ██ ██    ██   ',
+  ' █████    ██    ██ ████ █████ █████   ███  ████ ',
+  '     ██   ██    ██  ████ ██ ██ ██      ██ ██   ',
+  ' █████    ██    ██   ██ ██ ██ ██     ████  █████',
+];
 const BADGE: Record<string, string> = {
   anthropic: '\u25C6',
   openrouter: '\u25C7',
@@ -83,6 +103,10 @@ interface REPLDeps {
   initialMessages?: Message[];
   initialSessionId?: string;
   permissionManager: PermissionManager;
+}
+
+export function shouldUseAlternateScreen(isTTY: boolean, disabledValue?: string): boolean {
+  return isTTY && disabledValue !== '1' && disabledValue?.toLowerCase() !== 'true';
 }
 
 // ============================================================
@@ -112,28 +136,45 @@ function getInitialModel(dataDir: string): string {
 // UI Components
 // ============================================================
 
-export function WelcomeBanner({ providerName, model }: { providerName: string; model: string }) {
+export function welcomeBannerRows(columns: number): number {
+  return columns >= 82 ? 8 : 4;
+}
+
+export function WelcomeBanner({ providerName, model, columns = 100, cwd = process.cwd() }: {
+  providerName: string; model: string; columns?: number; cwd?: string;
+}) {
+  const wide = columns >= 82;
   return React.createElement(Box, { flexDirection: 'column' as const, marginBottom: 1 },
-    React.createElement(Text, { bold: true, color: 'cyan' as const }, '  Synapse v' + VERSION),
-    React.createElement(Text, { color: 'gray' as const }, '  ' + (BADGE[providerName] || '\u25CF') + ' ' + providerName + ' / ' + model),
-    React.createElement(Text, { color: 'gray' as const, dimColor: true }, '  /help: commands'),
+    React.createElement(Text, { color: 'gray' as const, dimColor: true, wrap: 'truncate-end' }, ` ${cwd}`),
+    ...(wide
+      ? SYNAPSE_LOGO.map((line, index) => React.createElement(Text, {
+          key: `logo-${index}`,
+          color: [ACCENT.blue, ACCENT.cyan, ACCENT.purple, ACCENT.magenta, ACCENT.purple, ACCENT.blue][index],
+          bold: true,
+        }, line))
+      : [React.createElement(Text, { key: 'compact-logo', color: ACCENT.cyan, bold: true }, ` ◆ SYNAPSE v${VERSION}`)]),
+    React.createElement(Text, { color: 'gray' as const },
+      ' ' + (BADGE[providerName] || '\u25CF') + ' ',
+      React.createElement(Text, { color: ACCENT.purple, bold: true }, providerName),
+      React.createElement(Text, { color: 'gray' as const }, ' / '),
+      React.createElement(Text, { color: ACCENT.blue }, model),
+    ),
   );
 }
 
-export function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, activeSkills, turnCount, permissionMode, columns }: {
+export function StatusBar({ providerName, model, tokens, msgs, vimMode, sessionTitle, activeSkills, turnCount, permissionMode, columns, cwd, working, activity }: {
   providerName: string; model: string; tokens: number; msgs: number;
   vimMode: boolean; sessionTitle?: string; activeSkills: string[]; turnCount: number; permissionMode: PermissionMode; columns: number;
+  cwd?: string; working?: boolean; activity?: string;
 }) {
-  const pct = Math.min(100, Math.round((tokens / CONTEXT_WINDOW) * 100));
-  const color = pct < 60 ? 'green' as const : pct < 85 ? 'yellow' as const : 'red' as const;
-  const line = formatStatusLine({
-    providerName, model, msgs, sessionTitle, activeSkills, turnCount, permissionMode, columns,
-  });
+  const status = working ? (activity ? `Working: ${activity}` : 'Working') : 'Ready';
   return React.createElement(Box, { paddingX: 1 },
     React.createElement(Text, { wrap: 'truncate-end' },
-      React.createElement(Text, { color: 'cyan' as const, bold: true }, 'Synapse'),
-      React.createElement(Text, { color: 'gray' as const, dimColor: true }, line),
-      React.createElement(Text, { color }, ` · ctx ${pct}%`),
+      React.createElement(Text, { color: ACCENT.cyan, bold: true }, 'Synapse'),
+      React.createElement(Text, { color: working ? 'yellow' as const : ACCENT.green }, ` · ${status}`),
+      columns >= 120 && activeSkills.length > 0
+        ? React.createElement(Text, { color: 'gray' as const }, ` · ${activeSkills.length} skills`)
+        : null,
       vimMode ? React.createElement(Text, { color: 'yellow' as const, bold: true }, ' NORMAL') : null,
     ),
   );
@@ -148,13 +189,13 @@ export function formatStatusLine(input: {
   turnCount: number;
   permissionMode: PermissionMode;
   columns: number;
+  cwd?: string;
+  working?: boolean;
+  activity?: string;
 }): string {
-  const compact = input.columns < 84;
-  const parts = compact
-    ? [input.model, `turn ${input.turnCount}`, input.permissionMode]
-    : [input.providerName, input.model, `${input.msgs} msgs`, `turn ${input.turnCount}`, input.permissionMode];
-  if (input.columns >= 110 && input.activeSkills.length > 0) parts.push(`${input.activeSkills.length} skills`);
-  if (input.columns >= 140 && input.sessionTitle) parts.push(input.sessionTitle);
+  const status = input.working ? (input.activity ? `Working: ${input.activity}` : 'Working') : 'Ready';
+  const parts = [status];
+  if (input.columns >= 120 && input.activeSkills.length > 0) parts.push(`${input.activeSkills.length} skills`);
   return ' · ' + parts.join(' · ');
 }
 
@@ -182,19 +223,98 @@ function ThinkingSpinner({ label }: { label: string }) {
   );
 }
 
-export function Footer({ vimMode, scrollPos, maxScroll, detailsMode, columns }: {
-  vimMode: boolean; scrollPos: number; maxScroll: number; detailsMode: DetailsMode; columns: number;
+export function Footer({ vimMode, permissionMode, rowsAbove, rowsBelow, detailsMode, failureCount, columns, cwd, model, contextPercent }: {
+  vimMode: boolean;
+  permissionMode: PermissionMode;
+  rowsAbove: number;
+  rowsBelow: number;
+  detailsMode: DetailsMode | 'current-turn';
+  failureCount: number;
+  columns: number;
+  cwd?: string;
+  model?: string;
+  contextPercent?: number;
 }) {
-  const scrollInfo = maxScroll > 0 ? ' PgUp/Dn:scroll ' + (scrollPos + 1) + '/' + (maxScroll + 1) : ' ';
-  if (columns < 72) {
-    return React.createElement(Text, { color: 'gray' as const, dimColor: true },
-      ` ${detailsMode} · Ctrl+O details · Enter send${scrollInfo}`,
-    );
-  }
-  return React.createElement(Text, { color: 'gray' as const, dimColor: true },
-    vimMode
-      ? ` ${detailsMode} · Ctrl+O:details · i:insert · esc:normal · PgUp/Dn:scroll · Ctrl+C:cancel/exit${scrollInfo}`
-      : ` ${detailsMode} · Ctrl+O:details · Enter:send · Ctrl+C:cancel/exit · PgUp/Dn:scroll · /help${scrollInfo}`,
+  const narrow = columns < 84;
+  const displayCwd = cwd ? (narrow ? basename(cwd) : cwd) : '';
+  const left = [displayCwd, rowsAbove > 0 ? `↑ ${rowsAbove}` : '', rowsBelow > 0 && columns >= 72 ? `↓ ${rowsBelow}` : ''].filter(Boolean).join(' · ');
+  const center = [
+    permissionMode,
+    detailsMode === 'expanded' ? 'details open' : detailsMode === 'current-turn' ? 'turn details' : '',
+    failureCount > 0 ? `${failureCount} issue${failureCount === 1 ? '' : 's'}` : '',
+    vimMode && columns >= 84 ? 'vim' : '',
+  ].filter(Boolean).join(' · ');
+  const right = [model ?? '', contextPercent === undefined ? '' : `ctx ${contextPercent}%`].filter(Boolean).join(' · ');
+  const modeColor = permissionMode === 'full-access' ? 'red' as const : permissionMode === 'ask' ? 'yellow' as const : ACCENT.green;
+  const widths = narrow ? ['32%', '28%', '40%'] : ['34%', '32%', '34%'];
+  return React.createElement(Box, { width: columns, paddingX: 1 },
+    React.createElement(Box, { width: widths[0] },
+      React.createElement(Text, { color: ACCENT.blue, dimColor: true, wrap: 'truncate-end' }, left),
+    ),
+    React.createElement(Box, { width: widths[1], justifyContent: 'center' },
+      React.createElement(Text, { color: modeColor, wrap: 'truncate-end' }, center),
+    ),
+    React.createElement(Box, { width: widths[2], justifyContent: 'flex-end' },
+      React.createElement(Text, { color: ACCENT.purple, wrap: 'truncate-end' }, right),
+    ),
+  );
+}
+
+export function appendQueuedInput(queue: string[], input: string, maxItems = MAX_QUEUED_INPUTS): string[] {
+  const normalized = input.trim();
+  if (!normalized || queue.length >= maxItems) return queue;
+  return [...queue, normalized];
+}
+
+export type BusySubmissionAction = 'ignore' | 'queue' | 'reject-command' | 'reject-full';
+
+export function busySubmissionAction(input: string, queuedCount: number, maxItems = MAX_QUEUED_INPUTS): BusySubmissionAction {
+  const normalized = input.trim();
+  if (!normalized) return 'ignore';
+  if (normalized.startsWith('/')) return 'reject-command';
+  if (queuedCount >= maxItems) return 'reject-full';
+  return 'queue';
+}
+
+export function engineErrorNotice(error: string): { tone: 'muted' | 'error'; title: string } {
+  return /cancel|abort/i.test(error)
+    ? { tone: 'muted', title: 'Turn cancelled' }
+    : { tone: 'error', title: error };
+}
+
+export function QueuePreview({ items }: { items: string[]; columns: number }) {
+  if (items.length === 0) return null;
+  const next = items[0].replace(/\s+/g, ' ').trim();
+  return React.createElement(Box, { paddingX: 1 },
+    React.createElement(Text, { color: 'yellow' as const, wrap: 'truncate-end' },
+      `↳ ${items.length} queued · ${next}`,
+    ),
+  );
+}
+
+export function Composer({ input, normalMode, columns, permissionMode, contextLabel }: {
+  input: string; normalMode: boolean; columns: number; permissionMode?: PermissionMode; contextLabel?: string;
+}) {
+  const visibleInput = tailTextByRows(input, Math.max(4, columns - 10), 4);
+  const modeColor = permissionMode === 'full-access' ? 'red' as const : permissionMode === 'ask' ? 'yellow' as const : ACCENT.green;
+  return React.createElement(Box, { flexDirection: 'column', marginX: 1, width: Math.max(10, columns - 2) },
+    permissionMode || contextLabel ? React.createElement(Box, { justifyContent: 'space-between' },
+      React.createElement(Text, { color: 'gray', dimColor: true }, contextLabel ?? ''),
+      permissionMode ? React.createElement(Text, { color: modeColor, bold: true }, permissionMode) : null,
+    ) : null,
+    React.createElement(Box, {
+      paddingX: 1,
+      minHeight: 1,
+      borderStyle: 'single',
+      borderColor: normalMode ? 'yellow' as const : ACCENT.cyan,
+    },
+      React.createElement(Text, {
+        color: normalMode ? 'yellow' as const : ACCENT.cyan,
+        bold: true,
+      }, normalMode ? 'N ' : '› '),
+      React.createElement(Text, { wrap: 'wrap' }, visibleInput),
+      React.createElement(Text, { color: 'gray' as const }, '\u2588'),
+    ),
   );
 }
 
@@ -244,7 +364,11 @@ export function launchREPL(deps: REPLDeps) {
         : [],
     );
     const [detailsMode, setDetailsModeState] = useState<DetailsMode>('compact');
+    const [expandedTurnId, setExpandedTurnId] = useState<string | null>(null);
     const [isThinking, setIsThinking] = useState(false);
+    const [queuedInputs, setQueuedInputs] = useState<string[]>([]);
+    const [commandCursor, setCommandCursor] = useState(0);
+    const [commandPaletteDismissed, setCommandPaletteDismissed] = useState(false);
     const [thinkingLabel, setThinkingLabel] = useState('');
     const [model, setModelState] = useState(initialModel);
     const [showWelcome, setShowWelcome] = useState(true);
@@ -263,10 +387,17 @@ export function launchREPL(deps: REPLDeps) {
     const sessionTitleRef = useRef<string>('');
     const activeSkillsRef = useRef<string[]>([]);
     const displaySequenceRef = useRef(0);
+    const activeTurnIdRef = useRef<string | undefined>(undefined);
+    const previousTotalRowsRef = useRef(0);
 
     useEffect(() => {
-      if (rows) setTerminalRows(Math.max(10, rows - SCROLL_MARGIN));
+      if (rows) setTerminalRows(Math.max(12, rows));
     }, [rows]);
+
+    useEffect(() => {
+      setCommandCursor(0);
+      setCommandPaletteDismissed(false);
+    }, [input]);
 
     // Discover skills on mount (may already be discovered by init.ts)
     useEffect(() => {
@@ -290,7 +421,7 @@ export function launchREPL(deps: REPLDeps) {
       setDisplayItems(prev => [...prev, item]);
     }, []);
 
-    const addNoticeText = useCallback((output: string, tone: 'muted' | 'info' | 'warning' | 'error' = 'info') => {
+    const addNoticeText = useCallback((output: string, tone: 'muted' | 'info' | 'warning' | 'error' = 'info', turnId?: string) => {
       const [title = '', ...detailLines] = output.split('\n');
       addItem({
         id: nextDisplayId('notice'),
@@ -299,14 +430,16 @@ export function launchREPL(deps: REPLDeps) {
         title: title || '(no output)',
         detail: detailLines.length ? detailLines.join('\n') : undefined,
         timestamp: Date.now(),
+        turnId: turnId ?? activeTurnIdRef.current,
       });
     }, [addItem, nextDisplayId]);
 
-    const runEngine = useCallback(async (allMessages: Message[]) => {
+    const runEngine = useCallback(async (allMessages: Message[], turnId: string) => {
       const controller = new AbortController();
       activeRunRef.current = controller;
+      activeTurnIdRef.current = turnId;
       const renderBuffer = new TokenRenderBuffer(batch => {
-        setDisplayItems(prev => appendAssistantText(prev, batch, nextDisplayId('assistant'), Date.now()));
+        setDisplayItems(prev => appendAssistantText(prev, batch, nextDisplayId('assistant'), Date.now(), turnId));
       });
 
       try {
@@ -339,6 +472,7 @@ export function launchREPL(deps: REPLDeps) {
                 name: event.tool,
                 input: event.input,
                 timestamp: Date.now(),
+                turnId,
               }));
               break;
 
@@ -351,6 +485,7 @@ export function launchREPL(deps: REPLDeps) {
                 isError: event.isError,
                 durationMs: event.durationMs,
                 timestamp: Date.now(),
+                turnId,
               }));
               setThinkingLabel('');
               break;
@@ -364,6 +499,7 @@ export function launchREPL(deps: REPLDeps) {
                 title: 'Context compressed',
                 detail: `${event.tokensBefore.toLocaleString()} → ${event.tokensAfter.toLocaleString()} tokens`,
                 timestamp: Date.now(),
+                turnId,
               });
               break;
 
@@ -391,12 +527,13 @@ export function launchREPL(deps: REPLDeps) {
             case 'error':
               renderBuffer.flush();
               setDisplayItems(finishAssistantStreams);
+              const errorNotice = engineErrorNotice(event.error);
               addItem({
                 id: nextDisplayId('error'),
                 kind: 'notice',
-                tone: 'error',
-                title: event.error,
+                ...errorNotice,
                 timestamp: Date.now(),
+                turnId,
               });
               setIsThinking(false);
               setThinkingLabel('');
@@ -406,17 +543,107 @@ export function launchREPL(deps: REPLDeps) {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         setDisplayItems(finishAssistantStreams);
-        addItem({ id: nextDisplayId('error'), kind: 'notice', tone: 'error', title: msg, timestamp: Date.now() });
+        addItem({ id: nextDisplayId('error'), kind: 'notice', tone: 'error', title: msg, timestamp: Date.now(), turnId });
         setIsThinking(false);
         setThinkingLabel('');
       } finally {
         renderBuffer.close();
         if (activeRunRef.current === controller) activeRunRef.current = null;
+        if (activeTurnIdRef.current === turnId) activeTurnIdRef.current = undefined;
         setIsThinking(false);
       }
     }, [addItem, nextDisplayId]);
 
+    const submitPrompt = useCallback((trimmed: string) => {
+      setShowWelcome(false);
+      if (!sessionTitleRef.current) {
+        sessionTitleRef.current = trimmed.length > 50 ? trimmed.slice(0, 50) + '...' : trimmed;
+      }
+      const turnId = nextDisplayId('turn');
+      addItem({ id: nextDisplayId('user'), kind: 'user', content: trimmed, timestamp: Date.now(), turnId });
+      const userMsg: Message = { role: 'user', content: trimmed };
+      const localAnswer = answerSkillInventoryQuery(trimmed, skillLoader, process.cwd());
+      if (localAnswer) {
+        const assistantMsg: Message = { role: 'assistant', content: localAnswer };
+        const all = [...allMessagesRef.current, userMsg, assistantMsg];
+        allMessagesRef.current = all;
+        setMessages(all);
+        addItem({
+          id: nextDisplayId('assistant'), kind: 'assistant', content: localAnswer,
+          streaming: false, timestamp: Date.now(), turnId,
+        });
+        activeSkillsRef.current = skillLoader.getActiveNames();
+        return;
+      }
+
+      skillLoader.autoMatch(trimmed, process.cwd());
+      activeSkillsRef.current = skillLoader.getActiveNames();
+      const activeContents = skillLoader.getActiveContents();
+      if (activeContents.trim() && (context as any).injectSkills) {
+        (context as any).injectSkills(activeContents);
+      }
+      const all = [...allMessagesRef.current, userMsg];
+      allMessagesRef.current = all;
+      setMessages(all);
+      setIsThinking(true);
+      setThinkingLabel('');
+      void runEngine(all, turnId);
+    }, [addItem, nextDisplayId, runEngine]);
+
+    const terminalColumns = Math.max(40, Number(stdout.columns) || 100);
+    const wideLayout = terminalColumns >= 110 && terminalRows >= 24;
+    const railWidth = wideLayout ? Math.min(30, Math.max(24, Math.floor(terminalColumns * 0.24))) : 0;
+    const renderableItems = compactTimeline(displayItems, detailsMode, expandedTurnId);
+    const commandCandidates = filterSlashCommands(registry.list(), input);
+    const commandPaletteOpen = !commandPaletteDismissed && !isThinking && !pendingPermission && commandCandidates.length > 0;
+    const commandPaletteRows = commandPaletteOpen ? commandCandidates.length + 2 : 0;
+    const composerRows = Math.min(4, Math.max(1, Math.ceil(Math.max(1, input.length) / Math.max(20, terminalColumns - 6))));
+    const chromeRows = (showWelcome ? welcomeBannerRows(terminalColumns) : 0)
+      + (pendingPermission
+        ? 15
+        : 6 + composerRows + commandPaletteRows + (isThinking ? 1 : 0) + (queuedInputs.length ? 1 : 0));
+    const timelineRowBudget = Math.max(6, terminalRows - chromeRows);
+    const maxAnswerLines = Math.max(6, timelineRowBudget - 4);
+    const timelineWindow = sliceTimelineByRows(
+      renderableItems,
+      timelineRowBudget,
+      Math.max(20, terminalColumns - railWidth - 6),
+      detailsMode,
+      maxAnswerLines,
+      scrollPos,
+      expandedTurnId,
+    );
+    const maxScroll = timelineWindow.maxScrollRows;
+    const failureCount = countFailures(renderableItems);
+
+    useEffect(() => {
+      const previousTotalRows = previousTotalRowsRef.current;
+      previousTotalRowsRef.current = timelineWindow.totalRows;
+      if (previousTotalRows === 0 || scrollPos === 0) return;
+      setScrollPos(previous => Math.min(
+        timelineWindow.maxScrollRows,
+        preserveScrollOffset(previous, previousTotalRows, timelineWindow.totalRows),
+      ));
+    }, [timelineWindow.totalRows, timelineWindow.maxScrollRows]);
+
+    useEffect(() => {
+      if (isThinking || pendingPermission || queuedInputs.length === 0) return;
+      const [next, ...remaining] = queuedInputs;
+      setQueuedInputs(remaining);
+      submitPrompt(next);
+    }, [isThinking, pendingPermission, queuedInputs, submitPrompt]);
+
     useInput(async (char, key) => {
+      if (key.escape && isThinking && activeRunRef.current) {
+        activeRunRef.current.abort(new Error('Cancelled by user'));
+        if (pendingPermission) {
+          pendingPermission.resolve(false);
+          setPendingPermission(null);
+        }
+        setThinkingLabel('cancelling');
+        return;
+      }
+
       // Ctrl+C must remain available while a provider request is in flight.
       if (key.ctrl && char === 'c') {
         if (isThinking && activeRunRef.current) {
@@ -461,26 +688,49 @@ export function launchREPL(deps: REPLDeps) {
       }
 
       if (key.ctrl && char === 'o') {
-        setDetailsModeState(previous => previous === 'compact' ? 'expanded' : 'compact');
+        const currentTurnId = latestTurnId(displayItems);
+        if (!currentTurnId) return;
+        setDetailsModeState('compact');
+        setExpandedTurnId(previous => previous === currentTurnId ? null : currentTurnId);
         setScrollPos(0);
         return;
       }
 
-      if (isThinking) return;
+      if (commandPaletteOpen) {
+        if (key.escape) {
+          setCommandPaletteDismissed(true);
+          return;
+        }
+        if (key.upArrow) {
+          setCommandCursor(previous => (previous - 1 + commandCandidates.length) % commandCandidates.length);
+          return;
+        }
+        if (key.downArrow) {
+          setCommandCursor(previous => (previous + 1) % commandCandidates.length);
+          return;
+        }
+        const selected = commandCandidates[Math.min(commandCursor, commandCandidates.length - 1)];
+        const exact = input.slice(1).toLowerCase() === selected.name.toLowerCase();
+        if (key.tab || (key.return && !exact)) {
+          setInput(`/${selected.name}${selected.usage?.includes(' ') ? ' ' : ''}`);
+          return;
+        }
+      }
+
       if (vim.handleKey(char, key).handled) return;
 
-      const maxScroll = Math.max(0, compactTimeline(displayItems, detailsMode).length - terminalRows + 4);
-
       if (key.pageUp || (key.upArrow && scrollPos > 0)) {
-        setScrollPos(prev => Math.min(maxScroll, prev + terminalRows - 4));
+        setScrollPos(prev => Math.min(maxScroll, prev + timelineRowBudget));
         return;
       }
       if (key.pageDown || (key.downArrow && scrollPos < maxScroll)) {
-        setScrollPos(prev => Math.max(0, prev - terminalRows + 4));
+        setScrollPos(prev => Math.max(0, prev - timelineRowBudget));
         return;
       }
 
-      if (key.ctrl && char === 'l') { setDisplayItems([]); setScrollPos(0); setShowWelcome(true); return; }
+      if (key.ctrl && char === 'l') {
+        setDisplayItems([]); setScrollPos(0); setExpandedTurnId(null); setShowWelcome(true); return;
+      }
       if (key.ctrl && char === 'u') { setInput(''); return; }
       if (key.ctrl && char === 'w') {
         setInput(prev => { const t = prev.trimEnd(); const i = t.lastIndexOf(' '); return i === -1 ? '' : t.slice(0, i + 1); });
@@ -490,8 +740,24 @@ export function launchREPL(deps: REPLDeps) {
       if (key.return) {
         const trimmed = input.trim();
         if (!trimmed) return;
+        if (isThinking) {
+          const action = busySubmissionAction(trimmed, queuedInputs.length);
+          if (action === 'reject-command') {
+            addNoticeText('Commands are unavailable while a turn is running.', 'warning');
+            return;
+          }
+          if (action === 'reject-full') {
+            addNoticeText(`Follow-up queue is full (${MAX_QUEUED_INPUTS}).`, 'warning');
+            return;
+          }
+          if (action !== 'queue') return;
+          setQueuedInputs(previous => appendQueuedInput(previous, trimmed));
+          setInput('');
+          return;
+        }
         setInput('');
         setScrollPos(0);
+        setExpandedTurnId(null);
 
         if (trimmed.startsWith('/')) {
           setShowWelcome(false);
@@ -515,51 +781,25 @@ export function launchREPL(deps: REPLDeps) {
             detailsMode,
             setDetailsMode: (next: DetailsMode) => {
               setDetailsModeState(next);
+              setExpandedTurnId(null);
               setScrollPos(0);
               return next;
             },
+            skillLoader,
           };
           const result = await registry.execute(trimmed, commandDeps);
           if (result.output) addNoticeText(result.output);
           return;
         }
 
-        setShowWelcome(false);
-        if (!sessionTitleRef.current) {
-          sessionTitleRef.current = trimmed.length > 50 ? trimmed.slice(0, 50) + '...' : trimmed;
-        }
-        addItem({ id: nextDisplayId('user'), kind: 'user', content: trimmed, timestamp: Date.now() });
-        const userMsg: Message = { role: 'user', content: trimmed };
-        setMessages(prev => {
-          const all = [...prev, userMsg];
-          allMessagesRef.current = all;
-          runEngine(all);
-          return all;
-        });
-        setIsThinking(true);
-        setThinkingLabel('');
+        submitPrompt(trimmed);
 
-        // Auto-match skills and inject into context
-        skillLoader.autoMatch(trimmed, process.cwd());
-        activeSkillsRef.current = skillLoader.getActiveNames();
-        // Inject active skills into context for next turn
-        const activeContents = skillLoader.getActiveContents();
-        if (activeContents.trim() && (context as any).injectSkills) {
-          (context as any).injectSkills(activeContents);
-        }
       } else if (key.backspace || key.delete) {
         setInput(prev => prev.slice(0, -1));
       } else if (!key.ctrl && !key.meta && char) {
         setInput(prev => prev + char);
       }
     });
-
-    const terminalColumns = Math.max(40, Number(stdout.columns) || 100);
-    const renderableItems = compactTimeline(displayItems, detailsMode);
-    const maxScroll = Math.max(0, renderableItems.length - terminalRows + 4);
-    const visibleStart = Math.max(0, renderableItems.length - terminalRows + 4 - scrollPos);
-    const visibleEnd = renderableItems.length - scrollPos;
-    const visibleItems = renderableItems.slice(visibleStart, visibleEnd);
 
     const tokens = estTokens(allMessagesRef.current);
     const msgCount = allMessagesRef.current.length;
@@ -570,14 +810,16 @@ export function launchREPL(deps: REPLDeps) {
       || (latestDisplayItem?.kind === 'tool' && latestDisplayItem.status === 'running')
     );
 
-    const scrollHint = scrollPos > 0
+    const scrollHint = timelineWindow.rowsAbove > 0
       ? React.createElement(Text, { color: 'gray' as const, dimColor: true },
-          ' \u21D1 ' + scrollPos + ' more above (PgUp)'
+          ` ↑ ${timelineWindow.rowsAbove} rows above`
         )
       : null;
 
     return React.createElement(Box, { flexDirection: 'column' as const, height: '100%' as const },
-      showWelcome && React.createElement(WelcomeBanner, { providerName: provider.name, model }),
+      showWelcome && React.createElement(WelcomeBanner, {
+        providerName: provider.name, model, columns: terminalColumns, cwd: process.cwd(),
+      }),
       React.createElement(StatusBar, {
         providerName: provider.name,
         model,
@@ -589,34 +831,76 @@ export function launchREPL(deps: REPLDeps) {
         turnCount,
         permissionMode,
         columns: terminalColumns,
+        cwd: process.cwd(),
+        working: isThinking,
+        activity: thinkingLabel,
       }),
       React.createElement(Divider, { columns: terminalColumns }),
-      scrollHint,
-      React.createElement(TimelineView, {
-        items: visibleItems,
-        detailsMode,
-        maxAnswerLines: Math.max(10, terminalRows - 10),
-        columns: Math.max(20, terminalColumns - 6),
-      }),
+      React.createElement(Box, { flexDirection: wideLayout ? 'row' as const : 'column' as const, height: timelineRowBudget },
+        wideLayout ? React.createElement(ActivityRail, {
+          items: displayItems,
+          width: railWidth,
+          height: timelineRowBudget,
+        }) : null,
+        React.createElement(Box, {
+          flexDirection: 'column' as const,
+          flexGrow: 1,
+          paddingLeft: wideLayout ? 1 : 0,
+        },
+          scrollHint,
+          React.createElement(TimelineView, {
+            items: timelineWindow.items,
+            detailsMode,
+            expandedTurnId,
+            maxAnswerLines,
+            columns: Math.max(20, terminalColumns - railWidth - 6),
+          }),
+        ),
+      ),
       pendingPermission && React.createElement(PermissionDialog, {
         tool: pendingPermission.tool,
         input: pendingPermission.input,
+        columns: terminalColumns,
       }),
       showWorkingIndicator && React.createElement(ThinkingSpinner, { label: thinkingLabel }),
-      React.createElement(Box, { flexGrow: 1 } as any),
-      React.createElement(Divider, { columns: terminalColumns }),
-      React.createElement(Box, { paddingX: 1 },
-        React.createElement(Text, {
-          color: vim.enabled && vim.isNormalMode ? 'yellow' as const : 'cyan' as const,
-          bold: true,
-        }, vim.enabled && vim.isNormalMode ? 'N ' : '❯ '),
-        React.createElement(Text, null, input),
-        React.createElement(Text, { color: 'gray' as const }, '\u2588'),
-      ),
-      React.createElement(Footer, { vimMode: vim.enabled, scrollPos, maxScroll, detailsMode, columns: terminalColumns }),
+      !pendingPermission && React.createElement(QueuePreview, { items: queuedInputs, columns: terminalColumns }),
+      !pendingPermission && commandPaletteOpen && React.createElement(CommandPalette, {
+          commands: commandCandidates,
+          selectedIndex: commandCursor,
+          columns: terminalColumns,
+        }),
+      !pendingPermission && React.createElement(Composer, {
+          input,
+          normalMode: vim.enabled && vim.isNormalMode,
+          columns: terminalColumns,
+          permissionMode,
+          contextLabel: activeSkillsRef.current.length > 0 ? `Using ${activeSkillsRef.current.length} skills` : undefined,
+        }),
+      !pendingPermission && React.createElement(Footer, {
+          vimMode: vim.enabled,
+          permissionMode,
+          rowsAbove: timelineWindow.rowsAbove,
+          rowsBelow: timelineWindow.rowsBelow,
+          detailsMode: expandedTurnId ? 'current-turn' : detailsMode,
+          failureCount,
+          columns: terminalColumns,
+          cwd: process.cwd(),
+          model,
+          contextPercent: Math.min(100, Math.round((tokens / CONTEXT_WINDOW) * 100)),
+        }),
     );
   }
 
-  const { waitUntilExit } = render(React.createElement(REPL));
-  return waitUntilExit();
+  const alternateScreen = shouldUseAlternateScreen(Boolean(process.stdout.isTTY), process.env.SYNAPSE_NO_ALT_SCREEN);
+  const restoreScreen = () => {
+    if (alternateScreen) process.stdout.write('\u001b[?1049l');
+  };
+  if (alternateScreen) process.stdout.write('\u001b[?1049h\u001b[2J\u001b[H');
+  try {
+    const { waitUntilExit } = render(React.createElement(REPL));
+    return waitUntilExit().finally(restoreScreen);
+  } catch (error) {
+    restoreScreen();
+    throw error;
+  }
 }

@@ -32,7 +32,7 @@ import { WebSearchTool } from '../tools/WebSearchTool.js';
 import { createWebFetchTool } from '../tools/WebFetchTool.js';
 import { TodoWriteTool } from '../tools/TodoWriteTool.js';
 import { AskUserQuestionTool } from '../tools/AskUserQuestionTool.js';
-import { SkillTool } from '../tools/SkillTool.js';
+import { createSkillTool } from '../tools/SkillTool.js';
 import { NotebookReadTool } from '../tools/NotebookReadTool.js';
 import { NotebookEditTool } from '../tools/NotebookEditTool.js';
 import { GitStatusTool } from '../tools/GitStatusTool.js';
@@ -61,13 +61,16 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
   const hooks = new HookSystem();
   const sessionStore = new SessionStore(join(dataDir, 'sessions'));
   const errorRecovery = new ErrorRecovery();
+  const skillLoader = new SkillAutoLoader(dataDir);
+  skillLoader.rebuild(process.cwd());
+  skillLoader.autoMatch('', process.cwd());
 
   // 基础工具（无依赖）
   const basicTools = [
     createBashTool({ permissionManager, sandboxBackend: opts.sandboxBackend }),
     FileReadTool, FileEditTool, FileWriteTool,
     GlobTool, GrepTool, WebSearchTool, createWebFetchTool(dataDir),
-    TodoWriteTool, AskUserQuestionTool, SkillTool,
+    TodoWriteTool, AskUserQuestionTool, createSkillTool(skillLoader),
     NotebookReadTool, NotebookEditTool,
     GitStatusTool, GitDiffTool, GitCommitTool,
     PowerShellTool, ImageReadTool, ImageGenerateTool, TtsTool,
@@ -79,12 +82,6 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
   const soulLoader = new SoulLoader(dataDir);
   const memoryManager = new MemoryManager(dataDir);
   const dynamicReminder = new DynamicReminder();
-
-  const skillLoader = new SkillAutoLoader(dataDir);
-  // Auto-discover skills in workspace
-  skillLoader.rebuild(process.cwd());
-  // Auto-match based on current working directory
-  skillLoader.autoMatch('', process.cwd());
 
   const context = new ContextBuilder({
     dataDir,

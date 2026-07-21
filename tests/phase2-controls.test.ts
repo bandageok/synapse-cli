@@ -198,17 +198,22 @@ describe('TUI streaming controls', () => {
   it('virtualizes long output without mutating source content', () => {
     const source = Array.from({ length: 100 }, (_, index) => `line-${index}`).join('\n');
     const rendered = virtualizeText(source, 10, 80);
-    expect(rendered.split('\n').length).toBeLessThanOrEqual(10);
-    expect(rendered).toContain('rendered lines omitted');
+    expect(rendered.text.split('\n').length).toBeLessThanOrEqual(10);
+    expect(rendered.text).toContain('rendered lines hidden');
+    expect(rendered.truncated).toBe(true);
     expect(source).toContain('line-99');
   });
 
   it('bounds virtualization work for very large single-line output', () => {
     const source = 'x'.repeat(1_000_000);
+    const startedAt = performance.now();
     const rendered = virtualizeText(source, 20, 100);
-    expect(rendered.length).toBeLessThan(10_000);
-    expect(rendered).toContain('characters omitted');
+    const elapsedMs = performance.now() - startedAt;
+    expect(rendered.text.length).toBeLessThan(10_000);
+    expect(rendered.text).toContain('rendered lines hidden');
+    expect(rendered.omittedRows).toBeGreaterThan(9_000);
     expect(source.length).toBe(1_000_000);
+    expect(elapsedMs).toBeLessThan(2_000);
   });
 
   it('propagates cancellation through the engine provider signal', async () => {

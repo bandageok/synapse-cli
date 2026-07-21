@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   appendAssistantText,
   compactTimeline,
+  latestTurnId,
+  preserveScrollOffset,
+  sliceTimelineByRows,
   finishAssistantStreams,
   finishTool,
   previewToolOutput,
+  summarizeToolError,
   startTool,
   stripAnsi,
   summarizeToolInput,
+  wrappedRows,
   type DisplayItem,
   type ToolDisplayItem,
 } from '../src/ui/timeline.js';
@@ -58,25 +63,76 @@ describe('terminal timeline model', () => {
     })]);
   });
 
-  it('folds old successful calls while keeping recent, running, and failed calls visible', () => {
+  it('folds an entire tool run into one stable activity item', () => {
     const items: DisplayItem[] = [
       ...Array.from({ length: 7 }, (_, index) => tool(index + 1, 'success', index < 5 ? 'PowerShell' : 'WebFetch')),
       tool(8, 'error'),
       tool(9, 'running'),
     ];
-    const compact = compactTimeline(items, 'compact', 3);
-    const summary = compact.find(item => item.kind === 'tool-summary');
-    expect(summary).toMatchObject({ kind: 'tool-summary', count: 6 });
-    expect(summary && summary.kind === 'tool-summary' ? summary.tools : '').toContain('PowerShell ×5');
-    expect(compact.filter(item => item.kind === 'tool')).toHaveLength(3);
-    expect(compact.some(item => item.kind === 'tool' && item.status === 'error')).toBe(true);
-    expect(compact.some(item => item.kind === 'tool' && item.status === 'running')).toBe(true);
+    const compact = compactTimeline(items, 'compact');
+    expect(compact).toHaveLength(1);
+    expect(compact[0]).toMatchObject({
+      kind: 'activity', total: 9, succeeded: 7, failed: 1, running: 1,
+      current: expect.objectContaining({ id: 'display-9' }),
+    });
     expect(compactTimeline(items, 'expanded')).toEqual(items);
   });
 
+  it('groups repeated failures in compact mode without deleting expanded audit events', () => {
+    const items: DisplayItem[] = [
+      { ...tool(1, 'error', 'Glob'), output: "Error: EPERM scandir '.pytest_cache'", turnId: 'turn-1' },
+      { ...tool(2, 'error', 'Glob'), output: "Error: EPERM scandir '.pytest_cache'", turnId: 'turn-1' },
+      { ...tool(3, 'error', 'Glob'), output: "Error: EPERM scandir '.pytest_cache'", turnId: 'turn-1' },
+    ];
+    const compact = compactTimeline(items, 'compact');
+    expect(compact).toHaveLength(1);
+    expect(compact[0]).toMatchObject({
+      kind: 'activity', failed: 3, turnId: 'turn-1',
+      failures: [expect.objectContaining({ count: 3 })],
+    });
+    expect(compactTimeline(items, 'expanded')).toEqual(items);
+  });
+
+  it('keeps one selected turn expanded while compacting other turns', () => {
+    const items: DisplayItem[] = Array.from({ length: 8 }, (_, index) => ({
+      ...tool(index + 1),
+      turnId: index < 4 ? 'turn-1' : 'turn-2',
+    }));
+    const compact = compactTimeline(items, 'compact', 'turn-1');
+    expect(compact.filter(item => item.turnId === 'turn-1')).toHaveLength(4);
+    expect(compact.filter(item => item.turnId === 'turn-2')).toHaveLength(1);
+    expect(compact.find(item => item.turnId === 'turn-2')).toMatchObject({ kind: 'activity', total: 4 });
+    expect(latestTurnId(items)).toBe('turn-2');
+  });
+
+  it('extracts one actionable error line instead of a traceback', () => {
+    const output = "Traceback (most recent call last):\n  at worker.ts:12\nError: EPERM scandir 'C:\\Users\\demo\\.pytest_cache'";
+    expect(summarizeToolError(output)).toBe("EPERM scandir '.pytest_cache'");
+    expect(summarizeToolError('')).toBe('No error details');
+  });
+
+  it('uses terminal display width for CJK row estimates and slices by rows', () => {
+    expect(wrappedRows('中文中文', 4)).toBe(2);
+    const items: DisplayItem[] = [
+      { id: 'u1', kind: 'user', content: 'first', timestamp: 1, turnId: 'turn-1' },
+      { id: 'a1', kind: 'assistant', content: '中文'.repeat(20), streaming: false, timestamp: 2, turnId: 'turn-1' },
+      { id: 'u2', kind: 'user', content: 'latest', timestamp: 3, turnId: 'turn-2' },
+    ];
+    const window = sliceTimelineByRows(items, 6, 20, 'compact', 20);
+    expect(window.totalRows).toBeGreaterThan(items.length);
+    expect(window.items.at(-1)).toMatchObject({ id: 'u2' });
+    expect(window.rowsAbove).toBeGreaterThan(0);
+  });
+
+  it('preserves the viewed history position when streamed rows are appended', () => {
+    expect(preserveScrollOffset(12, 100, 107)).toBe(19);
+    expect(preserveScrollOffset(0, 100, 107)).toBe(0);
+    expect(preserveScrollOffset(12, 100, 98)).toBe(12);
+  });
+
   it('streams into the current assistant item and seals it at turn end', () => {
-    const first = appendAssistantText([], 'hello', 'assistant-1', 1);
-    const second = appendAssistantText(first, ' world', 'unused', 2);
+    const first = appendAssistantText([], 'hello', 'assistant-1', 1, 'turn-1');
+    const second = appendAssistantText(first, ' world', 'unused', 2, 'turn-1');
     expect(second).toEqual([expect.objectContaining({ content: 'hello world', streaming: true })]);
     expect(finishAssistantStreams(second)).toEqual([expect.objectContaining({ streaming: false })]);
   });

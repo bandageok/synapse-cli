@@ -283,7 +283,7 @@ Provider 预设只是快捷配置，运行时不会把厂商写死。任何 Open
 - 未初始化权限的 Registry 默认拒绝；子代理只能继承或收紧父 Registry 权限。
 - 非交互模式没有人工审批处理器，因此高风险操作默认拒绝。
 - `permissions.json` 中的优先级为 `deniedTools > askForTools > allowedTools`。`allowedTools` 可在 `ask` 模式消除普通工具的重复确认，但不能绕过敏感路径、工作区边界或 deny；受限子代理不会继承高风险 allow 条目。
-- 权限确认框中，`A` 只允许一次，`D` 拒绝，`F`/`Y` 把当前会话切到 `full-access` 后允许当前工具；该选择不写入 `.synapse.json`。
+- 权限确认框中，`1`/`A` 只允许一次，`3`/`D` 拒绝，`2`/`F`/`Y` 把当前会话切到 `full-access` 后允许当前工具；该选择不写入 `.synapse.json`。
 - 已存在但无法解析的 `permissions.json` 会阻止权限初始化并报告具体字段，不会静默回退到可能丢失 deny 条目的默认策略。文件保存使用同目录临时文件加原子 rename。
 - 完整状态、入口和运行时验收条件见 [权限测试矩阵](./PERMISSION-TEST-MATRIX.md)。
 
@@ -298,3 +298,7 @@ Synapse 从工作区根目录到当前目录分层加载 `AGENTS.md` 和 `CLAUDE
 ## Provider 和 审计
 
 Synapse 会把不可变产品身份、当前 Provider/模型路由、`IDENTITY.md`、`SOUL.md`、`MEMORY.md`、`AGENTS.md`/`CLAUDE.md`、技能上下文和当前环境组装成系统提示词发送给 provider。产品身份固定为 Synapse，由 BandageOK 开发和维护；Provider 只是可替换的推理依赖。项目指令中的 `@include` 只能读取所属根目录内的真实文件；绝对路径、`..` 越界和符号链接/junction 逃逸都会被拒绝。工具调用先经过 Schema、权限和隔离判断，再进入执行层；所有工具决策会写入 `logs/audit.jsonl`，便于回溯。
+
+## 终端显示
+
+交互式 TTY 默认使用 alternate screen，以保持 Timeline、对话 viewport、输入框和状态栏位置稳定，并在退出后恢复原终端内容。非交互 pipe 模式不会写入 alternate-screen 控制序列。需要保留 inline scrollback 或兼容特定辅助工具、终端复用器时，可在本次命令设置 `SYNAPSE_NO_ALT_SCREEN=1`。
