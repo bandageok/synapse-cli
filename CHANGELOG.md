@@ -4,6 +4,8 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-21
+
 - Rebuilt the interactive terminal around structured user, assistant, tool, and notice items instead of prefix-parsed strings.
 - Added automatic successful-tool folding, always-visible failures, ANSI-safe output previews, stable tool ids, durations, and `Ctrl+O` or `/details` compact/expanded views.
 - Replaced the unused terminal Markdown implementation with a streaming-safe semantic renderer and added responsive status, composer, and footer layouts.
