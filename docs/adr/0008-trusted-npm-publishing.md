@@ -15,6 +15,7 @@ Synapse publishes from `.github/workflows/publish.yml` when a `v*` tag is pushed
 - GitHub Actions receives only `contents: read` and `id-token: write`.
 - npm authenticates the workflow through OpenID Connect Trusted Publishing; no `NPM_TOKEN` is stored in the repository or GitHub secrets.
 - The job uses a GitHub-hosted runner, Node.js 24, and the latest npm CLI.
+- The dependency lockfile may resolve packages only from `https://registry.npmjs.org`; CI checks this before installation so a developer-local mirror cannot leak into release infrastructure.
 - The tag must exactly match `v` plus the version in `package.json` before publishing.
 - `prepublishOnly` remains the package-side lint, test, and build gate.
 - Public packages receive npm provenance from the trusted-publishing flow.
@@ -28,3 +29,4 @@ The npm package settings must bind `@bandageok/synapse-cli` to repository `banda
 - A compromised repository token cannot publish because npm validates the workflow identity and OIDC claims.
 - Tag creation becomes the irreversible release trigger and must happen only after local and pull-request gates pass.
 - Failed workflows can be rerun against the same tag without creating another package version, provided npm has not accepted the version.
+- Lockfile registry drift fails before `npm ci` with the exact offending package paths and URLs.

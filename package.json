@@ -11,11 +11,12 @@
   "scripts": {
     "dev": "tsx src/entry/cli.ts",
     "build": "tsup",
+    "check:lockfile": "node scripts/check-lockfile-registry.mjs",
     "test": "vitest run",
     "test:permissions": "vitest run tests/permission-matrix.test.ts tests/permission-dialog.test.tsx tests/permission-modes.test.ts tests/security-boundaries.test.ts tests/phase2-controls.test.ts tests/cli-integration.test.ts tests/commands.test.ts tests/conversation-e2e.test.ts",
     "lint": "tsc --noEmit",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run lint && npm test && npm run build"
+    "prepublishOnly": "npm run check:lockfile && npm run lint && npm test && npm run build"
   },
   "repository": {
     "type": "git",
