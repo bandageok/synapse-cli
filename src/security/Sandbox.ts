@@ -17,6 +17,9 @@ export interface SandboxProcess {
   backend: SandboxBackend;
 }
 
+const initialProbeTimeoutMs = 3_000;
+const retryProbeTimeoutMs = 10_000;
+
 export function createSandboxProcess(command: string, options: SandboxOptions): SandboxProcess {
   const backend = resolveSandboxBackend(options.backend ?? 'auto');
   if (!backend) {
@@ -40,10 +43,21 @@ export function resolveSandboxBackend(preference: 'auto' | SandboxBackend = 'aut
           '--unshare-pid', '--unshare-net', '--ro-bind', '/', '/', '--proc', '/proc', '--dev', '/dev',
           '/bin/true',
         ];
-    const result = spawnSync(executable, args, { stdio: 'ignore', timeout: 3_000, windowsHide: true });
-    if (!result.error && result.status === 0) return candidate;
+    const result = probeSandboxBackend(executable, args, initialProbeTimeoutMs);
+    if (result.available) return candidate;
+    if (result.timedOut && probeSandboxBackend(executable, args, retryProbeTimeoutMs).available) {
+      return candidate;
+    }
   }
   return null;
+}
+
+function probeSandboxBackend(executable: string, args: string[], timeout: number): { available: boolean; timedOut: boolean } {
+  const result = spawnSync(executable, args, { stdio: 'ignore', timeout, windowsHide: true });
+  return {
+    available: !result.error && result.status === 0,
+    timedOut: (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT',
+  };
 }
 
 function createBubblewrapProcess(command: string, options: SandboxOptions): SandboxProcess {

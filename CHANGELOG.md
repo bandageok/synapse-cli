@@ -13,6 +13,8 @@ All notable changes to Synapse are documented in this file.
 - Sanitized ANSI control sequences across tool output, Provider responses, user text, and notices before terminal rendering.
 - Added structured failure events for schema, hook, and permission rejections without executing the rejected tool.
 - Added OIDC trusted npm publishing and fixed the canonical package `bin` path so global installs retain the `synapse` command.
+- Normalized the dependency lockfile to the canonical npm registry and added a pre-install release gate that rejects foreign registry URLs.
+- Retried strict sandbox backend probes only after an explicit timeout so cold Docker daemons do not produce false unavailable results.
 
 ## 0.3.3 - 2026-07-20
 
