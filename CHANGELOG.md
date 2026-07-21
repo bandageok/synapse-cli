@@ -12,6 +12,7 @@ All notable changes to Synapse are documented in this file.
 - Bound assistant previews by visual rows and terminal width, including single-line content that wraps on screen.
 - Sanitized ANSI control sequences across tool output, Provider responses, user text, and notices before terminal rendering.
 - Added structured failure events for schema, hook, and permission rejections without executing the rejected tool.
+- Added OIDC trusted npm publishing and fixed the canonical package `bin` path so global installs retain the `synapse` command.
 
 ## 0.3.3 - 2026-07-20
 
