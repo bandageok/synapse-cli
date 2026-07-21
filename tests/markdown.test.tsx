@@ -31,10 +31,12 @@ describe('MarkdownRenderer', () => {
 
   it('marks a view-level truncation explicitly', () => {
     const view = render(React.createElement(MarkdownRenderer, {
-      text: 'one\ntwo\nthree',
-      maxLines: 2,
+      text: 'one\ntwo\nthree\nfour',
+      maxLines: 3,
     }));
-    expect(view.lastFrame()).toContain('response shortened in this view');
+    const frame = view.lastFrame() ?? '';
+    expect(frame).toContain('rendered lines hidden');
+    expect(frame.match(/hidden/g)).toHaveLength(1);
   });
 
   it('bounds a wrapped single-line response by the available terminal width', () => {
@@ -44,9 +46,17 @@ describe('MarkdownRenderer', () => {
       columns: 20,
     }));
     const frame = view.lastFrame() ?? '';
-    expect(frame).toContain('rendered lines omitted');
-    expect(frame).toContain('response shortened in this view');
+    expect(frame).toContain('rendered lines hidden');
+    expect(frame.match(/hidden/g)).toHaveLength(1);
     expect(frame.length).toBeLessThan(300);
+  });
+
+  it('renders Markdown links without exposing raw link syntax', () => {
+    const frame = render(React.createElement(MarkdownRenderer, {
+      text: 'Read [Synapse docs](https://github.com/bandageok/synapse-cli) now.',
+    })).lastFrame() ?? '';
+    expect(frame).toContain('Synapse docs');
+    expect(frame).not.toContain('[Synapse docs](');
   });
 
   it('removes terminal control sequences from provider text', () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
-import { Timeline } from '../src/ui/components/Timeline.js';
+import { ActivityRail, Timeline, buildActivityRailEntries } from '../src/ui/components/Timeline.js';
 import type { DisplayItem, ToolDisplayItem } from '../src/ui/timeline.js';
 
 function tool(index: number, status: ToolDisplayItem['status'], output = 'ok'): ToolDisplayItem {
@@ -26,7 +26,7 @@ describe('Timeline UI', () => {
     ];
     const view = render(React.createElement(Timeline, { items, detailsMode: 'compact', maxAnswerLines: 20 }));
     const frame = view.lastFrame() ?? '';
-    expect(frame).toContain('You');
+    expect(frame).toContain('› Fix the layout');
     expect(frame).toContain('Fix the layout');
     expect(frame).toContain('Synapse');
     expect(frame).toContain('Done');
@@ -53,18 +53,61 @@ describe('Timeline UI', () => {
     expect(frame).toContain('失败信息仍可见');
   });
 
-  it('folds old successes, keeps failures open, and strips terminal color escapes', () => {
+  it('folds completed work to one summary and keeps only an actionable failure line', () => {
     const items: DisplayItem[] = [
       tool(1, 'success'), tool(2, 'success'), tool(3, 'success'), tool(4, 'success'),
       tool(5, 'success'), tool(6, 'error', '\u001b[31mTraceback\nboom\u001b[0m'),
     ];
     const view = render(React.createElement(Timeline, { items, detailsMode: 'compact', maxAnswerLines: 20 }));
     const frame = view.lastFrame() ?? '';
-    expect(frame).toContain('3 completed');
+    expect(frame).toContain('Worked 6 steps');
+    expect(frame).toContain('1 issue');
     expect(frame).toContain('× WebFetch');
-    expect(frame).toContain('Traceback');
     expect(frame).toContain('boom');
+    expect(frame).not.toContain('Traceback');
+    expect(frame).not.toContain('PowerShell');
     expect(frame).not.toContain('\u001b');
+  });
+
+  it('renders repeated failures once with the original failure count', () => {
+    const repeated = [1, 2, 3].map(index => ({
+      ...tool(index, 'error', "Error: EPERM scandir '.pytest_cache'"),
+      name: 'Glob',
+      turnId: 'turn-1',
+    }));
+    const frame = render(React.createElement(Timeline, {
+      items: repeated,
+      detailsMode: 'compact',
+      maxAnswerLines: 20,
+    })).lastFrame() ?? '';
+    expect(frame).toContain('3 issues');
+    expect(frame).toContain('Glob ×3');
+    expect(frame.match(/EPERM/g)).toHaveLength(1);
+  });
+
+  it('shows only the current action while a compact tool run is active', () => {
+    const items = [
+      tool(1, 'success', 'first result'),
+      { ...tool(2, 'running', ''), input: { command: 'npm test' } },
+    ];
+    const frame = render(React.createElement(Timeline, {
+      items, detailsMode: 'compact', maxAnswerLines: 20,
+    })).lastFrame() ?? '';
+    expect(frame).toContain('Running WebFetch');
+    expect(frame).toContain('npm test');
+    expect(frame).not.toContain('first result');
+  });
+
+  it('keeps the failure count intact in a narrow terminal', () => {
+    const repeated = [1, 2, 3].map(index => ({
+      ...tool(index, 'error', "Error: EPERM scandir 'C:\\Users\\demo\\.pytest_cache'"),
+      name: 'Glob', turnId: 'turn-1',
+    }));
+    const frame = render(React.createElement(Timeline, {
+      items: repeated, detailsMode: 'compact', maxAnswerLines: 20, columns: 56,
+    })).lastFrame() ?? '';
+    expect(frame).toContain('Glob ×3');
+    expect(frame).toContain("EPERM scandir '.pytest_cache'");
   });
 
   it('shows inputs and successful outputs in expanded mode', () => {
@@ -74,6 +117,8 @@ describe('Timeline UI', () => {
       maxAnswerLines: 20,
     }));
     const frame = view.lastFrame() ?? '';
+    expect(frame).toContain('┌');
+    expect(frame).toContain('└');
     expect(frame).toContain('input  echo 1');
     expect(frame).toContain('all good');
   });
@@ -94,5 +139,21 @@ describe('Timeline UI', () => {
     expect(frame).toContain('detail');
     expect(frame).not.toContain('\u001b');
     expect(frame).not.toContain('changed-title');
+  });
+
+  it('renders a real latest-turn timeline rail and groups repeated failures', () => {
+    const items: DisplayItem[] = [
+      { ...tool(1, 'success'), turnId: 'turn-1' },
+      { ...tool(2, 'success'), turnId: 'turn-2' },
+      { ...tool(3, 'error', 'EPERM'), name: 'Glob', turnId: 'turn-2' },
+      { ...tool(4, 'error', 'EPERM'), name: 'Glob', turnId: 'turn-2' },
+    ];
+    expect(buildActivityRailEntries(items)).toHaveLength(2);
+    const frame = render(React.createElement(ActivityRail, { items, width: 28, height: 12 })).lastFrame() ?? '';
+    expect(frame).toContain('Timeline');
+    expect(frame).toContain('WebFetch');
+    expect(frame).toContain('Glob ×2');
+    expect(frame).toContain('2 issues');
+    expect(frame).not.toContain('PowerShell');
   });
 });

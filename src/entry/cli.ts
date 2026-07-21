@@ -10,6 +10,7 @@ import { getConfiguredPermissionMode } from '../utils/permissionConfig.js';
 import { compareVersions } from '../utils/semver.js';
 import { findTemplateDir } from '../utils/templates.js';
 import { VERSION } from '../version.js';
+import { answerSkillInventoryQuery } from '../skills/query.js';
 
 const program = new Command();
 
@@ -128,6 +129,12 @@ program
         if (!input) {
           console.error('Error: No input from stdin');
           process.exit(1);
+        }
+
+        const localAnswer = answerSkillInventoryQuery(input, deps.skillLoader, process.cwd());
+        if (localAnswer) {
+          process.stdout.write(localAnswer + '\n');
+          return;
         }
 
         const { createEngine } = await import('../core/Engine.js');

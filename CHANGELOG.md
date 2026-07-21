@@ -4,6 +4,22 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-21
+
+- Reworked the default terminal transcript around user prompts, one stable turn activity, and assistant answers instead of a shortened tool log.
+- Folded completed tool runs into `Worked N steps` summaries, grouped repeated failures by root-cause fingerprint, and kept full inputs, outputs, and traces in the expanded audit view.
+- Added turn-scoped `Ctrl+O` details, responsive row-based viewport slicing, CJK-aware display widths, bounded composer input, and one consistent long-content omission marker.
+- Reduced status and footer noise, added terminal-native Markdown links, and preserved failure counts and actionable causes in narrow terminals.
+- Kept the composer editable while a turn runs, queued bounded follow-up messages instead of starting concurrent Engines, and displayed the queue in the bottom pane.
+- Made `Esc` interrupt the active turn through its abort signal and rendered user cancellation as neutral state rather than a failed issue.
+- Replaced the placeholder `Skill` tool with loader-backed list/show behavior and answered explicit skill inventory questions deterministically without unnecessary Provider or filesystem scans.
+- Preserved active skill state across loader rebuilds and unified slash-command, tool, pipe, and interactive skill inventory output.
+- Added conversation, running, failure aggregation, expanded audit, CJK, narrow-terminal, queue, cancellation, Markdown, skill-query, and row-virtualization regression tests.
+- Documented the clean-room interaction study of Codex CLI, Claude Code, Hermes Agent, and Qwen Code in ADR-0009.
+- Added a responsive blue-purple-pink Synapse wordmark, mode-aware bordered composer, three-zone footer, and optional wide-terminal Timeline rail while preserving the single-column narrow layout.
+- Added a registry-backed slash-command palette with bounded candidates and keyboard navigation, plus bordered expanded tool cards and a bounded approval panel with numeric or mnemonic actions.
+- Enabled alternate-screen rendering for interactive TTY sessions with an explicit inline-mode environment escape hatch.
+
 ## 0.4.0 - 2026-07-21
 
 - Rebuilt the interactive terminal around structured user, assistant, tool, and notice items instead of prefix-parsed strings.

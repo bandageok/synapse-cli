@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import terminalLink from 'terminal-link';
 import { virtualizeText } from './streaming.js';
 import { stripAnsi } from './timeline.js';
 
@@ -38,7 +39,7 @@ export function parseMarkdownBlocks(text: string, maxLines = 200): { blocks: Mar
 }
 
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
-  const tokens = text.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g).filter(Boolean);
+  const tokens = text.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g).filter(Boolean);
   return tokens.map((token, index) => {
     if (token.startsWith('`') && token.endsWith('`')) {
       return React.createElement(Text, { key: `${keyPrefix}-code-${index}`, color: 'cyan' }, token.slice(1, -1));
@@ -46,15 +47,26 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
     if (token.startsWith('**') && token.endsWith('**')) {
       return React.createElement(Text, { key: `${keyPrefix}-bold-${index}`, bold: true }, token.slice(2, -2));
     }
+    const link = token.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+    if (link) {
+      const label = stripAnsi(link[1]);
+      const url = stripAnsi(link[2]);
+      return React.createElement(Text, { key: `${keyPrefix}-link-${index}`, color: 'cyan' },
+        terminalLink(label, url, { fallback: text => `${text} ↗` }),
+      );
+    }
     return React.createElement(Text, { key: `${keyPrefix}-text-${index}` }, token);
   });
 }
 
 function renderLine(text: string, index: number): React.ReactElement {
   const key = `line-${index}`;
+  if (/^… \d+ rendered lines hidden …$/.test(text)) {
+    return React.createElement(Text, { key, color: 'yellow', dimColor: true }, text);
+  }
   const heading = text.match(/^(#{1,3})\s+(.+)$/);
   if (heading) {
-    return React.createElement(Box, { key, marginTop: index > 0 ? 1 : 0 },
+    return React.createElement(Box, { key },
       React.createElement(Text, { bold: true, color: heading[1].length === 1 ? 'cyan' : undefined },
         ...renderInline(heading[2], key),
       ),
@@ -108,15 +120,11 @@ function renderCodeBlock(block: Extract<MarkdownBlock, { kind: 'code' }>, index:
 
 export function MarkdownRenderer({ text, maxLines = 200, columns = 100 }: MarkdownRendererProps): React.ReactElement {
   const safeText = stripAnsi(text);
-  const visibleText = virtualizeText(safeText, maxLines, Math.max(20, columns));
-  const parsed = parseMarkdownBlocks(visibleText, maxLines);
+  const visible = virtualizeText(safeText, maxLines, Math.max(20, columns));
+  const parsed = parseMarkdownBlocks(visible.text, Number.MAX_SAFE_INTEGER);
   const { blocks } = parsed;
-  const truncated = parsed.truncated || visibleText !== safeText;
   const elements = blocks.map((block, index) => block.kind === 'code'
     ? renderCodeBlock(block, index)
     : renderLine(block.text, index));
-  if (truncated) {
-    elements.push(React.createElement(Text, { key: 'truncated', color: 'gray', dimColor: true }, '… response shortened in this view'));
-  }
   return React.createElement(Box, { flexDirection: 'column' }, ...elements);
 }

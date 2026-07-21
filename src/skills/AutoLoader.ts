@@ -33,6 +33,8 @@ export class SkillAutoLoader {
   }
 
   discover(cwd?: string): LoadedSkill[] {
+    const previousSkills = new Map(this.skills);
+    const previousActive = new Set(this.activeSkills);
     this.skills.clear();
     this.activeSkills.clear();
     const searchDirs: string[] = [
@@ -76,14 +78,18 @@ export class SkillAutoLoader {
           }
         }
 
+        const previous = previousSkills.get(manifest.name);
+        const active = previousActive.has(manifest.name);
         this.skills.set(manifest.name, {
           manifest,
           dirPath: skillDir,
           skillMdPath,
           skillMd: readFileSync(skillMdPath, 'utf-8'),
-          active: false,
-          useCount: 0,
+          active,
+          lastUsed: previous?.lastUsed,
+          useCount: previous?.useCount ?? 0,
         });
+        if (active) this.activeSkills.add(manifest.name);
       }
     }
 
