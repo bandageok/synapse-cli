@@ -50,6 +50,19 @@ describe('PluginRegistry', () => {
     expect(r.list().length).toBe(0);
   });
 
+  it('skips manifests with unsafe names or missing versions', () => {
+    for (const [directory, manifest] of [
+      ['unsafe', { name: '../outside', version: '1.0.0' }],
+      ['missing-version', { name: 'missing-version' }],
+    ] as const) {
+      mkdirSync(join(dir, 'plugins', directory), { recursive: true });
+      writeFileSync(join(dir, 'plugins', directory, 'plugin.json'), JSON.stringify(manifest));
+    }
+    const r = new PluginRegistry();
+    r.loadFromDir(dir);
+    expect(r.list()).toEqual([]);
+  });
+
   it('returns plugin by name', () => {
     mkdirSync(join(dir, 'plugins', 'findable'), { recursive: true });
     writeFileSync(join(dir, 'plugins', 'findable', 'plugin.json'),

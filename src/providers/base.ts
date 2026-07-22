@@ -15,4 +15,6 @@ export interface Provider {
   name: string;
   stream(params: StreamParams): AsyncIterable<StreamChunk>;
   countTokens?(params: StreamParams): Promise<number>;
+  getModel?(): string;
+  setModel?(model: string): void;
 }

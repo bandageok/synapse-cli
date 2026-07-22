@@ -13,6 +13,22 @@ describe('OpenAI-compatible tool protocol', () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => { globalThis.fetch = originalFetch; });
 
+  it('uses a runtime model switch in the next provider request', async () => {
+    let requestBody: any;
+    globalThis.fetch = async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return sseResponse([{ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }]);
+    };
+    const provider = new OpenRouterProvider({ apiKey: 'key', baseUrl: 'http://local/v1', model: 'old-model' });
+    provider.setModel('new-model');
+    for await (const _ of provider.stream({
+      system: [], messages: [{ role: 'user', content: 'hello' }], tools: [],
+    })) {}
+
+    expect(provider.getModel()).toBe('new-model');
+    expect(requestBody.model).toBe('new-model');
+  });
+
   it('preserves assistant tool calls and tool result identifiers', async () => {
     let requestBody: any;
     globalThis.fetch = async (_input, init) => {

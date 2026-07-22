@@ -66,7 +66,10 @@ export class ContextBuilder {
     return answerProductIdentityQuestion(userInput, this.config.runtimeIdentity);
   }
 
-  clearMemoryCache(): void {}
+  setRuntimeModel(model: string): void {
+    if (!this.config.runtimeIdentity) return;
+    this.config.runtimeIdentity = { ...this.config.runtimeIdentity, model };
+  }
 
   private layer1_defaultPrompt(): string {
     return buildProductIdentityContract(this.config.runtimeIdentity);

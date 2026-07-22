@@ -21,7 +21,8 @@ export class Compressor {
   private consecutiveFailures = 0;
   private readonly maxConsecutiveFailures = 3;
   private readonly provider?: Provider;
-  private readonly tokenCounter: TokenCounter;
+  private tokenCounter: TokenCounter;
+  private model: string;
   private readonly qualityFloor: number;
 
   constructor(config: CompressorConfig) {
@@ -30,8 +31,16 @@ export class Compressor {
     this.aggressiveCompactThreshold = effectiveWindow - 5_000;
     this.snipThreshold = effectiveWindow - 1_000;
     this.provider = config.provider;
+    this.model = config.model;
     this.tokenCounter = new TokenCounter(config.model, config.provider);
     this.qualityFloor = config.qualityFloor ?? 0.72;
+  }
+
+  setModel(model: string): void {
+    const next = model.trim();
+    if (!next) throw new Error('Model id cannot be empty.');
+    this.model = next;
+    this.tokenCounter = new TokenCounter(next, this.provider);
   }
 
   getThresholds() {

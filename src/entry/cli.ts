@@ -12,6 +12,7 @@ import { findTemplateDir } from '../utils/templates.js';
 import { VERSION } from '../version.js';
 import { answerSkillInventoryQuery } from '../skills/query.js';
 import { resolveRateLimitRetries } from '../core/retry.js';
+import { declaredPluginCapabilities, parsePluginManifest } from '../plugins/manifest.js';
 
 const program = new Command();
 
@@ -62,7 +63,9 @@ program
 
 program
   .command('chat')
+  .alias('exec')
   .description('Start interactive chat')
+  .argument('[prompt...]', 'Optional task to submit immediately')
   .option('-m, --model <model>', 'Model to use')
   .option('-p, --pipe', 'Pipe mode: read from stdin, output to stdout')
   .option('-v, --verbose', 'Verbose mode: show full API requests')
@@ -70,7 +73,8 @@ program
   .option('--permission-mode <mode>', 'Permission mode: ask | auto | full-access')
   .option('--yolo', 'Alias for --permission-mode full-access')
   .option('--sandbox-backend <backend>', 'Strict sandbox backend: auto | bubblewrap | docker', 'auto')
-  .action(async (opts) => {
+  .action(async (promptParts: string[], opts) => {
+    if (process.argv[2] === 'exec') opts.pipe = true;
     const { join } = await import('path');
     const { homedir } = await import('os');
     const { existsSync, readFileSync } = await import('fs');
@@ -93,6 +97,10 @@ program
     }
 
     if (needOnboard) {
+      if (opts.pipe || !process.stdin.isTTY) {
+        console.error('Error: Synapse is not configured. Run `synapse onboard` in an interactive terminal or configure a provider with `synapse provider set`.');
+        process.exit(1);
+      }
       const { launchOnboarding } = await import('../ui/Onboarding.js');
       const result = await launchOnboarding();
       if (!result) {
@@ -123,12 +131,9 @@ program
 
     // Pipe 模式：从 stdin 读取，输出到 stdout
     if (opts.pipe) {
-      const chunks: Buffer[] = [];
-      process.stdin.on('data', (chunk: Buffer) => chunks.push(chunk));
-      process.stdin.on('end', async () => {
-        const input = Buffer.concat(chunks).toString('utf-8').trim();
+      const runInput = async (input: string) => {
         if (!input) {
-          console.error('Error: No input from stdin');
+          console.error('Error: No prompt argument or input from stdin');
           process.exit(1);
         }
 
@@ -168,12 +173,26 @@ program
           process.stderr.write(`\n❌ ${msg}\n`);
           process.exit(1);
         }
+      };
+
+      const directInput = promptParts.join(' ').trim();
+      if (directInput) {
+        await runInput(directInput);
+        return;
+      }
+      const chunks: Buffer[] = [];
+      process.stdin.on('data', (chunk: Buffer) => chunks.push(chunk));
+      process.stdin.on('end', async () => {
+        await runInput(Buffer.concat(chunks).toString('utf-8').trim());
       });
       return;
     }
 
     const { launchREPL } = await import('../ui/REPL.js');
-    await launchREPL(deps as Parameters<typeof launchREPL>[0]);
+    await launchREPL({
+      ...deps,
+      initialPrompt: promptParts.join(' ').trim() || undefined,
+    } as Parameters<typeof launchREPL>[0]);
   });
 
 program
@@ -228,9 +247,10 @@ program
   .command('resume')
   .description('Resume a previous session')
   .argument('[session]', 'Session id or recent-session number')
+  .option('--last', 'Resume the most recently updated session')
   .option('--permission-mode <mode>', 'Permission mode: ask | auto | full-access')
   .option('--yolo', 'Alias for --permission-mode full-access')
-  .action(async (session: string | undefined, opts: { permissionMode?: string; yolo?: boolean }) => {
+  .action(async (session: string | undefined, opts: { last?: boolean; permissionMode?: string; yolo?: boolean }) => {
     const { homedir } = await import('os');
     const { join, basename } = await import('path');
     const { existsSync, readdirSync, readFileSync } = await import('fs');
@@ -260,7 +280,12 @@ program
       return;
     }
 
-    if (!session) {
+    if (session && opts.last) {
+      console.error('Error: provide either a session id or --last, not both.');
+      process.exit(2);
+    }
+
+    if (!session && !opts.last) {
       console.log('Recent sessions:');
       for (const [index, entry] of entries.slice(0, 10).entries()) {
         const meta = entry.data.metadata;
@@ -270,13 +295,15 @@ program
       return;
     }
 
-    const numeric = Number.parseInt(session, 10);
-    const selected = Number.isInteger(numeric) && String(numeric) === session
-      ? entries[numeric - 1]
-      : entries.find(entry =>
-          entry.data.metadata?.id === session ||
-          basename(entry.file, '.json') === session
-        );
+    const numeric = session ? Number.parseInt(session, 10) : Number.NaN;
+    const selected = opts.last
+      ? entries[0]
+      : Number.isInteger(numeric) && String(numeric) === session
+        ? entries[numeric - 1]
+        : entries.find(entry =>
+            entry.data.metadata?.id === session ||
+            basename(entry.file, '.json') === session
+          );
 
     if (!selected) {
       console.error(`Session not found: ${session}`);
@@ -298,7 +325,10 @@ program
     }
     const resumeWarning = PERMISSION_PROFILES[resumePermissionMode].warning;
     if (resumeWarning) process.stderr.write(`Warning: ${resumeWarning}\n`);
-    const deps = await init({ permissionMode: resumePermissionMode });
+    const deps = await init({
+      permissionMode: resumePermissionMode,
+      model: selected.data.metadata?.model,
+    });
     if (!deps.provider) {
       console.error('Error: No API key found. Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY.');
       process.exit(1);
@@ -380,7 +410,7 @@ program
 
 program
   .command('plugin')
-  .description('Manage plugins')
+  .description('Inspect and manage manifest-only plugin packages')
   .argument('[action]', 'list | install | remove')
   .argument('[target]', 'Plugin name or local plugin directory')
   .action(async (action, target) => {
@@ -401,8 +431,13 @@ program
       for (const dir of dirs) {
         const manifestPath = join(pluginsDir, dir.name, 'plugin.json');
         if (existsSync(manifestPath)) {
-          const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-          console.log(`  ${manifest.name}@${manifest.version} — ${manifest.description ?? ''}`);
+          try {
+            const manifest = parsePluginManifest(JSON.parse(readFileSync(manifestPath, 'utf-8')));
+            const declared = declaredPluginCapabilities(manifest);
+            console.log(`  ${manifest.name}@${manifest.version} [manifest-only; inactive]${declared.length ? ` declares ${declared.join(', ')}` : ''}`);
+          } catch {
+            console.log(`  ${dir.name} [invalid manifest; inactive]`);
+          }
         } else {
           console.log(`  ${dir.name} (no manifest)`);
         }
@@ -414,9 +449,11 @@ program
         console.error(`Plugin manifest not found: ${manifestPath}`);
         process.exit(1);
       }
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { name?: string; version?: string };
-      if (!manifest.name || !manifest.version) {
-        console.error('Invalid plugin.json: name and version are required.');
+      let manifest: ReturnType<typeof parsePluginManifest>;
+      try {
+        manifest = parsePluginManifest(JSON.parse(readFileSync(manifestPath, 'utf-8')));
+      } catch (error) {
+        console.error(`Invalid plugin.json: ${error instanceof Error ? error.message : String(error)}`);
         process.exit(1);
       }
       if (!existsSync(pluginsDir)) mkdirSync(pluginsDir, { recursive: true });
@@ -430,7 +467,8 @@ program
         process.exit(1);
       }
       cpSync(sourceDir, destination, { recursive: true });
-      console.log(`✅ Plugin "${manifest.name}" installed`);
+      console.log(`Plugin "${manifest.name}" installed as a manifest-only package.`);
+      console.log('Executable plugin commands, skills, and hooks remain inactive until a trusted runtime is implemented.');
     } else if (action === 'remove' && target) {
       if (!existsSync(pluginsDir)) { console.log('No plugins installed.'); return; }
       const dirs = readdirSync(pluginsDir, { withFileTypes: true }).filter(d => d.isDirectory());
@@ -561,5 +599,12 @@ program
       });
     }
   });
+
+const cliArgs = process.argv.slice(2);
+const firstArg = cliArgs[0];
+const commandNames = new Set(program.commands.flatMap(command => [command.name(), ...command.aliases()]));
+if (!firstArg || (!firstArg.startsWith('-') && !commandNames.has(firstArg))) {
+  process.argv.splice(2, 0, 'chat');
+}
 
 await program.parseAsync();

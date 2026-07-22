@@ -37,6 +37,16 @@ export class OpenRouterProvider implements Provider {
     this.timeoutMs = config.timeoutMs ?? 120_000;
   }
 
+  getModel(): string {
+    return this.model;
+  }
+
+  setModel(model: string): void {
+    const next = model.trim();
+    if (!next) throw new Error('Model id cannot be empty.');
+    this.model = next;
+  }
+
   async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (this.auth === 'x-api-key') headers['x-api-key'] = this.apiKey;

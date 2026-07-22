@@ -57,7 +57,7 @@ export async function init(opts: { model?: string; addDir?: string[]; permission
   tools.initPermissions(dataDir);
   tools.setWorkspaceRoots([process.cwd(), ...(opts.addDir ?? [])]);
   const logger = new Logger({ dataDir });
-  const compressor = new Compressor({ contextWindow: 200_000, model: opts.model ?? 'default', provider: provider ?? undefined });
+  const compressor = new Compressor({ contextWindow: 200_000, model: providerRuntime?.model ?? opts.model ?? 'default', provider: provider ?? undefined });
   const hooks = new HookSystem();
   const sessionStore = new SessionStore(join(dataDir, 'sessions'));
   const errorRecovery = new ErrorRecovery();

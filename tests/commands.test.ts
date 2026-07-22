@@ -3,9 +3,12 @@ import { CommandRegistry } from '../src/commands/registry.js';
 import { helpCommand } from '../src/commands/builtin/help.js';
 import { clearCommand } from '../src/commands/builtin/clear.js';
 import { modelCommand } from '../src/commands/builtin/model.js';
+import { costCommand } from '../src/commands/builtin/cost.js';
+import { memoryCommand } from '../src/commands/builtin/memory.js';
 import { permissionsCommand } from '../src/commands/builtin/permissions.js';
 import { detailsCommand } from '../src/commands/builtin/details.js';
 import { statusCommand } from '../src/commands/builtin/status.js';
+import { resumeCommand } from '../src/commands/builtin/resume.js';
 import type { PermissionMode } from '../src/core/types.js';
 
 const mockDeps = {
@@ -63,6 +66,35 @@ describe('CommandRegistry', () => {
     const result = await reg.execute('/model new-model', deps);
     expect(newModel).toBe('new-model');
     expect(result.output).toContain('switched');
+  });
+
+  it('reports estimated usage without inventing provider billing', async () => {
+    const reg = new CommandRegistry();
+    reg.register(costCommand);
+    const result = await reg.execute('/usage', {
+      ...mockDeps,
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+    expect(result.output).toContain('Session Usage');
+    expect(result.output).toContain('Token count is estimated');
+    expect(result.output).not.toContain('USD');
+    expect(result.output).not.toContain('MiniMax');
+  });
+
+  it('describes memory reload as live instead of clearing a fake cache', async () => {
+    const reg = new CommandRegistry();
+    reg.register(memoryCommand);
+    const result = await reg.execute('/memory reload', mockDeps);
+    expect(result.output).toContain('already live');
+    expect(result.output).not.toContain('cache cleared');
+  });
+
+  it('does not merge a resumed transcript into the active session identity', async () => {
+    const reg = new CommandRegistry();
+    reg.register(resumeCommand);
+    const result = await reg.execute('/resume 1', mockDeps);
+    expect(result.output).toContain('separate session identity');
+    expect(result.output).toContain('synapse resume');
   });
 
   it('aliases work', async () => {

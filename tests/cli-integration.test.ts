@@ -84,6 +84,7 @@ describe('CLI integration', () => {
     expect(output).toContain('Recent sessions');
     expect(output).toContain('session-one');
     expect(runCli(['resume', '--help'], dataDir)).toContain('--yolo');
+    expect(runCli(['resume', '--help'], dataDir)).toContain('--last');
   });
 
   it('adds and lists MCP servers', () => {
@@ -111,11 +112,25 @@ describe('CLI integration', () => {
     runCli(['plugin', 'install', pluginSource], dataDir);
     const listOutput = runCli(['plugin', 'list'], dataDir);
 
-    expect(listOutput).toContain('demo-plugin@1.0.0');
+    expect(listOutput).toContain('demo-plugin@1.0.0 [manifest-only; inactive]');
     expect(existsSync(join(dataDir, 'plugins', 'demo-plugin', 'README.md'))).toBe(true);
 
     runCli(['plugin', 'remove', 'demo-plugin'], dataDir);
     expect(existsSync(join(dataDir, 'plugins', 'demo-plugin'))).toBe(false);
+  });
+
+  it('lists valid plugins even when another installed manifest is corrupt', () => {
+    const dataDir = tempDir('synapse-cli-plugin-corrupt-');
+    const pluginsDir = join(dataDir, 'plugins');
+    mkdirSync(join(pluginsDir, 'valid'), { recursive: true });
+    mkdirSync(join(pluginsDir, 'broken'), { recursive: true });
+    writeFileSync(join(pluginsDir, 'valid', 'plugin.json'), JSON.stringify({ name: 'valid', version: '1.0.0' }));
+    writeFileSync(join(pluginsDir, 'broken', 'plugin.json'), '{broken');
+
+    const output = runCli(['plugin', 'list'], dataDir);
+
+    expect(output).toContain('valid@1.0.0 [manifest-only; inactive]');
+    expect(output).toContain('broken [invalid manifest; inactive]');
   });
 
   it('checks updates against a configurable registry URL', async () => {
@@ -214,6 +229,47 @@ describe('CLI integration', () => {
 
     expect(result.status).toBe(2);
     expect(result.stderr).toContain(message);
+  });
+
+  it('routes a direct task through the interactive chat command', () => {
+    const dataDir = tempDir('synapse-cli-direct-task-');
+    writeFileSync(join(dataDir, '.synapse.json'), JSON.stringify({ provider: 'local', model: 'test-model' }));
+
+    const result = runCliResult(['fix', 'the', 'tests', '--permission-mode', 'invalid'], dataDir);
+
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('--permission-mode must be');
+    expect(result.stderr).not.toContain('unknown command');
+  });
+
+  it('supports an exec alias with a prompt argument for automation', () => {
+    const dataDir = tempDir('synapse-cli-exec-');
+    writeFileSync(join(dataDir, '.synapse.json'), JSON.stringify({
+      provider: 'local',
+      providerName: 'Local test gateway',
+      protocol: 'openai',
+      auth: 'bearer',
+      apiKeyEnv: 'SYNAPSE_API_KEY',
+      baseUrl: 'http://127.0.0.1:1/v1',
+      model: 'test-model',
+    }));
+    writeFileSync(join(dataDir, '.env'), 'SYNAPSE_API_KEY=test-key\n');
+
+    const output = runCli(['exec', 'list', 'all', 'skills'], dataDir);
+
+    expect(output).toContain('skills');
+    expect(output).not.toContain('unknown command');
+  });
+
+  it('fails cleanly instead of launching onboarding for unconfigured automation', () => {
+    const dataDir = tempDir('synapse-cli-exec-unconfigured-');
+
+    const result = runCliResult(['exec', 'hello'], dataDir);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Synapse is not configured');
+    expect(result.stderr).toContain('synapse provider set');
+    expect(result.stdout).not.toContain('Raw mode is not supported');
   });
 
   it('inspects, searches, exports, and safely prunes memory', () => {

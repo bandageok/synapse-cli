@@ -9,6 +9,16 @@ export class FallbackProvider implements Provider {
     this.name = providers[0].name;
   }
 
+  getModel(): string {
+    return this.providers[0].getModel?.() ?? 'unknown';
+  }
+
+  setModel(model: string): void {
+    const primary = this.providers[0];
+    if (!primary.setModel) throw new Error(`Provider ${primary.name} does not support runtime model switching.`);
+    primary.setModel(model);
+  }
+
   async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
     const failures: string[] = [];
     for (const [index, provider] of this.providers.entries()) {

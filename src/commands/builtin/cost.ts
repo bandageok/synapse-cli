@@ -13,7 +13,8 @@ function estimateTokens(messages: any[]): number {
 
 export const costCommand: SlashCommand = {
   name: 'cost',
-  description: 'Show token usage and approximate cost',
+  aliases: ['usage'],
+  description: 'Show measured activity and estimated context usage',
   handler: async (_args, deps) => {
     const msgs = deps.messages;
     const turns = msgs.filter((m: any) => m.role === 'user').length;
@@ -28,21 +29,16 @@ export const costCommand: SlashCommand = {
       }
     }
 
-    const inputCost = (approxTokens / 1_000_000) * 1.4;      // MiniMax M2.7
-    const outputCost = (approxTokens * 0.3 / 1_000_000) * 3.5;
-
     return [
-      '--- Session Cost ---',
+      '--- Session Usage ---',
       '  Model:       ' + deps.model,
       '  Turns:       ' + turns,
       '  Messages:    ' + msgs.length,
       '  Tool calls:  ' + toolCalls,
-      '  ~Input:      ' + approxTokens.toLocaleString() + ' tokens',
-      '  ~Output:     ' + (approxTokens * 0.3).toFixed(0) + ' tokens (est)',
-      '  ~Total:      ' + (approxTokens * 1.3).toLocaleString() + ' tokens',
-      '  ~Cost:       $' + (inputCost + outputCost).toFixed(6) + ' USD',
+      '  Context:     ~' + approxTokens.toLocaleString() + ' tokens',
       '',
-      '  Based on MiniMax M2.7: $1.4/1M input, $3.5/1M output',
+      '  Token count is estimated from local conversation text.',
+      '  Billing cost is not shown because providers do not report a consistent price.',
     ].join('\n');
   },
 };
