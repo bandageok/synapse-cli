@@ -12,12 +12,14 @@ Short version:
 
 ## Proof points
 
-- 394 passing tests in the v0.3.3 suite, plus two environment-gated skips locally
+- 470+ passing tests in the v0.6.1 suite, with only platform/backend-gated skips
 - Node.js 18 and 22 CI on Windows and Linux
 - A Linux job that runs the strict sandbox and checks filesystem, network, and PID isolation
 - A deterministic offline demo that verifies local memory reaches the provider request
 - Provider configuration based on protocol, auth, BaseURL, model, and key environment variable
 - Three explicit permission profiles: prompted `ask`, fail-closed workspace `auto`, and warned no-prompt host `full-access`
+- A default interactive `synapse` entry point and bounded `synapse exec` path for scripts and CI
+- Atomic resumable sessions, real runtime model switching, and explicitly estimated usage output
 
 Do not claim that memory, MCP, Vim editing, plugins, or multi-provider support are unique to Synapse. Explain how Synapse combines them and link to reproducible evidence.
 
@@ -43,7 +45,7 @@ Body:
 >
 > The part I spent the most time on is the tool boundary. Approval and shell isolation are separate: ask prompts before risky actions, auto never prompts but only runs shell commands through a working Bubblewrap or Docker backend, and full-access is an explicit warned host mode. Schema, path, trust, network, and audit controls remain centralized in every profile.
 >
-> v0.3.3 is on npm. The repository includes 394 passing tests, Windows/Linux CI, an executable permission matrix, adversarial security tests, and a deterministic offline demo that checks whether project memory reaches the provider request.
+> v0.6.1 is on npm. The repository includes 470+ passing tests, Windows/Linux CI, an executable permission matrix, adversarial security tests, and a deterministic offline demo that checks whether project memory reaches the provider request. The default command is interactive; `synapse exec` is the bounded automation path.
 >
 > I would value feedback on provider compatibility, onboarding friction, and whether the memory model is useful in real repositories.
 
@@ -73,7 +75,7 @@ Body:
 >
 > Synapse 把项目上下文保存在本地文件中，Provider 则通过协议、BaseURL、模型和密钥环境变量独立配置。权限与 Shell 隔离分开：ask 逐次确认，auto 从不询问但只在严格工作区沙箱执行 Shell，full-access 是显式带警告的无询问宿主模式。所有模式仍经过集中 Schema、路径、信任、网络与审计边界。
 >
-> README 中的离线演示运行真实 CLI，并验证本地记忆确实进入 Provider 请求。v0.3.3 目前有 394 项测试通过、可执行权限矩阵和 Windows/Linux CI。我更需要真实的安装失败、Provider 兼容性问题和工作流反馈，而不是单纯的 star。
+> README 中的离线演示运行真实 CLI，并验证本地记忆确实进入 Provider 请求。v0.6.1 目前有 470+ 项测试通过、可执行权限矩阵和 Windows/Linux CI。默认的 `synapse` 命令用于交互工作，`synapse exec` 用于有界自动化。我更需要真实的安装失败、Provider 兼容性问题和工作流反馈，而不是单纯的 star。
 
 ## Launch sequence
 
@@ -91,9 +93,9 @@ Do not publish every draft at once. Each community should get a native post and 
 Use a different `utm_source` value for every post:
 
 ```text
-https://github.com/bandageok/synapse-cli?utm_source=hackernews&utm_medium=community&utm_campaign=v0_3_2_launch
-https://github.com/bandageok/synapse-cli?utm_source=reddit&utm_medium=community&utm_campaign=v0_3_2_launch
-https://github.com/bandageok/synapse-cli?utm_source=v2ex&utm_medium=community&utm_campaign=v0_3_2_launch
+https://github.com/bandageok/synapse-cli?utm_source=hackernews&utm_medium=community&utm_campaign=v0_6_1_launch
+https://github.com/bandageok/synapse-cli?utm_source=reddit&utm_medium=community&utm_campaign=v0_6_1_launch
+https://github.com/bandageok/synapse-cli?utm_source=v2ex&utm_medium=community&utm_campaign=v0_6_1_launch
 ```
 
 GitHub may not expose full UTM reporting in repository traffic. Keep the tags anyway so external analytics and copied links stay distinguishable.

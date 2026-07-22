@@ -22,6 +22,7 @@ jobs:
           package-manager-cache: false
       - run: npm install --global npm@latest
       - run: npm run check:lockfile
+      - run: npm run check:release-metadata
       - run: npm ci
       - name: Verify tag matches package version
         shell: bash

@@ -9,4 +9,3 @@ db.json
 *.local.json
 .DS_Store
 Thumbs.db
-scripts/

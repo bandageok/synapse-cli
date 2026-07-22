@@ -31,8 +31,17 @@ Requires Node.js 18 or newer.
 npm install -g @bandageok/synapse-cli
 synapse onboard
 synapse doctor
-synapse chat
+synapse
 ```
+
+Start with a task, or use the bounded automation entry point:
+
+```bash
+synapse "Explain the failing test"
+synapse exec "Explain the failing test"
+```
+
+`synapse chat` and `synapse chat --pipe` remain compatibility aliases. Use `synapse` for interactive work and `synapse exec` for scripts and CI.
 
 Use a provider preset, or configure any compatible endpoint:
 
@@ -73,8 +82,11 @@ Synapse does not claim that these ideas are unique. The project focuses on makin
 # See available providers and credential status
 synapse provider list
 
-# Ask a one-off question from a script
-echo "Explain the failing test" | synapse chat --pipe
+# Run one bounded task from a script
+synapse exec "Explain the failing test"
+
+# Standard input is supported too
+echo "Explain the failing test" | synapse exec
 
 # Search local project memory
 synapse memory search "release convention"
@@ -104,8 +116,8 @@ Choose a persisted default, override one launch, or switch the running session:
 
 ```bash
 synapse permissions set auto                 # new sessions
-synapse chat --permission-mode full-access   # this launch only
-synapse chat --yolo                          # alias for full-access
+synapse --permission-mode full-access        # this launch only
+synapse --yolo                               # alias for full-access
 synapse resume 1 --yolo                      # same override when resuming
 /permissions ask                             # inside an interactive session
 ```
@@ -125,6 +137,7 @@ Read the decisions behind these boundaries:
 - [Trusted context and executable identity](./docs/adr/0003-trusted-context-and-executable-identity.md)
 - [Product identity and provider boundary](./docs/adr/0005-product-identity-and-provider-boundary.md)
 - [Permission profiles and dynamic switching](./docs/adr/0006-permission-profiles-and-dynamic-switching.md)
+- [Product truth and runtime state](./docs/adr/0010-product-truth-and-runtime-state.md)
 - [Executable permission test matrix](./docs/PERMISSION-TEST-MATRIX.md)
 
 ## Memory and configuration
@@ -162,14 +175,16 @@ Search and export exclude session transcripts unless `--include-sessions` is sup
 - Interactive Ink REPL with Vim editing
 - OpenAI-compatible and Anthropic-compatible provider codecs
 - File, shell, search, Git, notebook, web, image, TTS, and sub-agent tools
-- MCP client and local plugin registry
+- MCP client with explicit trust and capability-drift checks
+- Validated plugin manifest inventory; third-party plugin commands, skills, and hooks remain inactive
 - Context compression with provider-aware token accounting
-- Session resume, persistent memory, and project instruction discovery
+- Runtime model switching, truthful usage estimates, and `resume --last`
+- Atomic session persistence, live memory reload, and project instruction discovery
 - Runtime schema validation, audit logging, and workspace path isolation
 
 ## Verification
 
-The `v0.3.3` release is covered by 394 passing tests across unit, matrix, component, integration, protocol, CLI, and adversarial security paths, with two environment-gated tests skipped locally. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
+The `v0.6.1` release is covered by 470+ passing tests across unit, matrix, component, integration, protocol, CLI, and adversarial security paths. Environment-specific tests are skipped only when their required platform or isolation backend is unavailable. CI runs Node.js 18 and 22 on Windows and Linux. A separate Linux job executes the strict sandbox and checks workspace writes, host-path isolation, disabled networking, and private PID visibility.
 
 Run the same checks locally:
 
@@ -185,7 +200,7 @@ npm audit
 
 ## Project status
 
-Synapse is early-stage software. `v0.3.3` is usable and tested, but command names and configuration details can still change before `v1.0.0`. See the [current roadmap](./docs/ROADMAP.md) and [changelog](./CHANGELOG.md).
+Synapse is early-stage software. `v0.6.1` is usable and tested, but command names and configuration details can still change before `v1.0.0`. See the [current roadmap](./docs/ROADMAP.md) and [changelog](./CHANGELOG.md).
 
 For a code-backed explanation of the architecture and tradeoffs, read the [Chinese project case study](./docs/CASE-STUDY.zh-CN.md), the [Chinese interview guide](./docs/INTERVIEW-GUIDE.zh-CN.md), and [ADR-0004 on provenance remediation](./docs/adr/0004-provenance-remediation-and-maintenance.md).
 

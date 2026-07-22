@@ -64,7 +64,7 @@ program
 program
   .command('chat')
   .alias('exec')
-  .description('Start interactive chat')
+  .description('Start an interactive session or run a bounded task')
   .argument('[prompt...]', 'Optional task to submit immediately')
   .option('-m, --model <model>', 'Model to use')
   .option('-p, --pipe', 'Pipe mode: read from stdin, output to stdout')

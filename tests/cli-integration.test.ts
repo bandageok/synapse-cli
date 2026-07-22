@@ -261,6 +261,16 @@ describe('CLI integration', () => {
     expect(output).not.toContain('unknown command');
   });
 
+  it('describes exec as the bounded automation path', () => {
+    const dataDir = tempDir('synapse-cli-exec-help-');
+
+    const result = runCliResult(['exec', '--help'], dataDir);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Start an interactive session or run a bounded task');
+    expect(result.stdout).not.toContain('Start interactive chat');
+  });
+
   it('fails cleanly instead of launching onboarding for unconfigured automation', () => {
     const dataDir = tempDir('synapse-cli-exec-unconfigured-');
 
