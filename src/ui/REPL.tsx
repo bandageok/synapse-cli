@@ -58,6 +58,7 @@ import type { Logger } from '../core/Logger.js';
 import type { SessionStore } from '../core/SessionStore.js';
 import type { PermissionManager } from '../core/PermissionManager.js';
 import { resolveRateLimitRetries } from '../core/retry.js';
+import { switchRuntimeModel } from '../core/RuntimeState.js';
 
 // ============================================================
 // Constants
@@ -103,6 +104,7 @@ interface REPLDeps {
   skillLoader?: SkillAutoLoader;
   initialMessages?: Message[];
   initialSessionId?: string;
+  initialPrompt?: string;
   permissionManager: PermissionManager;
 }
 
@@ -327,10 +329,10 @@ export function launchREPL(deps: REPLDeps) {
   const {
     provider, tools, context, compressor, hooks, errorRecovery, dataDir,
     sessionStore, heartbeat, watchdog, selfImprovement, logger, permissionManager,
-    skillLoader: skillLoaderFromDeps, initialMessages, initialSessionId,
+    skillLoader: skillLoaderFromDeps, initialMessages, initialSessionId, initialPrompt,
   } = deps;
   const sessionId = initialSessionId ?? 'session-' + Date.now();
-  const initialModel = getInitialModel(dataDir);
+  const initialModel = provider.getModel?.() ?? getInitialModel(dataDir);
   const configuredRateLimitRetries = resolveRateLimitRetries(process.env.SYNAPSE_RATE_LIMIT_RETRIES, -1);
 
   if (heartbeat) heartbeat.start();
@@ -385,6 +387,9 @@ export function launchREPL(deps: REPLDeps) {
     const vim = useVimInput(input, setInput);
 
     const allMessagesRef = useRef<Message[]>(initialMessages ? [...initialMessages] : []);
+    const modelRef = useRef(initialModel);
+    const sessionCreatedAtRef = useRef(new Date().toISOString());
+    const initialPromptSubmittedRef = useRef(false);
     const activeRunRef = useRef<AbortController | null>(null);
     const sessionTitleRef = useRef<string>('');
     const activeSkillsRef = useRef<string[]>([]);
@@ -435,6 +440,25 @@ export function launchREPL(deps: REPLDeps) {
         turnId: turnId ?? activeTurnIdRef.current,
       });
     }, [addItem, nextDisplayId]);
+
+    const persistSession = useCallback(async () => {
+      if (!sessionStore || allMessagesRef.current.length === 0) return;
+      const turns = allMessagesRef.current.filter(message => message.role === 'user').length;
+      try {
+        await sessionStore.save(sessionId, allMessagesRef.current, {
+          id: sessionId,
+          model: modelRef.current,
+          createdAt: sessionCreatedAtRef.current,
+          updatedAt: new Date().toISOString(),
+          tokenUsage: estTokens(allMessagesRef.current),
+          turnCount: turns,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logger?.warn('Session save failed', { sessionId, error: message });
+        addNoticeText(`Session save failed\n${message}`, 'warning');
+      }
+    }, [addNoticeText]);
 
     const runEngine = useCallback(async (allMessages: Message[], turnId: string) => {
       const controller = new AbortController();
@@ -523,15 +547,7 @@ export function launchREPL(deps: REPLDeps) {
               activeSkillsRef.current = skillLoader.getActiveNames();
               setIsThinking(false);
               setThinkingLabel('');
-              if (sessionStore) {
-                const turns = allMessagesRef.current.filter(m => m.role === 'user').length;
-                sessionStore.save(sessionId, allMessagesRef.current, {
-                  id: sessionId, model,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                  tokenUsage: 0, turnCount: turns,
-                }).catch(() => {});
-              }
+              await persistSession();
               break;
             }
 
@@ -548,6 +564,7 @@ export function launchREPL(deps: REPLDeps) {
               });
               setIsThinking(false);
               setThinkingLabel('');
+              await persistSession();
               break;
           }
         }
@@ -557,13 +574,14 @@ export function launchREPL(deps: REPLDeps) {
         addItem({ id: nextDisplayId('error'), kind: 'notice', tone: 'error', title: msg, timestamp: Date.now(), turnId });
         setIsThinking(false);
         setThinkingLabel('');
+        await persistSession();
       } finally {
         renderBuffer.close();
         if (activeRunRef.current === controller) activeRunRef.current = null;
         if (activeTurnIdRef.current === turnId) activeTurnIdRef.current = undefined;
         setIsThinking(false);
       }
-    }, [addItem, nextDisplayId]);
+    }, [addItem, nextDisplayId, persistSession]);
 
     const submitPrompt = useCallback((trimmed: string) => {
       setShowWelcome(false);
@@ -584,6 +602,7 @@ export function launchREPL(deps: REPLDeps) {
           streaming: false, timestamp: Date.now(), turnId,
         });
         activeSkillsRef.current = skillLoader.getActiveNames();
+        void persistSession();
         return;
       }
 
@@ -599,7 +618,14 @@ export function launchREPL(deps: REPLDeps) {
       setIsThinking(true);
       setThinkingLabel('');
       void runEngine(all, turnId);
-    }, [addItem, nextDisplayId, runEngine]);
+    }, [addItem, nextDisplayId, persistSession, runEngine]);
+
+    useEffect(() => {
+      const prompt = initialPrompt?.trim();
+      if (!prompt || initialPromptSubmittedRef.current) return;
+      initialPromptSubmittedRef.current = true;
+      submitPrompt(prompt);
+    }, [initialPrompt, submitPrompt]);
 
     const terminalColumns = Math.max(40, Number(stdout.columns) || 100);
     const wideLayout = terminalColumns >= 110 && terminalRows >= 24;
@@ -666,6 +692,7 @@ export function launchREPL(deps: REPLDeps) {
           setThinkingLabel('cancelling');
           return;
         }
+        await persistSession();
         exit();
         return;
       }
@@ -775,13 +802,17 @@ export function launchREPL(deps: REPLDeps) {
           skillLoader.rebuild(process.cwd());
           const commandDeps = {
             dataDir, model,
-            setModel: (m: string) => setModelState(m),
+            setModel: (m: string) => {
+              const next = switchRuntimeModel(m, provider, context, compressor);
+              modelRef.current = next;
+              setModelState(next);
+            },
             clearOutput: () => { setDisplayItems([]); setScrollPos(0); setShowWelcome(true); },
             addOutput: (line: string) => addNoticeText(line),
             messages: allMessagesRef.current,
             resetMessages: () => { allMessagesRef.current = []; setMessages([]); setDisplayItems([]); setScrollPos(0); setShowWelcome(true); },
             setMessages: (msgs: Message[]) => { allMessagesRef.current = msgs; setMessages(msgs); },
-            clearMemoryCache: () => context.clearMemoryCache(),
+            exit: async () => { await persistSession(); exit(); },
             turnCount: messages.filter(m => m.role === 'user').length,
             permissionMode,
             setPermissionMode: (mode: PermissionModeInput) => {

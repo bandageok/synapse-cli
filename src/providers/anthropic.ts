@@ -24,6 +24,16 @@ export class AnthropicProvider implements Provider {
     }
   }
 
+  getModel(): string {
+    return this.model;
+  }
+
+  setModel(model: string): void {
+    const next = model.trim();
+    if (!next) throw new Error('Model id cannot be empty.');
+    this.model = next;
+  }
+
   async *stream(params: StreamParams): AsyncIterable<StreamChunk> {
     const stream = this.client.messages.stream({
       model: this.model,

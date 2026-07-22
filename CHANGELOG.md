@@ -4,6 +4,18 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.6.0 - 2026-07-22
+
+- Made `synapse` launch the interactive CLI by default, accepted a direct initial task, and added `synapse exec <prompt>` as the automation-oriented alias for bounded pipe execution.
+- Made unconfigured automation fail with an actionable non-TTY error instead of starting Ink onboarding or returning a false success.
+- Replaced display-only `/model` switching with one runtime transaction that updates the active Provider request model, identity context, token counter, and session metadata.
+- Replaced vendor-specific `/cost` guesses with `/usage`-compatible, explicitly estimated session activity and removed fabricated currency output.
+- Made session writes atomic, preserved creation timestamps, rejected unsafe session ids, skipped corrupt entries during listing, and persisted normal, local, failed, cancelled, and exit paths without silently swallowing failures.
+- Added `synapse resume --last`, restored the saved model when resuming, and prevented in-session `/resume` from merging a transcript under the wrong session identity.
+- Clarified that memory files reload before every model turn instead of claiming to clear a nonexistent cache.
+- Validated plugin manifests and labeled installed packages as `manifest-only; inactive`; executable commands, skills, and hooks remain fail-closed until a trusted runtime exists.
+- Added ADR-0010 and regression coverage for direct and exec entry points, runtime model requests, session atomicity and path boundaries, truthful usage and memory output, resume identity, and invalid plugin manifests.
+
 ## 0.5.1 - 2026-07-22
 
 - Kept interactive tasks alive across provider `429 Too Many Requests` responses with cancellable retries, `Retry-After` support, and bounded exponential backoff.

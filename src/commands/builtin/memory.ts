@@ -38,7 +38,7 @@ function overview(dataDir: string): string {
   lines.push('  /memory view <relative-file>');
   lines.push('  /memory prune <days> [memory|learnings|sessions|all] [--yes]');
   lines.push('  /memory export [file]');
-  lines.push('  /memory reload');
+  lines.push('  Memory files are reloaded automatically before every model turn.');
   return lines.join('\n');
 }
 
@@ -73,7 +73,6 @@ export const memoryCommand: SlashCommand = {
       if (subCommand === 'add') {
         if (!text) return 'Usage: /memory add <text>';
         const result = appendLongTermMemory(dataDir, text);
-        deps.clearMemoryCache?.();
         return `Added to MEMORY.md. Lines: ${result.lines}/200`;
       }
 
@@ -110,8 +109,7 @@ export const memoryCommand: SlashCommand = {
       }
 
       if (subCommand === 'reload') {
-        deps.clearMemoryCache?.();
-        return 'Memory cache cleared. It will reload on the next turn.';
+        return 'Memory is already live: managed files are reloaded before every model turn.';
       }
     } catch (error) {
       return `Error: ${error instanceof Error ? error.message : String(error)}`;

@@ -1,7 +1,7 @@
 // src/plugins/registry.ts
 import { readdirSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import type { PluginManifest } from './manifest.js';
+import { parsePluginManifest, type PluginManifest } from './manifest.js';
 
 export interface LoadedPlugin {
   manifest: PluginManifest;
@@ -22,7 +22,7 @@ export class PluginRegistry {
       if (!existsSync(manifestPath)) continue;
 
       try {
-        const manifest: PluginManifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+        const manifest = parsePluginManifest(JSON.parse(readFileSync(manifestPath, 'utf-8')));
         this.plugins.set(manifest.name, { manifest, path: pluginDir });
       } catch {
         // skip invalid plugins

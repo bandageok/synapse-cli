@@ -20,7 +20,7 @@ export interface CommandDeps {
   messages: Message[];
   resetMessages: () => void;
   setMessages?: (msgs: Message[]) => void;
-  clearMemoryCache?: () => void;
+  exit?: () => Promise<void> | void;
   turnCount: number;
   permissionMode?: PermissionMode;
   setPermissionMode?: (mode: PermissionModeInput) => PermissionMode;

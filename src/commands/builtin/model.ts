@@ -9,7 +9,9 @@ export const modelCommand: SlashCommand = {
     if (!args) {
       return `Current model: ${deps.model}\nUsage: /model <model-name>`;
     }
-    deps.setModel(args);
-    return `Model switched to: ${args}`;
+    const model = args.trim();
+    if (!model) return 'Usage: /model <model-name>';
+    deps.setModel(model);
+    return `Model switched for this session: ${model}`;
   },
 };
