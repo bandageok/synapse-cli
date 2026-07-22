@@ -281,4 +281,103 @@ describe('Engine', () => {
     )) events.push(event);
     expect(events.at(-1)).toEqual({ type: 'error', error: 'Agent stopped after reaching the 2-turn safety limit.' });
   });
+
+  it('keeps the same agent turn alive while a rate-limited provider recovers', async () => {
+    let calls = 0;
+    const provider: Provider = {
+      name: 'limited',
+      async *stream() {
+        calls++;
+        if (calls < 3) {
+          throw Object.assign(new Error('exceeded retry limit, last status: 429 Too Many Requests'), {
+            status: 429,
+            retryAfterMs: 0,
+          });
+        }
+        yield { type: 'content_block_start', content_block: { type: 'text', text: '' } } as StreamChunk;
+        yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Recovered' } } as StreamChunk;
+        yield { type: 'content_block_stop' } as StreamChunk;
+        yield { type: 'message_stop' } as StreamChunk;
+      },
+    };
+    const recovery = {
+      executeWithRetry: async <T>(fn: () => Promise<T>) => fn(),
+      handleApiError: async () => false,
+      resetFailures: () => {},
+    };
+    const events: any[] = [];
+    for await (const event of createEngine(
+      [{ role: 'user', content: 'finish the task' }],
+      provider,
+      explicitRegistry(),
+      noopContext,
+      noopHooks,
+      noopCompressor,
+      recovery,
+      { maxTurns: 1, rateLimitRetries: 2 },
+    )) events.push(event);
+
+    expect(calls).toBe(3);
+    expect(events.filter(event => event.type === 'retrying')).toEqual([
+      { type: 'retrying', reason: 'rate_limit', attempt: 1, maxAttempts: 2, delayMs: 0 },
+      { type: 'retrying', reason: 'rate_limit', attempt: 2, maxAttempts: 2, delayMs: 0 },
+    ]);
+    expect(events.filter(event => event.type === 'token').map(event => event.text).join('')).toBe('Recovered');
+    expect(events.at(-1)).toEqual({ type: 'end_turn' });
+  });
+
+  it('supports cancellable unlimited rate-limit recovery for interactive sessions', async () => {
+    let calls = 0;
+    const provider: Provider = {
+      name: 'limited',
+      async *stream() {
+        calls++;
+        if (calls < 4) {
+          throw Object.assign(new Error('429 Too Many Requests'), { status: 429, retryAfterMs: 0 });
+        }
+        yield { type: 'content_block_start', content_block: { type: 'text', text: '' } } as StreamChunk;
+        yield { type: 'content_block_delta', delta: { type: 'text_delta', text: 'Done' } } as StreamChunk;
+        yield { type: 'content_block_stop' } as StreamChunk;
+      },
+    };
+    const events: any[] = [];
+    for await (const event of createEngine(
+      [{ role: 'user', content: 'continue' }], provider, explicitRegistry(), noopContext, noopHooks,
+      noopCompressor, noopErrorRecovery, { maxTurns: 1, rateLimitRetries: -1 },
+    )) events.push(event);
+
+    expect(calls).toBe(4);
+    expect(events.filter(event => event.type === 'retrying')).toHaveLength(3);
+    expect(events.find(event => event.type === 'retrying')?.maxAttempts).toBeNull();
+    expect(events.at(-1)).toEqual({ type: 'end_turn' });
+  });
+
+  it('does not bypass the finite retry budget through generic API recovery', async () => {
+    let calls = 0;
+    let genericRecoveryCalls = 0;
+    const provider: Provider = {
+      name: 'limited',
+      async *stream() {
+        calls++;
+        throw Object.assign(new Error('429 Too Many Requests'), { status: 429, retryAfterMs: 0 });
+      },
+    };
+    const events: any[] = [];
+    for await (const event of createEngine(
+      [{ role: 'user', content: 'run in CI' }], provider, explicitRegistry(), noopContext, noopHooks,
+      noopCompressor,
+      {
+        executeWithRetry: async <T>(fn: () => Promise<T>) => fn(),
+        handleApiError: async () => { genericRecoveryCalls++; return true; },
+      },
+      { maxTurns: 1, rateLimitRetries: 2 },
+    )) events.push(event);
+
+    expect(calls).toBe(3);
+    expect(genericRecoveryCalls).toBe(0);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: expect.stringContaining('after 2 retries'),
+    });
+  });
 });

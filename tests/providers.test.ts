@@ -12,6 +12,8 @@ import {
 import { homedir } from 'os';
 import { join } from 'path';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
+import { OpenRouterProvider } from '../src/providers/openrouter.js';
+import { errorDetails } from '../src/core/retry.js';
 
 describe('Provider Factory', () => {
   const origEnv = { ...process.env };
@@ -182,6 +184,37 @@ describe('Provider Factory', () => {
         baseUrl: 'https://llm.example.com/v1',
         preset: false,
       }, { timeoutMs: 1000 })).rejects.toThrow('Check the API key and account permissions.');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('preserves HTTP 429 and Retry-After metadata for engine recovery', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response('slow down', {
+      status: 429,
+      headers: { 'Retry-After': '4' },
+    });
+    try {
+      const provider = new OpenRouterProvider({
+        apiKey: 'key',
+        model: 'model',
+        baseUrl: 'https://llm.example.com/v1',
+      });
+      let thrown: unknown;
+      try {
+        for await (const _chunk of provider.stream({
+          system: [],
+          messages: [{ role: 'user', content: 'hello' }],
+          tools: [],
+        })) {}
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toContain('429');
+      expect(errorDetails(thrown)).toEqual({ status: 429, retryAfterMs: 4_000 });
     } finally {
       globalThis.fetch = originalFetch;
     }

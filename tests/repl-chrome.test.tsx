@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { render } from 'ink-testing-library';
+import { VERSION } from '../src/version.js';
 import {
   Composer, Divider, Footer, QueuePreview, StatusBar, WelcomeBanner, appendQueuedInput,
   busySubmissionAction, engineErrorNotice, formatStatusLine, welcomeBannerRows,
@@ -85,7 +86,7 @@ describe('REPL chrome', () => {
     const narrow = render(React.createElement(WelcomeBanner, {
       providerName: 'openrouter', model: 'company-model', columns: 60, cwd: 'C:/repo/synapse-cli',
     })).lastFrame() ?? '';
-    expect(narrow).toContain('SYNAPSE v0.5.0');
+    expect(narrow).toContain(`SYNAPSE v${VERSION}`);
     expect(narrow).not.toContain('██████ ██  ██');
     expect(welcomeBannerRows(60)).toBe(4);
   });

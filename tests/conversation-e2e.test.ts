@@ -89,6 +89,71 @@ describe('real CLI conversation path', () => {
     expect(existsSync(join(dataDir, 'IDENTITY.md'))).toBe(true);
   });
 
+  it('recovers a real pipe-mode conversation after repeated HTTP 429 responses', async () => {
+    let requests = 0;
+    server = createServer((request, response) => {
+      request.resume();
+      request.on('end', () => {
+        requests++;
+        if (requests <= 2) {
+          response.writeHead(429, { 'content-type': 'text/plain', 'retry-after': '0' });
+          response.end('Too Many Requests');
+          return;
+        }
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        response.write('data: ' + JSON.stringify({ choices: [{ delta: { content: 'RATE_LIMIT_RECOVERED' } }] }) + '\n\n');
+        response.write('data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }) + '\n\n');
+        response.end();
+      });
+    });
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', () => resolve()));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Test server did not expose a port');
+
+    const dataDir = mkdtempSync(join(tmpdir(), 'synapse-rate-limit-conversation-'));
+    cleanup.push(dataDir);
+    setProvider('local-rate-limit', {
+      dataDir,
+      baseUrl: 'http://127.0.0.1:' + address.port + '/v1',
+      protocol: 'openai',
+      model: 'test-model',
+      apiKey: 'test-key',
+    });
+
+    const child = spawn(process.execPath, [tsxCli, entry, 'chat', '--pipe'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        SYNAPSE_DATA_DIR: dataDir,
+        SYNAPSE_RATE_LIMIT_RETRIES: '2',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    child.stdout.on('data', chunk => stdout.push(Buffer.from(chunk)));
+    child.stderr.on('data', chunk => stderr.push(Buffer.from(chunk)));
+    child.stdin.end('Complete the task after the rate limit clears\n');
+
+    const code = await new Promise<number | null>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new Error('Rate-limit recovery timed out. stderr=' + Buffer.concat(stderr).toString('utf-8')));
+      }, 15_000);
+      child.on('error', reject);
+      child.on('close', result => { clearTimeout(timeout); resolve(result); });
+    });
+
+    const output = Buffer.concat(stdout).toString('utf-8');
+    const diagnostics = Buffer.concat(stderr).toString('utf-8');
+    expect(code).toBe(0);
+    expect(requests).toBe(3);
+    expect(output).toBe('RATE_LIMIT_RECOVERED');
+    expect(diagnostics).toContain('retrying 1/2');
+    expect(diagnostics).toContain('retrying 2/2');
+    expect(output).not.toContain('retrying');
+  });
+
   it('answers product identity locally without calling the configured provider', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'synapse-identity-conversation-'));
     cleanup.push(dataDir);

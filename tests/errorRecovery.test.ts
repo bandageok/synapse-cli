@@ -42,4 +42,31 @@ describe('ErrorRecovery', () => {
     try { await er.executeWithRetry(async () => { calls++; throw new Error('boom'); }, { maxRetries: 0 }); } catch {}
     expect(calls).toBe(1);
   });
+
+  it('retries 429 responses without opening the circuit breaker', async () => {
+    let calls = 0;
+    const result = await er.executeWithRetry(async () => {
+      calls++;
+      if (calls < 3) {
+        throw Object.assign(new Error('429 Too Many Requests'), {
+          status: 429,
+          retryAfterMs: 0,
+        });
+      }
+      return 'recovered';
+    }, { tool: 'Provider', maxRetries: 0, rateLimitRetries: 2 });
+
+    expect(result).toBe('recovered');
+    expect(calls).toBe(3);
+    expect(er.getCircuitBreakerState().state).toBe('closed');
+  });
+
+  it('stops after the configured number of rate-limit retries', async () => {
+    let calls = 0;
+    await expect(er.executeWithRetry(async () => {
+      calls++;
+      throw Object.assign(new Error('rate_limit'), { status: 429, retryAfterMs: 0 });
+    }, { tool: 'Provider', maxRetries: 0, rateLimitRetries: 2 })).rejects.toThrow('rate_limit');
+    expect(calls).toBe(3);
+  });
 });

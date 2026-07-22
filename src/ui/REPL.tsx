@@ -57,6 +57,7 @@ import type { SelfImprovement } from '../soul/SelfImprovement.js';
 import type { Logger } from '../core/Logger.js';
 import type { SessionStore } from '../core/SessionStore.js';
 import type { PermissionManager } from '../core/PermissionManager.js';
+import { resolveRateLimitRetries } from '../core/retry.js';
 
 // ============================================================
 // Constants
@@ -330,6 +331,7 @@ export function launchREPL(deps: REPLDeps) {
   } = deps;
   const sessionId = initialSessionId ?? 'session-' + Date.now();
   const initialModel = getInitialModel(dataDir);
+  const configuredRateLimitRetries = resolveRateLimitRetries(process.env.SYNAPSE_RATE_LIMIT_RETRIES, -1);
 
   if (heartbeat) heartbeat.start();
 
@@ -453,6 +455,7 @@ export function launchREPL(deps: REPLDeps) {
         if (selfImprovement) engineOptions.selfImprovement = selfImprovement;
         if (logger) engineOptions.logger = logger;
         engineOptions.signal = controller.signal;
+        engineOptions.rateLimitRetries = configuredRateLimitRetries;
 
         for await (const event of createEngine(
           allMessages, provider, tools, context, hooks, compressor, errorRecovery,
@@ -461,6 +464,14 @@ export function launchREPL(deps: REPLDeps) {
           switch (event.type) {
             case 'token':
               await renderBuffer.push(event.text);
+              break;
+
+            case 'retrying':
+              renderBuffer.flush();
+              setDisplayItems(finishAssistantStreams);
+              setThinkingLabel(
+                `rate limited · retry ${event.attempt}/${event.maxAttempts ?? 'unlimited'} in ${formatDelay(event.delayMs)}`,
+              );
               break;
 
             case 'tool_use':
@@ -903,4 +914,9 @@ export function launchREPL(deps: REPLDeps) {
     restoreScreen();
     throw error;
   }
+}
+
+function formatDelay(delayMs: number): string {
+  if (delayMs < 1_000) return `${delayMs}ms`;
+  return `${Math.ceil(delayMs / 1_000)}s`;
 }
