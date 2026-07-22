@@ -2,6 +2,42 @@
 
 This roadmap records intended direction, not a release promise. Work moves into a version only after its behavior and validation plan are clear.
 
+## Shipped in v0.6.1
+
+- Synchronized the English and Chinese public entry points with the real v0.6 command surface and verification evidence
+- Added a release-metadata gate so package, runtime, changelog, and README versions cannot drift silently
+- Clarified the inactive plugin boundary and linked the public documentation to ADR-0010
+
+## Shipped in v0.6.0
+
+- Made `synapse` the default interactive entry point and added bounded `synapse exec` automation
+- Made `/model` update the real Provider request route, identity context, token counter, and session metadata
+- Added atomic session persistence and `synapse resume --last`
+- Replaced fabricated cross-provider price output with explicitly estimated `/usage` activity
+- Made memory reload output reflect the actual per-turn reload behavior
+- Kept third-party plugin commands, skills, and hooks inactive while validating their manifests
+- Added ADR-0010 and regression tests for each corrected product claim
+
+## Shipped in v0.5.1
+
+- Added cancellable `429 Too Many Requests` recovery with `Retry-After` support and bounded exponential backoff
+- Kept interactive work retrying until cancellation while bounding scripts and CI to eight retries by default
+- Prevented rate limits from consuming agent turn budgets or opening the tool circuit breaker
+
+## Shipped in v0.5.0
+
+- Reworked the TUI around turn-centric conversation flow, folded tool summaries, and expandable audit details
+- Added CJK-aware responsive rendering, bounded queued input, and alternate-screen operation
+- Added command palette, approval panel, mode-aware composer, three-zone footer, and optional Timeline rail
+- Added deterministic skill inventory backed by the actual loader
+
+## Shipped in v0.4.0
+
+- Replaced prefix-parsed transcript strings with structured terminal events
+- Added streaming-safe Markdown, bounded previews, ANSI sanitization, and compact/expanded tool views
+- Added OIDC trusted npm publishing and canonical package-bin validation
+- Made strict sandbox probing tolerate cold Docker startup without silently weakening isolation
+
 ## Shipped in v0.3.3
 
 - Added explicit `ask`, fail-closed `auto`, and warned `full-access` permission profiles

@@ -4,6 +4,14 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.6.1 - 2026-07-23
+
+- Updated the English and Chinese README quick starts to use the real default interactive and `exec` automation entry points.
+- Replaced stale v0.3.3 release and test evidence across the README, roadmap, launch kit, and case study with the verified v0.6.0 product state.
+- Clarified that plugin packages are validated manifest inventory only; third-party commands, skills, and hooks remain inactive.
+- Added current runtime model, session, memory, usage, and ADR-0010 documentation to the public project surface.
+- Corrected `exec --help` to describe bounded automation and added a CLI regression test for that contract.
+
 ## 0.6.0 - 2026-07-22
 
 - Made `synapse` launch the interactive CLI by default, accepted a direct initial task, and added `synapse exec <prompt>` as the automation-oriented alias for bounded pipe execution.

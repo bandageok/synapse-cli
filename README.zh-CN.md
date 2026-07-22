@@ -24,8 +24,17 @@
 npm install -g @bandageok/synapse-cli
 synapse onboard
 synapse doctor
-synapse chat
+synapse
 ```
+
+可以直接带入首个任务，也可以使用有界的自动化入口：
+
+```bash
+synapse "解释这个失败的测试"
+synapse exec "解释这个失败的测试"
+```
+
+`synapse chat` 和 `synapse chat --pipe` 仍作为兼容别名保留。交互工作使用 `synapse`，脚本和 CI 使用 `synapse exec`。
 
 可以选择预设 Provider，也可以配置任意兼容端点：
 
@@ -64,7 +73,8 @@ Synapse 适合需要切换模型或网关，同时希望保留同一套项目上
 
 ```bash
 synapse provider list
-echo "解释这个失败的测试" | synapse chat --pipe
+synapse exec "解释这个失败的测试"
+echo "解释这个失败的测试" | synapse exec
 synapse memory search "发布约定"
 synapse permissions set auto
 
@@ -88,8 +98,8 @@ Synapse 将“是否请求确认”和“Shell 是否隔离”分开，提供三
 
 ```bash
 synapse permissions set auto                 # 后续新会话
-synapse chat --permission-mode full-access   # 仅本次启动
-synapse chat --yolo                          # full-access 的别名
+synapse --permission-mode full-access        # 仅本次启动
+synapse --yolo                               # full-access 的别名
 synapse resume 1 --yolo                      # 恢复会话时同样可覆盖
 /permissions ask                             # 交互会话内切换
 ```
@@ -107,6 +117,7 @@ synapse resume 1 --yolo                      # 恢复会话时同样可覆盖
 - [可信上下文与可执行文件身份](./docs/adr/0003-trusted-context-and-executable-identity.md)
 - [产品身份与 Provider 边界](./docs/adr/0005-product-identity-and-provider-boundary.md)
 - [权限配置与动态切换](./docs/adr/0006-permission-profiles-and-dynamic-switching.md)
+- [产品事实与运行时状态](./docs/adr/0010-product-truth-and-runtime-state.md)
 - [可执行权限测试矩阵](./docs/PERMISSION-TEST-MATRIX.md)
 
 ## 记忆与配置
@@ -123,9 +134,20 @@ synapse memory export memories.json
 
 搜索和导出默认排除会话记录，只有显式传入 `--include-sessions` 才会包含。
 
+## 已包含能力
+
+- 支持 Vim 编辑的 Ink 交互界面
+- OpenAI 兼容和 Anthropic 兼容 Provider 编解码
+- 文件、Shell、搜索、Git、Notebook、Web、图片、TTS 和子 Agent 工具
+- 带显式信任与能力漂移检查的 MCP 客户端
+- 只读的插件清单验证；第三方插件命令、Skill 和 Hook 仍保持未激活
+- 运行时模型切换、明确标注的用量估算和 `resume --last`
+- 原子会话持久化、每轮实时加载记忆和项目指令发现
+- 运行时 Schema 校验、审计日志和工作区路径隔离
+
 ## 验证状态
 
-`v0.3.3` 本地验证有 394 项测试通过、2 项按环境跳过，覆盖单元、状态矩阵、组件、集成、协议、CLI 和对抗性安全路径。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
+`v0.6.1` 有 470+ 项测试通过，覆盖单元、状态矩阵、组件、集成、协议、CLI 和对抗性安全路径。只有在所需平台或隔离后端不可用时，才会跳过对应的环境测试。CI 在 Windows 和 Linux 上运行 Node.js 18/22；独立的 Linux 任务会真实运行严格沙箱，检查工作区写入、宿主路径隔离、网络禁用和 PID 隔离。
 
 ```bash
 npm ci
@@ -139,7 +161,7 @@ npm audit
 
 ## 项目状态
 
-Synapse 仍处于早期阶段。`v0.3.3` 已完成验证，但在 `v1.0.0` 之前，命令名和配置细节仍可能调整。查看[当前路线图](./docs/ROADMAP.md)和[更新记录](./CHANGELOG.md)。
+Synapse 仍处于早期阶段。`v0.6.1` 已完成验证，但在 `v1.0.0` 之前，命令名和配置细节仍可能调整。查看[当前路线图](./docs/ROADMAP.md)和[更新记录](./CHANGELOG.md)。
 
 需要了解真实架构、工程取舍和个人贡献边界时，请阅读[项目案例页](./docs/CASE-STUDY.zh-CN.md)、[中文面试讲稿](./docs/INTERVIEW-GUIDE.zh-CN.md)以及[来源整改 ADR](./docs/adr/0004-provenance-remediation-and-maintenance.md)。
 

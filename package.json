@@ -1,6 +1,6 @@
 {
   "name": "@bandageok/synapse-cli",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Local-first coding agent CLI with persistent project memory, multi-provider LLM support, and fail-closed tool isolation",
   "author": "BandageOK",
   "type": "module",
@@ -12,11 +12,12 @@
     "dev": "tsx src/entry/cli.ts",
     "build": "tsup",
     "check:lockfile": "node scripts/check-lockfile-registry.mjs",
+    "check:release-metadata": "node scripts/check-release-metadata.mjs",
     "test": "vitest run",
     "test:permissions": "vitest run tests/permission-matrix.test.ts tests/permission-dialog.test.tsx tests/permission-modes.test.ts tests/security-boundaries.test.ts tests/phase2-controls.test.ts tests/cli-integration.test.ts tests/commands.test.ts tests/conversation-e2e.test.ts",
     "lint": "tsc --noEmit",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run check:lockfile && npm run lint && npm test && npm run build"
+    "prepublishOnly": "npm run check:lockfile && npm run check:release-metadata && npm run lint && npm test && npm run build"
   },
   "repository": {
     "type": "git",
