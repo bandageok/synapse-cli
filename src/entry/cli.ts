@@ -11,6 +11,7 @@ import { compareVersions } from '../utils/semver.js';
 import { findTemplateDir } from '../utils/templates.js';
 import { VERSION } from '../version.js';
 import { answerSkillInventoryQuery } from '../skills/query.js';
+import { resolveRateLimitRetries } from '../core/retry.js';
 
 const program = new Command();
 
@@ -141,13 +142,18 @@ program
         const messages = [{ role: 'user' as const, content: input }];
 
         try {
+          const rateLimitRetries = resolveRateLimitRetries(process.env.SYNAPSE_RATE_LIMIT_RETRIES, 8);
           for await (const event of createEngine(
             messages, deps.provider!, deps.tools, deps.context,
             deps.hooks, deps.compressor, deps.errorRecovery,
-            { logger: deps.logger }
+            { logger: deps.logger, rateLimitRetries }
           )) {
             if (event.type === 'token') {
               process.stdout.write(event.text);
+            } else if (event.type === 'retrying') {
+              process.stderr.write(
+                `\nRate limited; retrying ${event.attempt}/${event.maxAttempts ?? 'unlimited'} in ${Math.ceil(event.delayMs / 1000)}s...\n`,
+              );
             } else if (event.type === 'tool_use' && opts.verbose) {
               process.stderr.write(`\n🔧 ${event.tool}\n`);
             } else if (event.type === 'tool_result' && opts.verbose) {

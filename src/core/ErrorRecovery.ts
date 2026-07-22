@@ -1,5 +1,6 @@
 // src/core/ErrorRecovery.ts
 import type { Message } from './types.js';
+import { isRateLimitError, retryDelayMs, waitForRetry } from './retry.js';
 
 // ============================================================================
 // 熔断器
@@ -82,39 +83,57 @@ export class ErrorRecovery {
 
   async executeWithRetry<T>(
     fn: () => Promise<T>,
-    opts: { tool: string; maxRetries: number },
+    opts: {
+      tool: string;
+      maxRetries: number;
+      rateLimitRetries?: number;
+      signal?: AbortSignal;
+    },
   ): Promise<T> {
     // 熔断器检查
     if (!this.circuitBreaker.canExecute()) {
       throw new Error(`Circuit breaker open for ${opts.tool}. Too many consecutive failures.`);
     }
 
-    let lastErr: Error | undefined;
-    for (let i = 0; i <= opts.maxRetries; i++) {
+    let genericRetries = 0;
+    let rateLimitAttempts = 0;
+    while (true) {
       try {
         const result = await fn();
         this.circuitBreaker.recordSuccess();
         this.consecutiveFailures = 0;
         return result;
       } catch (e: unknown) {
-        lastErr = e instanceof Error ? e : new Error(String(e));
-        this.circuitBreaker.recordFailure();
+        const error = e instanceof Error ? e : new Error(String(e));
+        const rateLimited = isRateLimitError(error);
+        if (!rateLimited) this.circuitBreaker.recordFailure();
 
         // 不可重试的错误类型
-        if (this.isNonRetryable(lastErr)) {
+        if (this.isNonRetryable(error)) {
           throw e;
         }
 
-        if (i < opts.maxRetries) {
-          const delay = exponentialBackoff(i);
-          await new Promise(r => setTimeout(r, delay));
+        if (rateLimited) {
+          if (rateLimitAttempts >= (opts.rateLimitRetries ?? 0)) throw error;
+          rateLimitAttempts++;
+          await waitForRetry(retryDelayMs(error, rateLimitAttempts), opts.signal);
+          continue;
         }
+
+        if (genericRetries >= opts.maxRetries) throw error;
+        const delay = exponentialBackoff(genericRetries);
+        genericRetries++;
+        await waitForRetry(delay, opts.signal);
       }
     }
-    throw lastErr;
   }
 
-  async handleApiError(err: Error, _messages: Message[]): Promise<boolean> {
+  async handleApiError(err: Error, _messages: Message[], options: { signal?: AbortSignal } = {}): Promise<boolean> {
+    if (isRateLimitError(err)) {
+      await waitForRetry(retryDelayMs(err, 1), options.signal);
+      return true;
+    }
+
     this.consecutiveFailures++;
     if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) return false;
 
@@ -127,12 +146,6 @@ export class ErrorRecovery {
     }
 
     // rate_limit: 等待后重试
-    if (err.message.includes('rate_limit') || err.message.includes('429')) {
-      const retryAfter = this.extractRetryAfter(err.message);
-      await new Promise(r => setTimeout(r, retryAfter));
-      return true;
-    }
-
     // context_too_long: 触发压缩
     if (err.message.includes('context_too_long') || err.message.includes('context_too_large')) {
       return false; // 让 Compressor 处理
@@ -145,11 +158,11 @@ export class ErrorRecovery {
 
     // 5xx 服务器错误: 重试
     if (err.message.includes('500') || err.message.includes('502') || err.message.includes('503')) {
-      await new Promise(r => setTimeout(r, 5000));
+      await waitForRetry(5000, options.signal);
       return true;
     }
 
-    await new Promise(r => setTimeout(r, 1000));
+    await waitForRetry(1000, options.signal);
     return true;
   }
 
@@ -175,11 +188,4 @@ export class ErrorRecovery {
     return false;
   }
 
-  private extractRetryAfter(message: string): number {
-    const match = message.match(/retry[_-]?after[:\s]+(\d+)/i);
-    if (match) {
-      return parseInt(match[1], 10) * 1000;
-    }
-    return 5000; // 默认 5s
-  }
 }

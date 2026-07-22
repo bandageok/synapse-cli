@@ -4,6 +4,7 @@ import type {
   Provider, EngineEvent,
 } from './types.js';
 import type { ToolRegistry } from './ToolRegistry.js';
+import { isRateLimitError, retryDelayMs, waitForRetry } from './retry.js';
 
 export interface ContextBuilder {
   build(turnCount: number): Promise<string[]>;
@@ -21,8 +22,13 @@ export interface Compressor {
   ): Promise<{ compressed: boolean; stats?: { tokensBefore: number; tokensAfter: number } }>;
 }
 export interface ErrorRecovery {
-  executeWithRetry<T>(fn: () => Promise<T>, opts: { tool: string; maxRetries: number }): Promise<T>;
-  handleApiError(err: Error, messages: Message[]): Promise<boolean>;
+  executeWithRetry<T>(fn: () => Promise<T>, opts: {
+    tool: string;
+    maxRetries: number;
+    rateLimitRetries?: number;
+    signal?: AbortSignal;
+  }): Promise<T>;
+  handleApiError(err: Error, messages: Message[], options?: { signal?: AbortSignal }): Promise<boolean>;
   resetFailures?: () => void;
 }
 
@@ -37,6 +43,7 @@ export interface EngineOptions {
     audit?: (action: string, meta?: Record<string, unknown>) => void;
   };
   maxTurns?: number;
+  rateLimitRetries?: number;
   signal?: AbortSignal;
 }
 
@@ -51,9 +58,15 @@ export async function* createEngine(
   options?: EngineOptions,
 ): AsyncGenerator<EngineEvent> {
   let turnCount = 0;
+  let rateLimitAttempts = 0;
   const maxTurns = options?.maxTurns ?? 40;
+  const maxRateLimitRetries = options?.rateLimitRetries ?? 8;
   if (!Number.isInteger(maxTurns) || maxTurns < 1 || maxTurns > 200) {
     yield { type: 'error', error: 'maxTurns must be an integer between 1 and 200.' };
+    return;
+  }
+  if (!Number.isInteger(maxRateLimitRetries) || maxRateLimitRetries < -1 || maxRateLimitRetries > 100) {
+    yield { type: 'error', error: 'rateLimitRetries must be -1 or an integer between 0 and 100.' };
     return;
   }
 
@@ -136,6 +149,7 @@ export async function* createEngine(
           }
         }
       }
+      rateLimitAttempts = 0;
       errorRecovery.resetFailures?.();
 
       // 4. Push assistant message
@@ -285,7 +299,12 @@ export async function* createEngine(
               cwd: process.cwd(),
               abortSignal: options?.signal ?? new AbortController().signal,
             }, { humanApproved }),
-            { tool: toolUse.name, maxRetries: 1 },
+            {
+              tool: toolUse.name,
+              maxRetries: 1,
+              rateLimitRetries: 5,
+              signal: options?.signal,
+            },
           );
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -327,8 +346,38 @@ export async function* createEngine(
         yield { type: 'error', error: 'Request cancelled.' };
         return;
       }
-      const errMsg = err instanceof Error ? err.message : String(err);
-      const recovered = await errorRecovery.handleApiError(err instanceof Error ? err : new Error(errMsg), messages);
+      const providerError = err instanceof Error ? err : new Error(String(err));
+      const errMsg = providerError.message;
+      if (isRateLimitError(providerError)) {
+        rateLimitAttempts++;
+        if (maxRateLimitRetries === -1 || rateLimitAttempts <= maxRateLimitRetries) {
+          const delayMs = retryDelayMs(providerError, rateLimitAttempts);
+          options?.logger?.warn('Provider rate limited; retry scheduled', {
+            attempt: rateLimitAttempts,
+            maxAttempts: maxRateLimitRetries === -1 ? null : maxRateLimitRetries,
+            delayMs,
+          });
+          yield {
+            type: 'retrying',
+            reason: 'rate_limit',
+            attempt: rateLimitAttempts,
+            maxAttempts: maxRateLimitRetries === -1 ? null : maxRateLimitRetries,
+            delayMs,
+          };
+          await waitForRetry(delayMs, options?.signal);
+          turnCount--;
+          continue;
+        }
+        options?.logger?.error('Provider rate-limit retry budget exhausted', {
+          attempts: rateLimitAttempts - 1,
+        });
+        yield {
+          type: 'error',
+          error: `Provider remained rate limited after ${rateLimitAttempts - 1} retries: ${errMsg}`,
+        };
+        return;
+      }
+      const recovered = await errorRecovery.handleApiError(providerError, messages, { signal: options?.signal });
       if (!recovered) {
         options?.logger?.error(`Engine error: ${errMsg}`);
         yield { type: 'error', error: errMsg };

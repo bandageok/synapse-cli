@@ -1,6 +1,7 @@
 // src/providers/openrouter.ts
 import type { ContentBlock, Message, StreamChunk, StreamParams, ToolUseBlock } from '../core/types.js';
 import type { Provider, ProviderConfig } from './base.js';
+import { parseRetryAfter } from '../core/retry.js';
 
 interface OpenAIToolCall {
   id: string;
@@ -84,7 +85,13 @@ export class OpenRouterProvider implements Provider {
     try {
       if (!response.ok) {
         const body = (await response.text()).replace(/\s+/g, ' ').slice(0, 2_000);
-        throw new Error(`${this.name} API error: ${response.status}${body ? ` - ${body}` : ''}`);
+        const error = new Error(`${this.name} API error: ${response.status}${body ? ` - ${body}` : ''}`) as Error & {
+          status?: number;
+          retryAfterMs?: number;
+        };
+        error.status = response.status;
+        error.retryAfterMs = parseRetryAfter(response.headers);
+        throw error;
       }
       if (!response.body) throw new Error(`${this.name} API returned an empty response body.`);
 

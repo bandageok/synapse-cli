@@ -4,6 +4,13 @@ All notable changes to Synapse are documented in this file.
 
 ## Unreleased
 
+## 0.5.1 - 2026-07-22
+
+- Kept interactive tasks alive across provider `429 Too Many Requests` responses with cancellable retries, `Retry-After` support, and bounded exponential backoff.
+- Kept pipe and CI use bounded to eight retries by default while allowing `SYNAPSE_RATE_LIMIT_RETRIES=-1` for retry-until-cancelled behavior.
+- Prevented rate limits from opening the tool circuit breaker or consuming the agent turn limit, and surfaced retry progress without contaminating pipe-mode stdout.
+- Added unit, Provider metadata, Engine budget, cancellation, Node 18, and real CLI round-trip coverage for rate-limit recovery.
+
 ## 0.5.0 - 2026-07-21
 
 - Reworked the default terminal transcript around user prompts, one stable turn activity, and assistant answers instead of a shortened tool log.

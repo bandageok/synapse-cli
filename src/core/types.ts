@@ -91,6 +91,7 @@ export interface ToolContext {
 
 export type EngineEvent =
   | { type: 'token'; text: string }
+  | { type: 'retrying'; reason: 'rate_limit'; attempt: number; maxAttempts: number | null; delayMs: number }
   | { type: 'tool_use'; toolUseId: string; tool: string; input: Record<string, unknown> }
   | { type: 'tool_result'; toolUseId: string; tool: string; output: string; isError: boolean; durationMs: number }
   | { type: 'compressed'; tokensBefore: number; tokensAfter: number }
